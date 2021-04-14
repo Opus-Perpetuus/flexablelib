@@ -3,6 +3,7 @@ TABULADOR AUTOMATICO LIMITADO
 '''
 
 import time
+import tabulate
 import os
 
 class table:
@@ -388,12 +389,12 @@ if __name__ == '__main__':
     import nltk
     from random import choice, randint
 
-    style = input("Style (0 - 5): ")
-    style = randint(0, 5) if style == "" else int(style)
-    alignment = input("Alignment (0: left, 1: center): ")
-    alignment = randint(0, 1) if alignment == "" else int(alignment)
-    centerTable = input("Adjust table to window (0: no, 1: yes): ")
-    centerTable = randint(0, 1) if centerTable == "" else int(centerTable)
+    # style = input("Style (0 - 5): ")
+    # style = randint(0, 5) if style == "" else int(style)
+    # alignment = input("Alignment (0: left, 1: center): ")
+    # alignment = randint(0, 1) if alignment == "" else int(alignment)
+    # centerTable = input("Adjust table to window (0: no, 1: yes): ")
+    # centerTable = randint(0, 1) if centerTable == "" else int(centerTable)
 
     try:
         nltk.corpus.words.words()
@@ -430,8 +431,40 @@ if __name__ == '__main__':
                     idEscogido += caracter
 
                 datos[x+1][y] = idEscogido
+    
+    datos.remove(encabezado)
 
-    tabla = table(datos, style, alignment, centerTable).table
-    print(tabla)
+    # tabla = table(datos, style, alignment, centerTable).table
+    # print(tabla)
+
+    # [print(x) for x in dir(table)]
+
+    newTable = tabulate.tabulate(
+        tabular_data = datos,
+        tablefmt='grid',
+        headers=encabezado,
+        stralign='center'
+    )
+
+    newData = []
+
+    for line in datos:
+        newData.append([])
+        for col in line:
+            newData[-1].append('')
+            for char in col:
+                newData[-1][-1] += char
+
+                newTable = tabulate.tabulate(
+                    tabular_data = newData,
+                    headers=encabezado,
+                    tablefmt='grid',
+                    stralign='fancy_outline'
+
+                    )
+                time.sleep(.002)
+                os.system('cls')
+                print(newTable)
+
 
     input("Press enter to exit")

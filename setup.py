@@ -4,7 +4,7 @@ setup(
   packages = ['prettyTables'],   
   version = '0.2',      
   license='MIT',        
-  description = 'All sorts of tables and graphics for console (for now just tables) ',   
+  description = 'Tables to print in console',   
   author = 'Benjamin Ramirez',                   
   author_email = 'chilerito12@gmail.com',      
   url = 'https://github.com/Kyostenas/prettyTables',   
