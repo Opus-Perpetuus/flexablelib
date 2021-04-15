@@ -34,7 +34,7 @@ VerticalComposition = namedtuple(
     ]
 )
 
-Separator = namedtuple(
+SeparatorLine = namedtuple(
     'Separator',
     [
         'left',
@@ -56,13 +56,29 @@ _styleCompositions = {
     'clean': CompositionSet(
         horizontalComposition=HorizontalComposition(
             headerSuperior=None,
-            headerInferior=Separator('', '─', STIVISP, ''),
+            headerInferior=SeparatorLine('', '─', STINVISP, ''),
             tableBody=None,
             tableEnd=None
         ),
         verticalComposition=VerticalComposition(
-            header=Separator('', STIVISP, None, ''),
-            tableBody=Separator('', STIVISP, None, '')
+            header=SeparatorLine('', STINVISP, None, ''),
+            tableBody=SeparatorLine('', STINVISP, None, '')
+        ),
+        tableOptions=TableOptions(
+            margin=0,
+            hideWhenNoHeader=[0, 2, 3]
+        )
+    ),
+     'bold_header': CompositionSet(
+        horizontalComposition=HorizontalComposition(
+            headerSuperior=SeparatorLine('╔', '═', '╦', '╗'),
+            headerInferior=SeparatorLine('╚', '═', '╩', '╝'),
+            tableBody=SeparatorLine('├', '─', '┼', '┤'),
+            tableEnd=SeparatorLine('└', '─', '┴', '┘'),
+        ),
+        verticalComposition=VerticalComposition(
+            header=SeparatorLine('║', '║', None, '║'),
+            tableBody=SeparatorLine('│', '│', None, '│')
         ),
         tableOptions=TableOptions(
             margin=STAMA,
