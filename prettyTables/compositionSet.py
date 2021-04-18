@@ -7,7 +7,7 @@ from constants import *
 """
 
 
-CompositionSet = namedtuple(
+tableComposition = namedtuple(
     'CompositionSet',
     [
         'horizontalComposition',
@@ -21,6 +21,7 @@ HorizontalComposition = namedtuple(
     [
         'headerSuperior',
         'headerInferior',
+        'startWithNoHeader',
         'tableBody',
         'tableEnd'
     ]
@@ -53,10 +54,11 @@ TableOptions = namedtuple(
 )
 
 _styleCompositions = {
-    'clean': CompositionSet(
+    'clean': tableComposition(
         horizontalComposition=HorizontalComposition(
             headerSuperior=None,
             headerInferior=SeparatorLine('', '─', STINVISP, ''),
+            startWithNoHeader=None,
             tableBody=None,
             tableEnd=None
         ),
@@ -69,16 +71,17 @@ _styleCompositions = {
             hideWhenNoHeader=[0, 2, 3]
         )
     ),
-     'bold_header': CompositionSet(
+    'bold_borderline': tableComposition(
         horizontalComposition=HorizontalComposition(
-            headerSuperior=SeparatorLine('╔', '═', '╦', '╗'),
-            headerInferior=SeparatorLine('╚', '═', '╩', '╝'),
-            tableBody=SeparatorLine('├', '─', '┼', '┤'),
-            tableEnd=SeparatorLine('└', '─', '┴', '┘'),
+            headerSuperior=SeparatorLine('╔', '═', '╤', '╗'),
+            headerInferior=SeparatorLine('╠', '═', '╪', '╣'),
+            startWithNoHeader=SeparatorLine('╔', '═', '╤', '╗'),
+            tableBody=SeparatorLine('╟', '─', '┼', '╢'),
+            tableEnd=SeparatorLine('╚', '═', '╧', '╝'),
         ),
         verticalComposition=VerticalComposition(
-            header=SeparatorLine('║', '║', None, '║'),
-            tableBody=SeparatorLine('│', '│', None, '│')
+            header=SeparatorLine('║', '│', None, '║'),
+            tableBody=SeparatorLine('║', '│', None, '║')
         ),
         tableOptions=TableOptions(
             margin=STAMA,
