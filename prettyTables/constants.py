@@ -10,3 +10,9 @@ STINVISP = '  '
 
 # Standar margin for cells is one space. More could look weird.
 STAMA = 1
+
+# Escape codes for a new line
+ESCODES = ['\n', '\r']
+
+# Minimum width of a column
+MIWCOL = 2

@@ -48,8 +48,7 @@ SeparatorLine = namedtuple(
 TableOptions = namedtuple(
     'TableOptions',
     [
-        'margin',
-        'hideWhenNoHeader'
+        'margin'
     ]
 )
 
@@ -60,6 +59,22 @@ _styleCompositions = {
             headerInferior=SeparatorLine('', '─', STINVISP, ''),
             startWithNoHeader=None,
             tableBody=None,
+            tableEnd=SeparatorLine('', '─', STINVISP, '')
+        ),
+        verticalComposition=VerticalComposition(
+            header=SeparatorLine('', STINVISP, None, ''),
+            tableBody=SeparatorLine('', STINVISP, None, '')
+        ),
+        tableOptions=TableOptions(
+            margin=0
+        )
+    ),
+    'plain': tableComposition(
+        horizontalComposition=HorizontalComposition(
+            headerSuperior=None,
+            headerInferior=None,
+            startWithNoHeader=None,
+            tableBody=None,
             tableEnd=None
         ),
         verticalComposition=VerticalComposition(
@@ -67,8 +82,7 @@ _styleCompositions = {
             tableBody=SeparatorLine('', STINVISP, None, '')
         ),
         tableOptions=TableOptions(
-            margin=0,
-            hideWhenNoHeader=[0, 2, 3]
+            margin=0
         )
     ),
     'bold_borderline': tableComposition(
@@ -84,10 +98,74 @@ _styleCompositions = {
             tableBody=SeparatorLine('║', '│', None, '║')
         ),
         tableOptions=TableOptions(
-            margin=STAMA,
-            hideWhenNoHeader=[0, 2, 3]
+            margin=STAMA
         )
-    )
+    ),
+    'grid': tableComposition(
+        horizontalComposition=HorizontalComposition(
+            headerSuperior=SeparatorLine('+', '-', '+', '+'),
+            headerInferior=SeparatorLine('+', '=', '+', '+'),
+            startWithNoHeader=SeparatorLine('+', '-', '+', '+'),
+            tableBody=SeparatorLine('+', '-', '+', '+'),
+            tableEnd=SeparatorLine('+', '-', '+', '+')
+        ),
+        verticalComposition=VerticalComposition(
+            header=SeparatorLine('|', '|', None, '|'),
+            tableBody=SeparatorLine('|', '|', None, '|')
+        ),
+        tableOptions=TableOptions(
+            margin=STAMA
+        )
+    ),
+    'windows_alike': tableComposition(
+        horizontalComposition=HorizontalComposition(
+            headerSuperior=None,
+            headerInferior=SeparatorLine('', '-', STINVISP, ''),
+            startWithNoHeader=None,
+            tableBody=None,
+            tableEnd=None
+        ),
+        verticalComposition=VerticalComposition(
+            header=SeparatorLine('', STINVISP, None, ''),
+            tableBody=SeparatorLine('', STINVISP, None, '')
+        ),
+        tableOptions=TableOptions(
+            margin=0
+        )
+    ),
+    'thin_borderLine': tableComposition(
+        horizontalComposition=HorizontalComposition(
+            headerSuperior=SeparatorLine('┌', '─', '─', '┐'),
+            headerInferior=SeparatorLine('├', '─', '┬', '┤'),
+            startWithNoHeader=SeparatorLine('┌', '─', '┬', '┐'),
+            tableBody=SeparatorLine('├', '─', '┼', '┤'),
+            tableEnd=SeparatorLine('└', '─', '┴', '┘')
+        ),
+        verticalComposition=VerticalComposition(
+            header=SeparatorLine('│', ' ', None, '│'),
+            tableBody=SeparatorLine('│', '│', None, '│')
+        ),
+        tableOptions=TableOptions(
+            margin=STAMA
+        )
+    ),
+    'bold_header': tableComposition(
+        horizontalComposition=HorizontalComposition(
+            headerSuperior=SeparatorLine('╔', '═', '╦', '╗'),
+            headerInferior=SeparatorLine('╚', '═', '╩', '╝'),
+            startWithNoHeader=SeparatorLine('┌', '─', '┬', '┐'),
+            tableBody=SeparatorLine('├', '─', '┼', '┤'),
+            tableEnd=SeparatorLine('└', '─', '┴', '┘')
+        ),
+        verticalComposition=VerticalComposition(
+            header=SeparatorLine('║', '║', None, '║'),
+            tableBody=SeparatorLine('│', '│', None, '│')
+        ),
+        tableOptions=TableOptions(
+            margin=STAMA
+        )
+    ),
+
 }
 
 def getCompositions():
