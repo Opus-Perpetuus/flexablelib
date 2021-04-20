@@ -95,9 +95,12 @@ class Table(object):
         windowSize = Utils.getWIndowsSize()
 
         headerIncluded = True if (
-            self.headers == 'first' or self.isarray(self.headers )
+            self.headers == 'first' or Utils.isarray(self.headers)
             ) else False
         
+        if Utils.isarray(self.headers):
+            self.headers = 'first'
+            self.data.insert(0, headers)
 
         cellsData = adjust.TableMeasures(
             expandToWindow=self.expandToWindow,
@@ -116,20 +119,6 @@ class Table(object):
             cellMargin=margin,
             alignments=self.strAlign
             )
-
-        if Utils.isarray(self.headers):
-            headerAdjustment = adjust.Cells(
-                tabularData=self.headers,
-                columnWidths=adjustedColumnWidths,
-                cellMargin=margin,
-                alignments=self.strAlign
-            )
-
-             # wrap the rows that exceed the width limit
-            headerAdjustment.wrapRows()
-            
-            formatedHeader = headerAdjustment.format()
-            self.headers = formatedHeader
 
         # wrap the rows that exceed the width limit
         cellsAdjustment.wrapRows()
@@ -162,8 +151,7 @@ class Table(object):
 
 if __name__ == '__main__':
 
-    import nltk
-    from random import choice, randint
+    from random import  randint
 
     alignment = input("Alignment (0: left, 1: center, 2: right): ")
     alignment = randint(0, 2) if alignment == "" else int(alignment)
@@ -171,51 +159,26 @@ if __name__ == '__main__':
     expandToWindow = input("Adjust table to window (0: no, 1: yes): ")
     expandToWindow = randint(0, 1) if expandToWindow == "" else int(expandToWindow)
     expandToWindow = [False, True][expandToWindow]
-
-    try:
-        nltk.corpus.words.words()
-    except:
-        nltk.download("words")
-
-    inicio = randint(2000, 200000)
-    final = 10
-    wordList = nltk.corpus.words.words()[inicio:inicio+final] + ["a", "x", "y", "b", "c", "v", "q", "w", "e", "o", "t", "g"]
-    wordList[0] += ' Word'
-    wordList[1] += ' Elongated'
-    numeros = "1 3 2 4 5 6 7 8 9 0"
-    letras = "a b c d e f g h i j k l m n ñ o p q r s t u v w x y z"
-
-    encabezado = ["STRING","LEN","TYPE","ID"]
-    datos = [encabezado]
-    for x in range(0, len(wordList)):
-        datos.append(['' for nuevo in encabezado])
-        for y in range(0, len(encabezado)):
-            if y == 0:
-                datos[x+1][y] = wordList[x]
-            elif y == 1:
-                datos[x+1][y] = str(len(wordList[x]))
-            elif y == 2:
-                datos[x+1][y] = (choice(["Word", "String"])) if len(wordList[x]) > 1 else choice(["Letter", "Character"])
-            else:
-                tamaño = randint(30, 40)
-                idEscogido = ""            
-
-                for caracter in range(0, tamaño):
-                    eleccion = randint(0, 1)
-                    mayuscula = randint(0, 1)
-                    aElegir = (numeros if eleccion==0 else letras).split()
-                    caracter = choice(aElegir)
-                    caracter.upper() if (caracter in letras and mayuscula == 1) else True
-                    idEscogido += caracter
-
-                datos[x+1][y] = idEscogido
     
+    headers = ['STRING', 'LEN', 'TYPE', 'ID']
+    datos = [
+            ['gamelang Word', '13', 'Word', '1e8ñrz8ty136s66ñ4b8k38qn9ñadryzb5'],
+            ['gameless Elongated', '18', 'String', '4j4ycaicwenh2ñs25ñmmmr239ñ23w0bn803hcs'],
+            ['gamelike', '8', 'Word', 'p2in3782mub17480eq72mq3pc7v9zon'],
+            ['Gamelion', '8', 'String', '4hv2d710s6vsñ8n0ybfms2c301qr7dj'],
+            ['gamelotte', '9', 'Word', '1tg5y3jn7xf9046681qe8o1pul50c046w29xz'],
+            ['gamely', '6', 'String', 'mq58xu8vq84x784ngcw44w5410u28fñ'],
+            ['gamene', '6', 'Word', '98r75qj996c379tg1kñpz10dw534m22a'],
+            ['gameness', '8', 'String', 'yfv5886ff04sp7a1t8z30tugq3bx47jd'],
+            ['gamesome', '8', 'Word', 'owus19312vy2hube4rdha0ej9s98v28fz'],
+            ['gamesomely', '10', 'String', '0ms888ib3768p3khz32f8272456v219']
+            ]
 
     tabla = Table(
         tabularData=datos,
-        headers='first',
+        headers=headers,
         strAlign=alignment,
-        style='bold_header',
+        style='bold_borderline',
         expandToWindow=expandToWindow
         ).make()
 
