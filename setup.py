@@ -10,9 +10,7 @@ setup(
   url = 'https://github.com/Kyostenas/prettyTables',   
   download_url = 'https://github.com/Kyostenas/prettyTables/archive/v0.3-beta.1.tar.gz',    
   keywords = ['console', 'graphics'],   
-  install_requires=[ 
-      'nltk'
-      ],
+  install_requires=[],
   classifiers=[
     'Development Status :: 4 - Beta',      
     'Intended Audience :: Developers',      

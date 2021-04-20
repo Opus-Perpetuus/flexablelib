@@ -6,7 +6,6 @@ from constants import *
 import compositionSet
 import composed
 import adjust
-import tabulate
 
 class Table(object):
     '''
