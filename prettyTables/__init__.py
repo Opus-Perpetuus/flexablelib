@@ -1,1 +1,1 @@
-from prettyTables.table import table
+from prettyTables.table import Table
