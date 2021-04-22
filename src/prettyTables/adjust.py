@@ -1,8 +1,6 @@
-from utils import Utils
-from constants import *
-import compositionSet
-import textwrap
-import composed
+from .utils import Utils
+from .constants import *
+from . import textwrap
 
 class TableMeasures(object):
 

@@ -1,11 +1,11 @@
 '''
 Print formated tabular data in different styles
 '''
-from utils import Utils
-from constants import *
-import compositionSet
-import composed
-import adjust
+from .utils import Utils
+from .constants import *
+from . import compositionSet
+from . import composed
+from . import adjust
 
 class Table(object):
     '''
@@ -99,7 +99,7 @@ class Table(object):
         
         if Utils.isarray(self.headers):
             self.headers = 'first'
-            self.data.insert(0, headers)
+            self.data.insert(0, self.headers)
 
         cellsData = adjust.TableMeasures(
             expandToWindow=self.expandToWindow,
@@ -150,37 +150,4 @@ class Table(object):
 
 if __name__ == '__main__':
 
-    from random import  randint
-
-    alignment = input("Alignment (0: left, 1: center, 2: right): ")
-    alignment = randint(0, 2) if alignment == "" else int(alignment)
-    alignment = ['left', 'center', 'right'][alignment]
-    expandToWindow = input("Adjust table to window (0: no, 1: yes): ")
-    expandToWindow = randint(0, 1) if expandToWindow == "" else int(expandToWindow)
-    expandToWindow = [False, True][expandToWindow]
-    
-    headers = ['STRING', 'LEN', 'TYPE', 'ID']
-    datos = [
-            ['gamelang Word', '13', 'Word', '1e8ñrz8ty136s66ñ4b8k38qn9ñadryzb5'],
-            ['gameless Elongated', '18', 'String', '4j4ycaicwenh2ñs25ñmmmr239ñ23w0bn803hcs'],
-            ['gamelike', '8', 'Word', 'p2in3782mub17480eq72mq3pc7v9zon'],
-            ['Gamelion', '8', 'String', '4hv2d710s6vsñ8n0ybfms2c301qr7dj'],
-            ['gamelotte', '9', 'Word', '1tg5y3jn7xf9046681qe8o1pul50c046w29xz'],
-            ['gamely', '6', 'String', 'mq58xu8vq84x784ngcw44w5410u28fñ'],
-            ['gamene', '6', 'Word', '98r75qj996c379tg1kñpz10dw534m22a'],
-            ['gameness', '8', 'String', 'yfv5886ff04sp7a1t8z30tugq3bx47jd'],
-            ['gamesome', '8', 'Word', 'owus19312vy2hube4rdha0ej9s98v28fz'],
-            ['gamesomely', '10', 'String', '0ms888ib3768p3khz32f8272456v219']
-            ]
-
-    tabla = Table(
-        tabularData=datos,
-        headers=headers,
-        strAlign=alignment,
-        style='bold_borderline',
-        expandToWindow=expandToWindow
-        ).make()
-
-    print(tabla)
-
-    input("Press enter to exit")
+    print('This is not supposed to be executed!')

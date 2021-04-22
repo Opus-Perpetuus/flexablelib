@@ -2,13 +2,11 @@
 CREACION DE ESTILOS PARA LAS TABLAS
 """
 
-from compositionSet import (
+from .compositionSet import (
     HorizontalComposition,
     VerticalComposition
 )
-from collections import namedtuple
-from tabulate import tabulate
-from utils import Utils
+from .utils import Utils
 
 class Separators(object):
 

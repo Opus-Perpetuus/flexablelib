@@ -1,5 +1,5 @@
 from collections import namedtuple
-from constants import *
+from .constants import *
 
 """
 *¡This part was based (majority) in the "tabulate" package structure!
