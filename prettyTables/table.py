@@ -191,7 +191,7 @@ _styleCompositions = {
             margin=0
         )
     ),
-    'thin_borderLine': tableComposition(
+    'thin_borderline': tableComposition(
         horizontalComposition=HorizontalComposition(
             headerSuperior=SeparatorLine('┌', '─', '─', '┐'),
             headerInferior=SeparatorLine('├', '─', '┬', '┤'),
@@ -723,7 +723,7 @@ class Table(object):
         headers=None,
         style='clean',
         strAlign='left',
-        expandToWindow=True
+        expandToWindow=False
     ):
         self.data = tabularData
         self.headers = headers
