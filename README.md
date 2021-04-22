@@ -117,7 +117,6 @@ This is a dramatization using the previous example.
 ╚═════════════╧═════╧═════╧════════════════════════╝
 ```
 
-> ***For now it can't properly format lines with escape codes***
 
 
 
