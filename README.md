@@ -1,7 +1,6 @@
 # prettyTables
 
-This library is under development, and may suffer changes, however the base structure will not  
-change anymore.
+This library is under development, and may suffer changes.
 
 Feel free to make issues, suggestions, or pull requests.
 
