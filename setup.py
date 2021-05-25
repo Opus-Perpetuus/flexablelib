@@ -2,13 +2,13 @@ from distutils.core import setup
 setup(
   name = 'prettyTables',         
   packages = ['prettyTables'],   
-  version = '0.4',      
+  version = '0.4.1',      
   license='MIT',        
   description = 'Tables to print in console',   
   author = 'Benjamin Ramirez',                   
   author_email = 'chilerito12@gmail.com',      
   url = 'https://github.com/Kyostenas/prettyTables',   
-  download_url = 'https://github.com/Kyostenas/prettyTables/archive/v0.4-beta.1.tar.gz',    
+  download_url = 'https://github.com/Kyostenas/prettyTables/archive/v0.4.1-beta.1.tar.gz',    
   keywords = ['console', 'graphics'],   
   install_requires=[],
   classifiers=[

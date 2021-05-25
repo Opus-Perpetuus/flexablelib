@@ -3,6 +3,7 @@ Print formated tabular data in different styles
 '''
 
 from collections import namedtuple
+from sys import addaudithook
 import textwrap
 import os
 
@@ -29,12 +30,21 @@ ESCODES = ['\n', '\r']
 # Minimum width of a column
 MIWCOL = 2
 
+#TODO Decide if LineSpacing will be optional or deafult
+# Line Spacing for certain tableSyles
+LISPA = 1
+
 #-----------------------------------------------------------------------
 '''
 UTILS
 '''
 
-class Utils():
+
+class Utils(object):
+    '''
+    A class that contains functions for different porpuses that are helpfull
+    or essential.
+    '''
 
     def getWIndowsSize():
         if os.name == "nt":
@@ -54,6 +64,24 @@ class Utils():
     
     def isarray(piece):
         return isinstance(piece, list)
+    
+    def lenOfElements(self, elementList, index=0, lens=[]):
+        '''
+        Returns the lenght of each row (sub-array) in a single array
+        '''
+        # Will only calculate len if index is lower than the len of the array.
+        # If it isn't less, will return the final array of lens.
+        if index < len(elementList):
+
+            # Appends the lenght of the current element using the
+            # "index" param, wich starts as 0. 
+            lens.append(len(elementList[index]))
+
+            # For each time it appends a lenght, calls again the function, sending 
+            # the listOfElements, the lens array with the previous value\s and the
+            # index plus 1, last one so looks for the next element 
+            self.lenOfElements(elementList, index+1, lens)
+        return lens
 
 #-----------------------------------------------------------------------
 """
@@ -106,8 +134,8 @@ SeparatorLine = namedtuple(
 TableOptions = namedtuple(
     'TableOptions',
     [
-        'margin'
-    ]
+        'margin'            #FIX add "TopWithoutHeader" option in the TableOptions
+    ]                       #TODO add "lineSpacing" option
 )
 
 _styleCompositions = {
@@ -237,6 +265,7 @@ Here the separators and data rows are formed
 """
 
 class Separators(object):
+    # TODO Add description to the "Separators" Class
 
     def __init__(
         self,
@@ -263,8 +292,11 @@ class Separators(object):
     def __str__(self):
         pass
 
-    def makeMiddlePart(self, middle: str, singleColWidht: int, ):
-        return f'{f"{middle}"*((singleColWidht)+(self.cellMargin*2))}'
+    def makeMiddlePart(self, middle: str, singleColWidth: int, ):
+        '''
+        Returns the horizontal in a single column for a separator
+        '''
+        return f'{f"{middle}"*(singleColWidth+(self.cellMargin*2))}'
 
     def makeOne(self, singleComposition: tuple):
         """
@@ -341,11 +373,16 @@ class Separators(object):
 
 
 class DataRows(object):
+    #TODO add description to the "DataRows" Class
 
     def __init__(self, adjustedTableCells: list, composition: tuple, headers):
-        self.headerCells = adjustedTableCells[0] if(
-            (headers.lower() == 'first') if not Utils.isarray(headers) else False
-            ) else headers
+        try:
+            if Utils.isarray(headers):
+                self.headerCells = headers
+            elif headers.lower() == 'first':
+                self.headerCells = adjustedTableCells[0] 
+        except:    
+            self.headerCells = None
         self.rowCells = adjustedTableCells[1:]
         self.composition = composition 
 
@@ -407,30 +444,92 @@ Here the column widths are established, and the cells' spaces put.
 
 class TableMeasures(object):
 
-    def __init__(self, expandToWindow, rawData,  cellMargin, composition, windowSize):
+    def __init__(self,
+                 expandToWindow: bool, 
+                 rawData: list[list],
+                 cellMargin: int,
+                 composition: tuple,
+                 windowSize: int,
+                 adjustWidthTo: str,
+                 adjustHeaderWidthTo: str,
+                 ):
         self.verticalDivisions =  composition.verticalComposition.tableBody
         self.lenOfMidDiv = len(self.verticalDivisions.middle)
         self.lenOfRight = len(self.verticalDivisions.right)
         self.lenOfLeft = len(self.verticalDivisions.left)
         self.windowMeasures = windowSize
-        self.windowWidht = int(self.windowMeasures[1])
-        self.expandToWindow = expandToWindow # replace number for boolean
+        self.windowWidth = int(self.windowMeasures[1])
+        self.expandToWindow = expandToWindow
+        self.adjustWidthTo = adjustWidthTo,
+        self.adjustHeaderWidthTo = adjustHeaderWidthTo
         self.cellMargin = cellMargin
         self.rawData = rawData
 
+
+
+    def addColumns(self, difference, index, side):
+        '''
+        Adds blank strings ('') until the difference is 0
+        '''
+        # Will inly do something if there's a difference of widths 
+        if difference > 0:
+
+            # [..., ['' , 'data', ...], ...]
+            #        /\
+            #        Inserts at start
+            if side == 'right':
+                self.rawData[index].insert(0, '')
+
+            # [..., ['data', ..., ''], ...]
+            #                     /\
+            #                     Inserts at end
+            elif side == 'left':
+                self.rawData[index].append('')
+
+            # Will keep executing the function untill there's no
+            # difference with the widest (difference == 0), that's
+            # why the difference param is send with a -1 
+            self.addColumns(difference - 1, index, side)
+
     def makeRowsEquals(self):
         '''
-        Aqui se comprueba si todas las columnas tienen el mismo ancho.
-        '''
-        # falta completar comprobación del mismo ancho.
+        Here the widths of the data arrays are adjusted if there are bigger
+        ones or smaller ones.The smaller ones will always be expanded, and 
+        not the other way around.
 
-        pass
-       
+        This example shows the deafult way, with the "adjustWidthTo" option
+        deafult 'right'
+
+        >>> [                      [
+            ['dat','dat'],         ['dat','dat',''   ],
+            ['dat'],            -> ['dat',''   ,''   ],
+            ['dat','dat','dat']    ['dat','dat','dat']
+            ]                      ]
+
+        '''
+        WidestLine = max(Utils().lenOfElements(self.rawData))
+        print(WidestLine)
+        for row in range(len(self.rawData)):
+            if WidestLine > len(self.rawData[row]):
+                self.addColumns(
+                    WidestLine - (len(self.rawData[row])),
+                    row,
+                    self.adjustHeaderWidthTo if (
+                        row == 0
+                    ) else self.adjustWidthTo
+                )
+
+        print('raw data: ', self.rawData)
+
     def getRawDataCellsWidths(self):
         '''
         Here the widths of each cell are obtained iterating trough each
         row of the raw data.
-        [[cell1, cell2],[cell3, cell4]] --> [[len1, len2],[len3, len4]]
+
+        >>> [                  [
+            [cell1, cell2],    [len1, len2],
+            [cell3, cell4]  -> [len1, len2]
+            ]                  ]
         '''
         
         # Get len of each element in each row.
@@ -446,8 +545,9 @@ class TableMeasures(object):
         '''
         Returns the Width of each column including the margin.
         '''
-
+        # TODO simplify double for cicle
         # Each array in here is a column instead of a row.
+
         columnOrdenatedWidths = [] 
         for col in range(len(cellsWidths[0])):
             columnOrdenatedWidths.append([])
@@ -469,73 +569,73 @@ class TableMeasures(object):
     def getMaxWidth(self, columnWidths):        
         '''
         Returns:
-            - maxWidhtPerCol: A list of the max widht of each column to
+            - maxWidthPerCol: A list of the max width of each column to
                 fill the window, to be stretched or reduced.    
-            - maxWidhtOfColumns: The max width of the columns, excluding
+            - maxWidthOfColumns: The max width of the columns, excluding
                 the witdht of the vertical divisions of the table.
         '''
 
         # The widths of the vertical divisions are substracted of the
         # window width to ensure that the total width of the table, wich
         # includes the divisions, fit the window.
-        maxWidhtOfColumns = (self.windowWidht - 1) - sum([
+        maxWidthOfColumns = (self.windowWidth - 1) - sum([
             self.lenOfLeft,
             ((self.lenOfMidDiv * len(columnWidths)) - 1),
             self.lenOfRight
         ])
 
         # The sum of column widths.
-        WidhtOfColumns = sum(columnWidths)
+        WidthOfColumns = sum(columnWidths)
 
         # What percentage of the sum represents each column.
-        percentages = [column/WidhtOfColumns for column in columnWidths]
+        percentages = [column/WidthOfColumns for column in columnWidths]
 
         # The maximun width per column, obtained multiplying the percentage
-        # of each column by the maxWidhtOfColumns.
-        maxWidhtPerCol = [
+        # of each column by the maxWidthOfColumns.
+        maxWidthPerCol = [
             (
-                round(perc*maxWidhtOfColumns) 
+                round(perc*maxWidthOfColumns) 
             )for perc in percentages
             ]
 
         # sometimes the new size of the columns exceed the max width, 
         # so this substract that diference of the biggest column.
-        newWidhtOfColumns = sum(maxWidhtPerCol)
-        if newWidhtOfColumns > maxWidhtOfColumns:
-            toReduce = maxWidhtPerCol.index(max(maxWidhtPerCol))
-            if maxWidhtOfColumns > 0: 
-                maxWidhtPerCol[toReduce] -= newWidhtOfColumns - maxWidhtOfColumns
+        newWidthOfColumns = sum(maxWidthPerCol)
+        if newWidthOfColumns > maxWidthOfColumns:
+            toReduce = maxWidthPerCol.index(max(maxWidthPerCol))
+            if maxWidthOfColumns > 0: 
+                maxWidthPerCol[toReduce] -= newWidthOfColumns - maxWidthOfColumns
 
         # Now the margin is substracted of the max widths per column, 
         # to avoid miscalculations in the wrapping of multilines in the
         # cells .
-        maxWidhtPerColWithoutMargin = [width - (self.cellMargin*2) for width in maxWidhtPerCol]
+        maxWidthPerColWithoutMargin = [width - (self.cellMargin*2) for width in maxWidthPerCol]
 
         # Here each column is checked to see if there are 0 len columns 
         # (due to reduced space). If it is the case, the width is
         # incremented to fit the minimu width of a column (constant),
         # and the widest column gets decreased to keep to total width
         # the same 
-        for current in range(len(maxWidhtPerColWithoutMargin)):
+        for current in range(len(maxWidthPerColWithoutMargin)):
 
             # the biggest is re-calculated each time in case that the one
             # that was is no longer, because it will be reduced 
-            biggestWidth = max(maxWidhtPerColWithoutMargin)
-            biggestWidth = maxWidhtPerColWithoutMargin.index(biggestWidth)
+            biggestWidth = max(maxWidthPerColWithoutMargin)
+            biggestWidth = maxWidthPerColWithoutMargin.index(biggestWidth)
 
-            currentWidth = maxWidhtPerColWithoutMargin[current]
+            currentWidth = maxWidthPerColWithoutMargin[current]
             if currentWidth < MIWCOL:
                 incremented = 0
                 while currentWidth <= MIWCOL:
                     currentWidth += 1
                     incremented += 1
-                maxWidhtPerColWithoutMargin[current] = currentWidth
-                maxWidhtPerColWithoutMargin[biggestWidth] -= incremented
+                maxWidthPerColWithoutMargin[current] = currentWidth
+                maxWidthPerColWithoutMargin[biggestWidth] -= incremented
 
 
 
 
-        return maxWidhtPerColWithoutMargin, maxWidhtOfColumns
+        return maxWidthPerColWithoutMargin, maxWidthOfColumns
 
     def adjustWidthToWindow(self, columnWidths):
         '''
@@ -598,23 +698,7 @@ class Cells(object):
             currentCol += 1
         
         return rows
-
-    # def getWrapInfo(self):
-    #     '''
-    #     Returns a list of lists. Each is a multiline, and contain the
-    #     indexes of the rows that will conform the same line.
-    #     '''
-    #     multiLines = []
-
-    #     currentLine = 0
-    #     for multiline in self.tabularData:
-    #         multiLines.append([])
-    #         for row in multiline:
-    #             multiLines[-1].append(currentLine)
-    #             currentLine += 1
-
-    #     return multiLines
-    
+ 
     def wrapRows(self):
         '''
         Makes the tabularData a list of list's. Each list is a multiline,
@@ -622,13 +706,13 @@ class Cells(object):
         Returns Nothing.
         '''
 
-        maxWidhts = self.columnWidths
+        maxWidths = self.columnWidths
 
         currentRow = 0
         for row in self.tabularData:
             currentCell = 0
             for cell in row:
-                currWidth = maxWidhts[currentCell]
+                currWidth = maxWidths[currentCell]
 
                 if len(cell) > currWidth:
                     cell = self.wrapSingleCell(cell, currWidth)
@@ -647,6 +731,7 @@ class Cells(object):
         Calculates the blanks spaces in the left and right of the cell.
         Returns: leftPart, rightPart.
         '''
+        #FIX Investigate why some styles result in extra space in the columns
 
         mrg = self.cellMargin
 
@@ -723,16 +808,20 @@ class Table(object):
         headers=None,
         style='clean',
         strAlign='left',
+        adjustHeaderWidthTo = 'right',
+        adjustWidthsTo = 'left',
         expandToWindow=False
     ):
+        self.adjustHeaderWidthTo = adjustHeaderWidthTo
+        self.adjustWidthsTo = adjustWidthsTo
+        self.expandToWindow = expandToWindow
+        self.strAlign = strAlign
         self.data = tabularData
         self.headers = headers
         self.style = style
-        self.strAlign = strAlign
-        self.expandToWindow = expandToWindow
-        self.formatedCells = []
         self.formatedSeparators = ()
         self.formatedDataRows = ()
+        self.formatedCells = []
     
     def sepExists(self, separator):
         """
@@ -763,8 +852,11 @@ class Table(object):
         # each array with separators. If it is a multi line, it will result in
         # multiple rows betwin two separators, if not, only one, but the structure of 
         # "every table row in arrays" is the same.
-        headerRows = self.formatedDataRows.header
-        bodyRows = self.formatedDataRows.tableBody
+        headerRows =  self.formatedDataRows.header
+        bodyRows =  self.formatedDataRows.tableBody
+
+        if headerRows == None:
+            headerRows = ''
 
         headerString = ''.join(headerRows)
         completeRows = [''.join(multiline) for multiline in bodyRows]
@@ -788,6 +880,7 @@ class Table(object):
 
         Returns a table in the form of a string.
         '''
+
         composition = _styleCompositions[self.style]
         margin = composition.tableOptions.margin
         windowSize = Utils.getWIndowsSize()
@@ -797,16 +890,22 @@ class Table(object):
             ) else False
         
         if Utils.isarray(self.headers):
-            self.headers = 'first'
             self.data.insert(0, self.headers)
+            self.headers = 'first'
 
         cellsData = TableMeasures(
             expandToWindow=self.expandToWindow,
             rawData=self.data,
             cellMargin=margin,
             composition=composition,
-            windowSize=windowSize
+            windowSize=windowSize,
+            adjustWidthTo=self.adjustWidthsTo,
+            adjustHeaderWidthTo=self.adjustHeaderWidthTo
             )
+
+        # Make length of all data arrays the same
+        cellsData.makeRowsEquals()
+            
         cellsWidths = cellsData.getRawDataCellsWidths()
         columnWidths = cellsData.getFullColumnWidths(cellsWidths)
         adjustedColumnWidths = cellsData.adjustWidthToWindow(columnWidths)
@@ -826,7 +925,7 @@ class Table(object):
  
         obtainedSeparators = Separators(
             headerIncluded=headerIncluded,
-            alignments=[],                              # Correct
+            alignments=[],                  #TODO add multi-alignments functionality
             cellMargin=margin,
             composition=composition,
             colsWidth=adjustedColumnWidths
