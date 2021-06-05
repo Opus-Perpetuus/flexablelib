@@ -475,8 +475,6 @@ class TableMeasures(object):
         # Will inly do something if there's a difference of widths 
         if difference > 0:
 
-            print('adding to:', side)
-
             # [..., ['' , 'data', ...], ...]
             #        /\
             #        Inserts at start
@@ -519,7 +517,6 @@ class TableMeasures(object):
                     row,
                     self.adjustWidthTo
                 )
-                print(self.rawData[row])
         
         return self.rawData
 
