@@ -6,6 +6,7 @@ from collections import namedtuple
 from sys import addaudithook
 import textwrap
 import os
+from typing import List
 
 
 #-----------------------------------------------------------------------
@@ -460,7 +461,7 @@ class TableMeasures(object):
         self.windowMeasures = windowSize
         self.windowWidth = int(self.windowMeasures[1])
         self.expandToWindow = expandToWindow
-        self.adjustWidthTo = adjustWidthTo,
+        self.adjustWidthTo = adjustWidthTo
         self.adjustHeaderWidthTo = adjustHeaderWidthTo
         self.cellMargin = cellMargin
         self.rawData = rawData
@@ -473,6 +474,8 @@ class TableMeasures(object):
         '''
         # Will inly do something if there's a difference of widths 
         if difference > 0:
+
+            print('adding to:', side)
 
             # [..., ['' , 'data', ...], ...]
             #        /\
@@ -488,7 +491,7 @@ class TableMeasures(object):
 
             # Will keep executing the function untill there's no
             # difference with the widest (difference == 0), that's
-            # why the difference param is send with a -1 
+            # why the difference param is send with a -1
             self.addColumns(difference - 1, index, side)
 
     def makeRowsEquals(self):
@@ -507,19 +510,18 @@ class TableMeasures(object):
             ]                      ]
 
         '''
+        # Adjust the header firsd
         WidestLine = max(Utils().lenOfElements(self.rawData))
-        print(WidestLine)
-        for row in range(len(self.rawData)):
+        for row in range(0, len(self.rawData)):
             if WidestLine > len(self.rawData[row]):
                 self.addColumns(
                     WidestLine - (len(self.rawData[row])),
                     row,
-                    self.adjustHeaderWidthTo if (
-                        row == 0
-                    ) else self.adjustWidthTo
+                    self.adjustWidthTo
                 )
-
-        print('raw data: ', self.rawData)
+                print(self.rawData[row])
+        
+        return self.rawData
 
     def getRawDataCellsWidths(self):
         '''
@@ -793,13 +795,24 @@ Here the whole table is formed
 
 class Table(object):
     '''
+    # TABLE
+    
     Makes table out of tabular like data:
 
-    >>> tabularData: list[list[any]]
-    >>> headers: 'first' | list[] 
-    >>> style: str
-    >>> strAlign: 'left' | 'center' | 'right'
-    >>> expandToWindow: True | False
+    ```
+    tabularData: list[list[any]]
+    headers: 'first' | list[] | None
+    style:  'clean '
+            'plain '
+            'bold_borderline'
+            'grid'
+            'windows_alike'
+            'thin_borderline'
+            'bold_header'
+    strAlign: 'left' | 'center' | 'right'
+    adjustWidthsTo: 'left' | 'right'
+    adjustHeaderWidthTo: 'left' | 'right'
+    expandToWindow: True | False
     '''  
     
     def __init__(
@@ -808,8 +821,8 @@ class Table(object):
         headers=None,
         style='clean',
         strAlign='left',
-        adjustHeaderWidthTo = 'right',
-        adjustWidthsTo = 'left',
+        adjustWidthsTo = 'right',
+        adjustHeaderWidthTo = 'left',
         expandToWindow=False
     ):
         self.adjustHeaderWidthTo = adjustHeaderWidthTo
@@ -885,13 +898,14 @@ class Table(object):
         margin = composition.tableOptions.margin
         windowSize = Utils.getWIndowsSize()
 
-        headerIncluded = True if (
-            self.headers == 'first' or Utils.isarray(self.headers)
-            ) else False
-        
+        #TODO Make the class manage the header separated of the data 
         if Utils.isarray(self.headers):
             self.data.insert(0, self.headers)
             self.headers = 'first'
+
+        headerIncluded = True if (
+            self.headers == 'first' or Utils.isarray(self.headers)
+            ) else False
 
         cellsData = TableMeasures(
             expandToWindow=self.expandToWindow,
@@ -904,7 +918,7 @@ class Table(object):
             )
 
         # Make length of all data arrays the same
-        cellsData.makeRowsEquals()
+        self.data = cellsData.makeRowsEquals()
             
         cellsWidths = cellsData.getRawDataCellsWidths()
         columnWidths = cellsData.getFullColumnWidths(cellsWidths)
