@@ -8,6 +8,7 @@ Here the separators and data rows are formed
 from .compositionSets import *
 
 
+
 class Separators(object):
     # TODO Add description to the "Separators" Class
 
@@ -83,6 +84,7 @@ class Separators(object):
         sepcomp for sepcomp in self.separatorsCompositions
         ]
 
+
         madeSeparators = []
         current = 0
         for sepToDo in separatorsCompositions:
@@ -105,7 +107,7 @@ class Separators(object):
             headerInferior=madeSeparators[1]if (
                 self.headerIncluded == True
             ) else None,
-            startWithNoHeader=madeSeparators[2] if (
+            startsWithNoHeader=madeSeparators[2] if (
                 self.headerIncluded == False
             ) else None,
             tableBody=madeSeparators[3],
@@ -183,4 +185,3 @@ class DataRows(object):
         )
 
         return madeRows
-    

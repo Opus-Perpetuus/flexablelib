@@ -7,94 +7,89 @@ for each part of the table. Here are are the ones currently added.
 *¡This part was based (mainly) in the "tabulate" package structure!
 """
 
-from collections import namedtuple
-
+from typing import NamedTuple, Union
 from .constants import *
 
 
-tableComposition = namedtuple(
-    'CompositionSet',
-    [
-        'horizontalComposition',
-        'verticalComposition',
-        'tableOptions'
-    ]
-)
+class TableComposition(NamedTuple):
+    horizontalComposition: NamedTuple
+    verticalComposition: NamedTuple
+    tableOptions: NamedTuple
 
-HorizontalComposition = namedtuple(
-    'HorizontalComposition',
-    [
-        'headerSuperior',
-        'headerInferior',
-        'startWithNoHeader',
-        'tableBody',
-        'tableEnd'
-    ]
-)
 
-VerticalComposition = namedtuple(
-    'VerticalComposition', 
-    [
-        'header',
-        'tableBody'
-    ]
-)
+class HorizontalComposition(NamedTuple):
+    headerSuperior: Union[str, None]
+    headerInferior: Union[str, None]
+    startsWithNoHeader: Union[str, None]
+    tableBody: Union[str, None]
+    tableEnd: Union[str, None]
 
-SeparatorLine = namedtuple(
-    'Separator',
-    [
-        'left',
-        'middle',
-        'intersection',
-        'right'
-    ]
-)
 
-TableOptions = namedtuple(
-    'TableOptions',
-    [
-        'margin'            #FIX add "TopWithoutHeader" option in the TableOptions
-    ]                       #TODO add "lineSpacing" option
-)
+class VerticalComposition(NamedTuple): 
+    header: Union[str, None]
+    tableBody: Union[str, None]
 
-_styleCompositions = {
-    'clean': tableComposition(
+
+class SeparatorLine(NamedTuple):
+    left: Union[str, None]
+    middle: Union[str, None]
+    intersection: Union[str, None]
+    right: Union[str, None]
+
+
+class AlignIndicator(NamedTuple):
+    sides: Union[str, None]
+    center: Union[str, None]
+
+
+class TableOptions(NamedTuple):
+    margin: int
+    alignSensitive: bool
+    alignIndicator: Union[NamedTuple, None]
+    
+
+class StyleCompositions(NamedTuple):
+    clean = TableComposition(
         horizontalComposition=HorizontalComposition(
             headerSuperior=None,
             headerInferior=SeparatorLine('', '─', STINVISP, ''),
-            startWithNoHeader=None,
+            startsWithNoHeader=SeparatorLine('', '─', STINVISP, ''),
             tableBody=None,
-            tableEnd=SeparatorLine('', '─', STINVISP, '')
+            tableEnd=SeparatorLine('', '─', STINVISP, ''),
         ),
         verticalComposition=VerticalComposition(
             header=SeparatorLine('', STINVISP, None, ''),
             tableBody=SeparatorLine('', STINVISP, None, '')
         ),
         tableOptions=TableOptions(
-            margin=0
+            margin=0,
+            alignSensitive=False,
+            alignIndicator=None
         )
-    ),
-    'plain': tableComposition(
+    )
+    plain = TableComposition(
         horizontalComposition=HorizontalComposition(
             headerSuperior=None,
-            headerInferior=None,
-            startWithNoHeader=None,
+            headerInferior=SeparatorLine('', STINVISP, None, ''),
+            startsWithNoHeader=None,
             tableBody=None,
-            tableEnd=None
+            tableEnd=None,
         ),
         verticalComposition=VerticalComposition(
             header=SeparatorLine('', STINVISP, None, ''),
             tableBody=SeparatorLine('', STINVISP, None, '')
         ),
         tableOptions=TableOptions(
-            margin=0
+            margin=0,
+            alignSensitive=False,
+            alignIndicator=None
         )
-    ),
-    'bold_borderline': tableComposition(
+    )
+    bold_borderline = TableComposition(
         horizontalComposition=HorizontalComposition(
             headerSuperior=SeparatorLine('╔', '═', '╤', '╗'),
             headerInferior=SeparatorLine('╠', '═', '╪', '╣'),
-            startWithNoHeader=SeparatorLine('╔', '═', '╤', '╗'),
+            startsWithNoHeader=SeparatorLine('╔', '═', '╤', '╗'),
             tableBody=SeparatorLine('╟', '─', '┼', '╢'),
             tableEnd=SeparatorLine('╚', '═', '╧', '╝'),
         ),
@@ -103,75 +98,99 @@ _styleCompositions = {
             tableBody=SeparatorLine('║', '│', None, '║')
         ),
         tableOptions=TableOptions(
-            margin=STAMA
+            margin=STAMA,
+            alignSensitive=False,
+            alignIndicator=None
         )
-    ),
-    'grid': tableComposition(
+    )
+    grid = TableComposition(
         horizontalComposition=HorizontalComposition(
             headerSuperior=SeparatorLine('+', '-', '+', '+'),
             headerInferior=SeparatorLine('+', '=', '+', '+'),
-            startWithNoHeader=SeparatorLine('+', '-', '+', '+'),
+            startsWithNoHeader=SeparatorLine('+', '-', '+', '+'),
             tableBody=SeparatorLine('+', '-', '+', '+'),
-            tableEnd=SeparatorLine('+', '-', '+', '+')
+            tableEnd=SeparatorLine('+', '-', '+', '+'),
         ),
         verticalComposition=VerticalComposition(
             header=SeparatorLine('|', '|', None, '|'),
             tableBody=SeparatorLine('|', '|', None, '|')
         ),
         tableOptions=TableOptions(
-            margin=STAMA
+            margin=STAMA,
+            alignSensitive=False,
+            alignIndicator=None
         )
-    ),
-    'windows_alike': tableComposition(
+    )
+    windows_alike = TableComposition(
         horizontalComposition=HorizontalComposition(
             headerSuperior=None,
             headerInferior=SeparatorLine('', '-', STINVISP, ''),
-            startWithNoHeader=None,
+            startsWithNoHeader=None,
             tableBody=None,
-            tableEnd=None
+            tableEnd=None,
         ),
         verticalComposition=VerticalComposition(
             header=SeparatorLine('', STINVISP, None, ''),
             tableBody=SeparatorLine('', STINVISP, None, '')
         ),
         tableOptions=TableOptions(
-            margin=0
+            margin=0,
+            alignSensitive=False,
+            alignIndicator=None
         )
-    ),
-    'thin_borderline': tableComposition(
+    )
+    thin_borderline = TableComposition(
         horizontalComposition=HorizontalComposition(
             headerSuperior=SeparatorLine('┌', '─', '─', '┐'),
             headerInferior=SeparatorLine('├', '─', '┬', '┤'),
-            startWithNoHeader=SeparatorLine('┌', '─', '┬', '┐'),
+            startsWithNoHeader=SeparatorLine('┌', '─', '┬', '┐'),
             tableBody=SeparatorLine('├', '─', '┼', '┤'),
-            tableEnd=SeparatorLine('└', '─', '┴', '┘')
+            tableEnd=SeparatorLine('└', '─', '┴', '┘'),
         ),
         verticalComposition=VerticalComposition(
             header=SeparatorLine('│', ' ', None, '│'),
             tableBody=SeparatorLine('│', '│', None, '│')
         ),
         tableOptions=TableOptions(
-            margin=STAMA
+            margin=STAMA,
+            alignSensitive=False,
+            alignIndicator=None
         )
-    ),
-    'bold_header': tableComposition(
+    )
+    bold_header = TableComposition(
         horizontalComposition=HorizontalComposition(
             headerSuperior=SeparatorLine('╔', '═', '╦', '╗'),
             headerInferior=SeparatorLine('╚', '═', '╩', '╝'),
-            startWithNoHeader=SeparatorLine('┌', '─', '┬', '┐'),
+            startsWithNoHeader=SeparatorLine('┌', '─', '┬', '┐'),
             tableBody=SeparatorLine('├', '─', '┼', '┤'),
-            tableEnd=SeparatorLine('└', '─', '┴', '┘')
+            tableEnd=SeparatorLine('└', '─', '┴', '┘'),
         ),
         verticalComposition=VerticalComposition(
             header=SeparatorLine('║', '║', None, '║'),
             tableBody=SeparatorLine('│', '│', None, '│')
         ),
         tableOptions=TableOptions(
-            margin=STAMA
+            margin=STAMA,
+            alignSensitive=False,
+            alignIndicator=None
         )
-    ),
+    )
+    pipes = TableComposition(
+        horizontalComposition=HorizontalComposition(
+            headerSuperior=None,
+            headerInferior=SeparatorLine('|', '-', '|', '|'),
+            startsWithNoHeader=SeparatorLine('|', '-', '|', '|'),
+            tableBody=None,
+            tableEnd=SeparatorLine('|', '-', '|', '|'),
+        ),
+        verticalComposition=VerticalComposition(
+            header=SeparatorLine('|', '|', None, '|'),
+            tableBody=SeparatorLine('|', '|', None, '|')
+        ),
+        tableOptions=TableOptions(
+            margin=STAMA,
+            alignSensitive=True,
+            alignIndicator=AlignIndicator(':', None)
+        )
+    )
 
-}
-
-def getCompositions():
-    return _styleCompositions

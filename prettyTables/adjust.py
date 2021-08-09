@@ -5,6 +5,8 @@ Cells and column formatting
 Here the column widths are established, and the cells' spaces put.
 '''
 
+from functools import reduce
+from typing import Union
 import textwrap
 
 from .constants import *
@@ -29,7 +31,7 @@ class TableMeasures(object):
         self.lenOfRight = len(self.verticalDivisions.right)
         self.lenOfLeft = len(self.verticalDivisions.left)
         self.windowMeasures = windowSize
-        self.windowWidth = int(self.windowMeasures[1])
+        self.windowWidth = self.windowMeasures.columns
         self.expandToWindow = expandToWindow
         self.adjustWidthTo = adjustWidthTo
         self.adjustHeaderWidthTo = adjustHeaderWidthTo
@@ -38,61 +40,73 @@ class TableMeasures(object):
         self.headers = headers
         self.rawData = rawData
 
+    @property
+    def totalBody(self):
+        'headers + rawData'
+        data = self.rawData + [self.headers]
+        return data
 
-
-    def addColumns(self, difference, index, side):
+    def addCells(self, difference, index, side):
         '''
         Adds blank strings ('') until the difference is 0
         '''
-        # Will inly do something if there's a difference of widths 
+        # Will inly do something if there's a difference of widths
         if difference > 0:
+            while difference != 0:
+                # [..., ['' , 'data', ...], ...]
+                #        /\
+                #        Inserts at start
+                if side == 'right':
+                    self.rawData[index].insert(0, '')
+                    self.headers.append('')
 
-            # [..., ['' , 'data', ...], ...]
-            #        /\
-            #        Inserts at start
-            if side == 'right':
-                self.rawData[index].insert(0, '')
+                # [..., ['data', ..., ''], ...]
+                #                     /\
+                #                     Inserts at end
+                elif side == 'left':
+                    self.rawData[index].append('')
+                    self.headers.insert(0, '')
 
-            # [..., ['data', ..., ''], ...]
-            #                     /\
-            #                     Inserts at end
-            elif side == 'left':
-                self.rawData[index].append('')
-
-            # Will keep executing the function untill there's no
-            # difference with the widest (difference == 0), that's
-            # why the difference param is send with a -1
-            self.addColumns(difference - 1, index, side)
+                difference -= 1
 
     def makeRowsEquals(self):
         '''
-        Here the widths of the data arrays are adjusted if there are bigger
+        Here the widths of the data lists are adjusted if there are bigger
         ones or smaller ones.The smaller ones will always be expanded, and 
         not the other way around.
 
         This example shows the deafult way, with the "adjustWidthTo" option
         deafult 'right'
 
-        >>> [                      [
-            ['dat','dat'],         ['dat','dat',''   ],
-            ['dat'],            -> ['dat',''   ,''   ],
-            ['dat','dat','dat']    ['dat','dat','dat']
-            ]                      ]
-
+        ```
+        [                       [
+        ['dat','dat'      ],    ['dat','dat',''   ],
+        ['dat'            ], -> ['dat',''   ,''   ],
+        ['dat','dat','dat']     ['dat','dat','dat']
+        ]                       ]
+        ```
         '''
-        # Adjust the header firsd
-        WidestLine = max(Utils().lenOfElements(self.rawData))
+        # Get the widest row to adjust the other ones.   
+        WidestLine = (max([len(row) for row in self.totalBody]))
+
+        # for each row, compare the lenght with the max width,
+        # and add cells if necessary.
         for row in range(0, len(self.rawData)):
-            if WidestLine > len(self.rawData[row]):
-                self.addColumns(
-                    WidestLine - (len(self.rawData[row])),
+            if WidestLine > len(self.totalBody[row]):
+                print('ajustando...')
+                self.addCells(
+                    WidestLine - (len(self.totalBody[row])),
                     row,
-                    self.adjustWidthTo
+                    self.adjustWidthTo if (
+                        row > 0
+                    ) else self.adjustHeaderWidthTo
                 )
         
-        return self.rawData
+        print('este: ', self.rawData)
+        print('este: ', self.headers)
+        return self.rawData, self.headers
 
-    def getRawDataCellsWidths(self):
+    def getTotalTableCellsWidths(self):
         '''
         Here the widths of each cell are obtained iterating trough each
         row of the raw data.
@@ -104,11 +118,11 @@ class TableMeasures(object):
         '''
         
         # Get len of each element in each row.
-        cellsWidths = [
-            [
-                len(cell) for cell in row
-            ] for row in self.rawData
-            ]
+        cellsWidths = []
+        for row in self.totalBody:
+            cellsWidths.append([])
+            for col in row:
+                cellsWidths[-1].append(len(col))
 
         return cellsWidths
 
@@ -117,23 +131,17 @@ class TableMeasures(object):
         Returns the Width of each column including the margin.
         '''
         # TODO simplify double for cicle
-        # Each array in here is a column instead of a row.
 
-        columnOrdenatedWidths = [] 
-        for col in range(len(cellsWidths[0])):
-            columnOrdenatedWidths.append([])
-            for row in range(len(cellsWidths)):
-                columnOrdenatedWidths[-1].append(cellsWidths[row][col])
+        # Each array in here is a column instead of a row.
+        columnOrdenatedWidths = list(zip(*cellsWidths))
 
         # Here the max of each array is obtained and appended in a
         # single array and are additioned with the product of the margin
-        # by 2; it's important to add the margin at the beining, to ensure
+        # by 2; it's important to add the margin at the begining, to ensure
         # that the space calculations include it.
-        fullColumnWidths = [
-            (
-                max(singleCol) + (self.cellMargin*2)
-            ) for singleCol in columnOrdenatedWidths
-            ]
+        fullColumnWidths = list(
+            map(lambda x: max(x) + (self.cellMargin*2), columnOrdenatedWidths)
+        )
         
         return fullColumnWidths
 
@@ -203,9 +211,6 @@ class TableMeasures(object):
                 maxWidthPerColWithoutMargin[current] = currentWidth
                 maxWidthPerColWithoutMargin[biggestWidth] -= incremented
 
-
-
-
         return maxWidthPerColWithoutMargin, maxWidthOfColumns
 
     def adjustWidthToWindow(self, columnWidths):
@@ -233,7 +238,7 @@ class Cells(object):
 
     def __init__(self,
                  tabularData: list[list],
-                 headers: list[list],
+                 headers: Union[list, list[list]],
                  headerIncluded: bool,
                  columnWidths: list,
                  cellMargin: int,
@@ -281,12 +286,23 @@ class Cells(object):
  
     def wrapRows(self):
         '''
-        Makes the tabularData a list of list's. Each list is a multiline,
+        Makes the tabularData a list of list of lists. Each list of list is a multiline,
         containing the rows that conforms it.
         Returns Nothing.
         '''
 
         maxWidths = self.columnWidths
+
+        currentCell = 0
+        for cell in self.headers:
+            currWidth = maxWidths[currentCell]
+
+            if len(cell) > currentCell:
+                cell = self.wrapSingleCell(cell, currWidth)
+                self.headers[currentCell] = cell
+        
+        wrapedHeaders = self.wrapSingleRow(self.headers)
+        self.headers = wrapedHeaders
 
         currentRow = 0
         for row in self.tabularData:
@@ -342,14 +358,14 @@ class Cells(object):
         widths = self.columnWidths
         dataToFormat = self.tabularData
 
-        # Get the len of the string in the current cell
+        # Get the len of the string in the current cell.
         lenOfStr = lambda mtline, row, col: len(dataToFormat[mtline][row][col])
 
-        currentMultiline = 0 # The actual multiline in wich rows to work
+        currentMultiline = 0 # The actual multiline in wich rows to work.
         for multiline in self.tabularData:
             currentRow = 0 # Current row of the tabularData iterated.
             for row in multiline:
-                currentCol = 0 # It's the same that the curren cell.
+                currentCol = 0 # It's the same that the current cell.
                 for cell in row:
                     extraSpace = widths[currentCol] - lenOfStr(currentMultiline, currentRow, currentCol)
                     formatForCel = self.formatSingleCell(extraSpace)

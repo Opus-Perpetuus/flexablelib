@@ -12,8 +12,10 @@ Here the whole table is formed
 from .utils import *
 from .adjust import *
 from .compose import *
-from .compositionSets import _styleCompositions
+from .compositionSets import StyleCompositions
 
+# TODO Add more documentation to make package easiear to read
+# TODO Make the class manage the header separated of the data.
 
 class Table(object):
     '''
@@ -31,6 +33,7 @@ class Table(object):
             'windows_alike'
             'thin_borderline'
             'bold_header'
+            'pipes'
     strAlign: 'left' | 'center' | 'right'
     adjustWidthsTo: 'left' | 'right'
     adjustHeaderWidthTo: 'left' | 'right'
@@ -54,6 +57,9 @@ class Table(object):
         self.data = tabularData
         self.headers = headers
         self.style = style
+        self.headerIncluded = False
+        self.composition = getattr(StyleCompositions(), style)
+        self.windowSize = Utils.getWIndowsSize()
         self.formatedSeparators = ()
         self.formatedDataRows = ()
         self.formatedCells = []
@@ -79,7 +85,7 @@ class Table(object):
         # Finished string separators to put in the final table
         headSuperSep = self.sepExists(self.formatedSeparators.headerSuperior)
         headInferSep = self.sepExists(self.formatedSeparators.headerInferior)
-        startWithNoHeadSep = self.sepExists(self.formatedSeparators.startWithNoHeader)
+        startWithNoHeadSep = self.sepExists(self.formatedSeparators.startsWithNoHeader)
         bodySep = self.sepExists(self.formatedSeparators.tableBody)
         endSep = self.sepExists(self.formatedSeparators.tableEnd)
 
@@ -108,55 +114,56 @@ class Table(object):
         ])
 
         return fullTableString
-            
-    def make(self):
+    
+    def separateHeader(self):
         '''
-        This crafts the separators and data rows of the table.
-        Returns a table in the form of a string.
+        Looks for the headers
         '''
-
-        composition = _styleCompositions[self.style]
-        margin = composition.tableOptions.margin
-        windowSize = Utils.getWIndowsSize()
-
-        # TODO Make the class manage the header separated of the data.
-        # NOTE: This was commented to avoid inserting the header on the data first. 
-        # if Utils.isarray(self.headers):
-        #     self.data.insert(0, self.headers)
-        #     self.headers = 'first'
-
+        # HeaderIncluded: tihs variable determines wether if the header comes in the
+        # header property or as the first row of the data, in which case the header
+        # property will be the string 'fisrst'; in both of this cases, it's value 
+        # will be True, in any other case, False.
         headerIncluded = True if (
             self.headers == 'first' or Utils.isarray(self.headers)
             ) else False
         
+        # If the header property comes as 'first', the first row of the data will be
+        # assigned to that property and poped out of the array of arrays. 
         if self.headers == 'first':
             self.headers = self.data[0]
+            self.data.pop(0)
+        
+        return headerIncluded
 
-        cellsData = TableMeasures(
+    def adjustTableMeasures(self):
+        measures = TableMeasures(
             expandToWindow=self.expandToWindow,
             rawData=self.data,
             headers=self.headers,
-            headerIncluded=headerIncluded,
-            cellMargin=margin,
-            composition=composition,
-            windowSize=windowSize,
+            headerIncluded=self.headerIncluded,
+            cellMargin=self.composition.tableOptions.margin,
+            composition=self.composition,
+            windowSize=self.windowSize,
             adjustWidthTo=self.adjustWidthsTo,
             adjustHeaderWidthTo=self.adjustHeaderWidthTo
             )
-
+        
         # Make length of all data arrays the same
-        self.data = cellsData.makeRowsEquals()
-            
-        cellsWidths = cellsData.getRawDataCellsWidths()
-        columnWidths = cellsData.getFullColumnWidths(cellsWidths)
-        adjustedColumnWidths = cellsData.adjustWidthToWindow(columnWidths)
+        equalData, equalHeaders = measures.makeRowsEquals()
+        cellsWidths = measures.getTotalTableCellsWidths()
+        columnWidths = measures.getFullColumnWidths(cellsWidths)
+        adjustedColumnWidths = measures.adjustWidthToWindow(columnWidths)
 
+        return cellsWidths, columnWidths, adjustedColumnWidths, equalData, equalHeaders
+
+    def adjustTableData(self, adjustedWidths):
+        
         cellsAdjustment = Cells(
             tabularData=self.data,
             headers=self.headers,
-            headerIncluded=headerIncluded,
-            columnWidths=adjustedColumnWidths,
-            cellMargin=margin,
+            headerIncluded=self.headerIncluded,
+            columnWidths=adjustedWidths,
+            cellMargin=self.composition.tableOptions.margin,
             alignments=self.strAlign
             )
 
@@ -164,29 +171,60 @@ class Table(object):
         cellsAdjustment.wrapRows()
 
         formatedCells = cellsAdjustment.format()
-        self.formatedCells = formatedCells
- 
-        obtainedSeparators = Separators(
-            headerIncluded=headerIncluded,
+
+        return formatedCells
+    
+    def craftSeparators(self, adjustedWidths):
+        separators = Separators(
+            headerIncluded=self.headerIncluded,
             alignments=[],                  #TODO add multi-alignments functionality
-            cellMargin=margin,
-            composition=composition,
-            colsWidth=adjustedColumnWidths
+            cellMargin=self.composition.tableOptions.margin,
+            composition=self.composition,
+            colsWidth=adjustedWidths
             )
-        obtainedSeparators = obtainedSeparators.makeAll()
-        self.formatedSeparators = obtainedSeparators
+        obtainedSeparators = separators.makeAll()
+        
+        return obtainedSeparators
 
-
+    def craftDataRows(self):
         obtainedRows = DataRows(
-            adjustedTableCells=formatedCells,
-            composition=composition,
-            headerIncluded=headerIncluded,
+            adjustedTableCells=self.formatedCells,
+            composition=self.composition,
+            headerIncluded=self.headerIncluded,
             headers=self.headers
             )
         obtainedRows = obtainedRows.makeAll()
-        self.formatedDataRows = obtainedRows
-    
-        return self.compose()
+        
+        return obtainedRows
+
+    def craftTableStructure(self):
+        self.headerIncluded = self.separateHeader()     
+        cellsWidths, columnWidths, adjustedColumnWidths, equalData, equalHeaders = self.adjustTableMeasures()
+        self.data = equalData
+        self.formatedCells = self.adjustTableData(adjustedColumnWidths)
+        self.formatedSeparators = self.craftSeparators(adjustedColumnWidths)
+        self.formatedDataRows = self.craftDataRows()
+
+        return (cellsWidths,
+                columnWidths,
+                adjustedColumnWidths,
+                equalHeaders,
+                equalData,
+                self.headerIncluded,
+                self.data,
+                self.formatedCells,
+                self.formatedSeparators,
+                self.formatedDataRows)
+            
+    def make(self):
+        '''
+        This crafts the separators and data rows of the table.
+        Returns a table in the form of a string.
+        '''
+
+        craftedTable = self.compose()
+            
+        return craftedTable
 
 
 
