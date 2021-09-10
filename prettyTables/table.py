@@ -63,8 +63,6 @@ class Table(object):
         self.headerIncluded = False
         self.windowSize = Utils.getWIndowsSize()
     
-¿
-
 
 if __name__ == '__main__':
 
