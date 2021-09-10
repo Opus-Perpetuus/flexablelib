@@ -21,4 +21,4 @@ MIWCOL = 2
 
 #TODO Decide if LineSpacing will be optional or deafult
 # Line Spacing for certain tableSyles
-LISPA = 1
+LISPA = 1   
