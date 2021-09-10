@@ -106,13 +106,8 @@ class Separators(object):
             return x
 
 
-
-
-
-
-
-seps = Separators(['c', 'r'], [12, 4], 'pipes')._makeSeparators()
-x = ''.join(seps)
-print(x)
-
+if __name__ == '__main__':
+    seps = Separators(['c', 'r'], [12, 4], 'pipes')._makeSeparators()
+    x = ''.join(seps)
+    print(x)
 
