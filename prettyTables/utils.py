@@ -3,23 +3,28 @@ from typing import NamedTuple
 import os
 
 
-class Utils:
+class Utils():
     '''
-    UTILS
+    ## UTILS
 
-    functions for different porpuses that are helpfull
-    or essential.
+    functions for different porpuses that are of help:
+    ```
+    - getWIndowsSize
+    - isarray
+    - lenOfElements
+    - flatten
+    ```
     '''
-    def getWIndowsSize():
+    def getWIndowsSize(self):
         return os.get_terminal_size()
     
-    def isarray(piece):
+    def isarray(self, piece):
         return isinstance(piece, list)
     
     def lenOfElements(self, elementList, index=0, lengths=None):
-        '''
+        """
         Returns the lenght of each row (sub-array) in a single array
-        '''
+        """
         if lengths == None:
             lengths = []
         # Will only calculate len if index is lower than the len of the array.
@@ -36,3 +41,20 @@ class Utils:
             self.lenOfElements(elementList, index+1, lengths)
 
         return lengths
+
+    def flatten(self, tf, i=0, c=0):
+        """ 
+        Flatten a list containing lists that could also contain lists, 
+        and so on 
+        """
+        c += 1
+        if i < len(tf):
+            if self.isarray(tf[i]):
+                temp = tf.pop(i)
+                for x in range(len(temp)):
+                    tf.insert(i + x, temp[x])
+                return self.flatten(tf, i, c)
+            else:
+                return self.flatten(tf, i+1, c)
+        else:
+	        return tf
