@@ -183,9 +183,10 @@ class Cells(object):
         return self.headers[x]
 
     def _wrapCells(self):
-        headers = self.__wrapSinghleRow(self.headers)
+        if self.headers != None:
+            headers = self.__wrapSinghleRow(self.headers)
+            self.headers = headers
         body = list(map(self.__wrapSinghleRow, self.body))
-        self.headers = headers
         self.body = body
 
         return self.headers, self.body
@@ -196,12 +197,15 @@ class Cells(object):
 
         This makes the cells per row the same  (if different)
         """
-
-        hlen = len(self.headers)
+        if self.headers != None:
+            hlen = len(self.headers)
+        else:
+            hlen = 0
         mlen = max([len(x) for x in self.body] + [hlen])
-
-        if hlen < mlen:
-            self.headers = self.__adjustSingleRow(self.headers, mlen - hlen, True)
+        
+        if self.headers != None:
+            if hlen < mlen:
+                self.headers = self.__adjustSingleRow(self.headers, mlen - hlen, True)
         for row in range(len(self.body)):
             blen = len(self.body[row])
             if blen < mlen:

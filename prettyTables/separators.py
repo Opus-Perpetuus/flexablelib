@@ -85,7 +85,7 @@ class Separators(Cells):
                     elif self.colAlginment[i] == 'r':
                         if sidesChar != '':
                             middleLines[i] = ''.join([middleLines[i][:-1], sidesChar])
-                    elif self.colAlginment[i] == 'c':
+                    elif self.colAlginment[i] == 'c' or self.colAlginment[i] == 'f':
                         if centerChar != '':
                             if sidesToIndCenter:
                                 middleLines[i] = ''.join(

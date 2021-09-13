@@ -29,12 +29,15 @@ class Columns(Separators):
     def _columnSizes(self):
         # TODO add support for colouring codes
 
-        headSizes = [
-            max([len(str(row)) for row in headCol]) if (
-                isarray(headCol)
-            ) else len(str(headCol))
-            for headCol in self.headers
-            ]
+        if self.headers != None:
+            headSizes = [
+                max([len(str(row)) for row in headCol]) if (
+                    isarray(headCol)
+                ) else len(str(headCol))
+                for headCol in self.headers
+                ]
+        else:
+            headSizes = [0 for x in self.body]
         bodySizes = [
             max([
                 max([len(str(sbRow)) for sbRow in row]) if (
@@ -62,17 +65,16 @@ class Columns(Separators):
             zippedRows = list(zip(*rowsToZip))
             zippedRows = [list(x) for x in zippedRows]
             self.body = zippedRows
-
-            self.headers = self.__zipMultiRow(self.headers)
-
+            if self.headers != None:
+                self.headers = self.__zipMultiRow(self.headers)
             self.asColumns = True
 
         return self.headers, self.body
 
     def _transformToRows(self):
         if self.asColumns:
-            self.headers = self.__zipMultiRow(self.headers)
-
+            if self.headers != None:
+                self.headers = self.__zipHeaderMultiRow(self.headers)
             rows = []
             for row in range(len(self.body[0])):
                 if isarray(self.body[0][row]):
@@ -80,7 +82,6 @@ class Columns(Separators):
                 else:
                    rows.append(self.__ZipColumn(row))
             self.body = rows
-            
             self.asColumns = False
 
         return self.headers, self.body
@@ -228,7 +229,7 @@ class Columns(Separators):
 
     def _alignHeaders(self):
         margin = margin = self.style.tableOptions.margin
-        if self.colSizes != None:
+        if self.colSizes != None and self.headers != None:
             for x in range(len(self.headers)):
                 toWhere = self.colAlginment[x]
                 colSize = self.colSizes[x]
@@ -244,29 +245,34 @@ class Columns(Separators):
 
     def _addVerticalSeparators(self):
         if not self.asColumns:
-            rows = []
-            for row in range(len(self.headers)):
+            if self.headers != None:
+                rows = []
                 midChar = self.__checkNone(
                     self.style.verticalComposition.header.middle)
-                middle = f'{midChar}'.join(self.headers[row])
                 leftChar = self.__checkNone(
                     self.style.verticalComposition.header.left)
                 rightChar = self.__checkNone(
                     self.style.verticalComposition.header.right)
-                fullHeadRow = ''.join([leftChar, middle, rightChar])
-                rows.append(fullHeadRow)
+                if isarray(self.headers[0]):
+                    for row in range(len(self.headers)):
+                        middle = f'{midChar}'.join(self.headers[row])
+                        fullHeadRow = ''.join([leftChar, middle, rightChar])
+                        rows.append(fullHeadRow)
+                else:
+                    middle = f'{midChar}'.join(self.headers)
+                    fullHeadRow = ''.join([leftChar, middle, rightChar])
+                    rows.append(fullHeadRow)
 
-            self.headers = rows
+                self.headers = rows
 
             multiRows = []
+            midChar = self.__checkNone(
+                self.style.verticalComposition.tableBody.middle)
+            leftChar = self.__checkNone(
+                self.style.verticalComposition.tableBody.left)
+            rightChar = self.__checkNone(
+                self.style.verticalComposition.tableBody.right)
             for row in range(len(self.body)):
-                midChar = self.__checkNone(
-                    self.style.verticalComposition.tableBody.middle)
-                leftChar = self.__checkNone(
-                    self.style.verticalComposition.tableBody.left)
-                rightChar = self.__checkNone(
-                    self.style.verticalComposition.tableBody.right)
-
                 multiRows.append([])
                 for subRow in range(len(self.body[row])):
                     middle = f'{midChar}'.join(self.body[row][subRow])
@@ -296,18 +302,19 @@ class Columns(Separators):
             if self.headers != None:
                 headInterior = '\n'.join(self.headers)
                 header = ''.join([headSup, headInterior, headInf])
-                # print(header)
-
                 subrows = []
                 for multiRow in self.body:
                     subrowInt = ''.join(multiRow)
                     subrows.append(subrowInt)
                 body = f'{tabBody}'.join(subrows)
-                # print(body)
-
                 self.fullyFormed = ''.join([header, body, '\n', tablEnd])
-
-            print(self.fullyFormed)
+            else:
+                subrows = []
+                for multiRow in self.body:
+                    subrowInt = ''.join(multiRow)
+                    subrows.append(subrowInt)
+                body = f'{tabBody}'.join(subrows)
+                self.fullyFormed = ''.join([NoneHea, body, '\n', tablEnd])
 
             return self.fullyFormed
 
@@ -373,8 +380,15 @@ class Columns(Separators):
             multiRow.append(self.body[column][index])
 
         return [list(x) for x in zip(*multiRow)]
-
         
+    def __zipHeaderMultiRow(self, row):
+        if not isarray(row[0]):
+            return row
+        else:
+            zpd = list(zip(*row))
+            zpd = [list(x) for x in zpd]
+            return zpd
+
     def __zipMultiRow(self, row):
         if len(row) == 1:
             return row[0]
@@ -394,41 +408,41 @@ class Columns(Separators):
 
 
 if __name__ == '__main__':
+    def main(style, headers):
+        a = 1.0 / 96516.51698
 
-    a = 1.0 / 96516.51698
+        data = [
+            ['H1'           , 'H2'      , 'H3'     , 'H4' , 'H5' , 'H4',      ],
+            ['Data1'        , a         , True     , True , True , 1   ,      ],
+            ['othe1'        , 16.144    , False    , False, False, 4566,      ],
+            ['othe1'        , 1229.51155, 'FA\nLSE', 12   , 12.25, 12  , 11   ],
+            ['othe1'        , 29.2      , False    , 13   , 13   , 13  , 54654],
+            ['othe1'        , 548498.165, False    , 13   , 13   , 13  , 5    ],
+            ['othe1'        , 29.545    , False    , 13   , 13   , 13  , 14   ]
+        ]
+        
+        columns = Columns(data, style, headers=headers, formatExponentials=True)
+        columns._checkHeader()
+        columns._adjustCellsPerRow()
+        columns._wrapCells()
+        columns._transformToColumns()
+        types = columns._typify()
+        columns._alignFloatColumns()
+        columns._columnSizes()
+        columns._makeSeparators()
+        columns._alignHeaders()
+        columns._alignColumns()
+        columns._transformToRows()
+        columns._addVerticalSeparators()
+        table = columns._unifyAll()
 
-    data = [
-        ['H1'           , 'H2'      , 'H3'     , 'H4' , 'H5' , 'H4',   ],
-        ['Data1'        , a         , True     , True , True , 1   ,   ],
-        ['othe1'        , 16.144    , False    , False, False, 4566,   ],
-        ['othe1'        , 1229.51155, 'FA\nLSE', 12   , 12.25, 12  ,   ],
-        ['othe1'        , 29        , False    , 13   , 13   , 13, '']
-    ]
-    
-    columns = Columns(data, 'grid', headers='firstrow', formatExponentials=True)
-    columns._checkHeader()
-    columns._adjustCellsPerRow()
-    columns._wrapCells()
-    cols = columns._transformToColumns()
-    types = columns._typify()
-    columns._alignFloatColumns()
-    sizes = columns._columnSizes()
-    seps = columns._makeSeparators()
-    headers = columns._alignHeaders()
-    body = columns._alignColumns()
-    columns._transformToRows()
-    columns._addVerticalSeparators()
-    columns._unifyAll()
+        print(table)
 
-    # print(body)
+    styles = ['clean', 'windows_alike', 'curly_grid', 'curlyg_ebody', 'pipes', 'bd_bl_empty',
+              'sim_head_bd_bl', 'simple', 'simple_head_bold', 'curlyg_empty', 'grid_eheader',
+              'grid_ebody','grid_empty', 'grid']
 
-    # print(headers)
-    # list(map(print, body))
-    # print(cols)
-    # print(types)
-    # print(sizes)
-    # print(seps)
-    # [print(sep) for sep in seps]
-    # columns._typifyColumns()
-    # print(columns.headers)
-    # print(columns.body)
+    for style in styles:
+        for head in ['firstrow', None, ['H1', 'H2', 'HEADER\nMULTIROW', 'H4' , 'H5' , 'H4',]]:
+            main(style, head)
+            print()

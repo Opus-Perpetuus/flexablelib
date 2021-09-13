@@ -278,7 +278,7 @@ StyleCompositions = StyleNames(
             headerSuperior=SeparatorLine('o', '-', 'o', 'o'),
             headerInferior=SeparatorLine('O', '~', 'O', 'O'),
             startsWithNoHeader=SeparatorLine('O', '~', 'O', 'O'),
-            tableBody=SeparatorLine('o', '-', '-', 'o'),
+            tableBody=None,
             tableEnd=SeparatorLine('O', '~', '~', 'O')
         ),
         verticalComposition=VerticalComposition(
