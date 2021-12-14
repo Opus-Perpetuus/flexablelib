@@ -6,11 +6,13 @@ Feel free to make issues, suggestions, or pull requests.
 
 ## Instalation
 
-###  Windows
-```pip install prettyTables```
+### Windows
+
+``pip install prettyTables``
 
 ### Ubuntu
-```pip3 install prettyTables```
+
+``pip3 install prettyTables``
 
 ## Usage
 
@@ -46,7 +48,9 @@ newTable = newTable.make()
 print(newTable)
   
 ```
+
 ##### Output
+
 ```
 ╔══════════════════════╤═══════╤══════════╤══════════════════════════════════════════╗
 ║ STRING               │ LEN   │ TYPE     │ ID                                       ║
@@ -72,9 +76,10 @@ print(newTable)
 ║ gamesomely           │ 10    │ String   │ 0ms888ib3768p3khz32f8272456v219          ║
 ╚══════════════════════╧═══════╧══════════╧══════════════════════════════════════════╝
 ```
+
 ### Text Wrapping
 
-It also wraps the text of the cells if the width of the window is less than the total width  
+It also wraps the text of the cells if the width of the window is less than the total width
 of the table.
 
 This is a dramatization using the previous example.
@@ -115,11 +120,3 @@ This is a dramatization using the previous example.
 ║             │     │ ing │ 72456v219              ║  
 ╚═════════════╧═════╧═════╧════════════════════════╝
 ```
-
-
-
-
-
-
-
-
