@@ -7,11 +7,13 @@ Print formatted tabular data in different styles
 # Main Class.
 # Here the whole table is formed
 
+from styleCompositions import __style_compositions as style_catalogue
 from columns import _column_sizes, _typify_column
-from utils import get_window_size, is_bytes
+from separators import _get_separators
+from utils import get_window_size
 from cells import _wrap_cells
-from styleCompositions import __style_compositions
-style_catalogue = __style_compositions._asdict()
+
+DEFAULT_STYLE = 'pwrshll_alike'
 
 
 class Table(object):
@@ -76,7 +78,12 @@ class Table(object):
             dashes
     """
 
-    def __init__(self, rows=None, columns=None, headers=None, style_name='pwrshll_alike',
+    # _headers_added_to_count = False
+
+    _real_row_count = 1
+    _real_column_count = 0
+
+    def __init__(self, rows=None, columns=None, headers=None, style_name='',
                  missing_val='', str_align=None, int_align=None, float_align=None,
                  bool_align=None, table_align=None, col_alignment=None, spaces=0):
 
@@ -109,19 +116,16 @@ class Table(object):
         #   t: title
         #   c: capitalized
         self.header_style = None
-        self.style_name = style_name
         self.show_margin = True
         self.show_empty_columns = False
         self.show_empty_rows = False
         self.generic_column_name = 'column'
+        self.style_name = style_name
         # +------------------+ TABLE CHARACTERISTICS +-------------------+
         self.show_headers = True
         self.table_height = 0
         self.table_width = 0
         self._line_spacing = 0
-        self._real_row_count = 0
-        self._real_column_count = 0
-        self._include_header_in_row_count = False
         self._cell_types = {}
         self._column_types = {}
         self._column_types_as_list = []
@@ -141,7 +145,6 @@ class Table(object):
         self._processed_columns = {}
         self._processed_headers = []
         self._processed_rows = []
-        self.__table_string = ''
         # +-----------------------+ INIT ACTIONS +-----------------------+
 
     # +-----------------------------------------------------------------------------+
@@ -157,11 +160,11 @@ class Table(object):
     # start +-------------------------+ PROPERTIES +--------------------------+ start
 
     @property
-    def _style_composition(self):
-        try:
-            return style_catalogue[self.style_name]
-        except KeyError:
-            return style_catalogue['pwrshll_alike']
+    def _checked_style_name(self):
+        if self.style_name in self.possible_styles:
+            return self.style_name
+        else:
+            return DEFAULT_STYLE
 
     @property
     def _empty_row_indexes(self):
@@ -180,24 +183,38 @@ class Table(object):
         return none_type_columns
 
     @property
+    def possible_styles(self):
+        """
+        Returns a tuple with the admitted style names.
+        """
+        return style_catalogue._fields
+
+    @property
     def row_count(self):
         """
-        This count consideres if empty rows are shown or not
+        This count decides if empty rows will be shown or not.
         """
+        # if show headers is false, subtract it from count
+        checked_real_row_count = self._real_row_count
         if self.show_empty_rows:
-            return self._real_row_count
+            return checked_real_row_count
         else:
-            updated_row_count = self._real_row_count - len(self._empty_row_indexes)
+            # if show empty rows is set to false, subtract the length of the detected empty rows
+            updated_row_count = checked_real_row_count - len(self._empty_row_indexes)
             return updated_row_count
 
     @property
     def column_count(self):
         """
-        This count checks if empty columns are set to show
+        This counts the rows based on the show_empty_columns property.
+
+        If it is set to True, empty columns are counted.
+        If it is set to False, empty columns are not counted.
         """
         if self.show_empty_columns:
             return self._real_column_count
         else:
+            # if show empty columns is set to false, subtract the length of the detected empty columns
             updated_column_count = self._real_column_count - len(self._empty_column_indexes)
             return updated_column_count
 
@@ -242,7 +259,7 @@ class Table(object):
             header = str(header)
             if header in self.headers:
                 header = f'{header} {self.headers.count(header) + 1}'
-        self.__check_if_header_is_going_to_be_displayed()
+        # self.__check_if_header_is_going_to_be_counted()
         self.headers.append(header)
         self._column_widths[header] = 0
         self._column_types[header] = None
@@ -254,10 +271,8 @@ class Table(object):
 
     def _add_column_data(self, data, column_header):
         if data is not None:
-            if (len(data) + (1 if self._include_header_in_row_count else 0)) > self._real_row_count:
-                self._real_row_count += (
-                    len(data) + (1 if self._include_header_in_row_count else 0)
-                ) - self._real_row_count
+            if len(data) > self._real_row_count:
+                self._real_row_count += len(data)
             self.columns[column_header] += data
         self._real_column_count += 1
 
@@ -265,8 +280,8 @@ class Table(object):
 
     def _adjust_columns_to_row_count(self, rows_added_before=False):
         for header, column_body in self.columns.items():
-            if len(column_body) < self._real_row_count - int(self.show_headers):
-                difference = (self._real_row_count - len(column_body)) - int(self.show_headers)
+            if len(column_body) < self._real_row_count:
+                difference = self._real_row_count - len(column_body)
                 if rows_added_before:
                     [self.columns[header].insert(0, self.missing_val) for _ in range(difference)]
                 else:
@@ -274,17 +289,11 @@ class Table(object):
 
     def _transpose_column_to_rows(self, data):
         for column_i in range(self._real_column_count):
-            for row_i in range(self._real_row_count - int(self.show_headers)):
+            for row_i in range(self._real_row_count):
                 if data is None:
                     self.__fill_row_from_empty_column(row_i, column_i)
                 else:
                     self.__fill_row_from_column(row_i, column_i, data)
-
-    def __check_if_header_is_going_to_be_displayed(self):
-        if self._include_header_in_row_count is False:  # if header gets added, add 1 to count just once
-            if self.show_headers is True:
-                self._real_row_count += 1
-                self._include_header_in_row_count = True
 
     def __fill_row_from_empty_column(self, row_i, column_i):
         if column_i == self._real_column_count - 1:
@@ -337,7 +346,7 @@ class Table(object):
     def _adjust_rows_to_column_count(self, there_is_headers_to_add, count_of_new_headers):
         if there_is_headers_to_add:
             [self._add_column_header(None) for _ in range(count_of_new_headers)]
-        for row_i in range(self._real_row_count - int(self.show_headers)):
+        for row_i in range(self._real_row_count):
             if len(self.rows[row_i]) < self._real_column_count:
                 difference = self._real_column_count - len(self.rows[row_i])
                 [self.rows[row_i].append(self.missing_val) for _ in range(difference)]
@@ -351,8 +360,8 @@ class Table(object):
                 self.__fill_column_from_row(column_headers, column_i, data)
 
     def _check_existent_rows_vs_row_count(self):
-        if len(self.rows) < self._real_row_count - int(self.show_headers):
-            rows_to_add = (self._real_row_count - int(self.show_headers)) - len(self.rows)
+        if len(self.rows) < self._real_row_count:
+            rows_to_add = self._real_row_count - len(self.rows)
             [self.rows.append([]) for _ in range(rows_to_add)]
 
     def __check_data_and_fill_last_row(self, data):
@@ -407,12 +416,13 @@ class Table(object):
     # +------------------------+ TABLE BODY +------------------------+
 
     def compose(self):
-        self._typify_table()
-        self._parse_data()  # TODO add parsing
-        self._wrap_data()
-        self._get_column_widths()
+        if len(self.columns) != 0:
+            self._typify_table()
+            self._parse_data()  # TODO add parsing
+            self._wrap_data()
+            self._get_column_widths()
 
-        return self.__table_string
+        return self._form_string()
 
     def _typify_table(self):
         for header, column_content in self.columns.items():
@@ -425,7 +435,7 @@ class Table(object):
 
     def _get_column_widths(self):
         sizes = _column_sizes(self._processed_columns)
-        self._column_widths_as_list += sizes
+        self._column_widths_as_list.append(sizes)
         for i, column in enumerate(self.columns.items()):
             header, _ = column
             self._column_widths[header] = sizes[i]
@@ -447,8 +457,9 @@ class Table(object):
     def _parse_data(self):
         pass
 
-    def _update_string_table(self):
-        pass
+    def _form_string(self):
+        _get_separators(self._checked_style_name, tuple(self._column_widths.values()))
+        return ''
 
     # +------------------------+ TABLE BODY +------------------------+
 
@@ -500,8 +511,8 @@ def test():
     import json
 
     new_table = Table()
-    new_table.show_empty_columns = True
-    new_table.show_empty_rows = True
+    new_table.show_empty_columns = False
+    new_table.show_empty_rows = False
     new_table.show_headers = True
     new_table.missing_val = None
     new_table.add_column('Header 1', [1, 2, True, False, True, True])
@@ -513,40 +524,43 @@ def test():
     new_table.add_column()
     new_table.add_column('another', data=[True, False])
     new_table.add_row()
-    # new_table.add_row(['Data 7-1',
-    #                    'Data 7-2',
-    #                    'Data 7-3',
-    #                    'Data 7-4',
-    #                    'Data 7-5',
-    #                    'Data 7-6',
-    #                    'Data 7-7',
-    #                    'Data 7-8',
-    #                    'Data 7-9',
-    #                    'Data 7-10',
-    #                    'Data 7-11'])
-    new_table.style_name = 'pretty_columns'
+    new_table.add_row(['Data 7-1',
+                       'Data 7-2',
+                       'Data 7-3',
+                       'Data 7-4',
+                       'Data 7-5',
+                       'Data 7-6',
+                       'Data 7-7',
+                       'Data 7-8',
+                       'Data 7-9',
+                       'Data 7-10',
+                       'Data 7-11'])
+    new_table.style_name = 'asd'
     print(new_table)
-    print('-------------ROWS------------')
-    print(new_table.headers, end='\n\n')
-    list(map(print, new_table.rows))
-    print('-------------ROWS------------')
+    print(new_table._column_widths)
+    # print('-------------ROWS------------')
+    # print(new_table.headers, end='\n\n')
+    # list(map(print, new_table.rows))
+    # print('-------------ROWS------------')
     print('-------PROCESSED ROWS--------')
     list(map(print, new_table._processed_headers))
     print('\n')
     list(map(lambda x: print('\n'.join(list(map(str, x))), '\n'), new_table._processed_rows))
     print('-------PROCESSED ROWS--------')
-    print('------PROCESSED COLUMNS------')
-    print(new_table._processed_columns)
-    print('------PROCESSED COLUMNS------')
-    print(new_table.window_size)
-    print('_column_alignments_as_list: ', new_table._column_alignments_as_list)
-    print('col_widths_as_list: ', new_table._column_widths_as_list)
-    print('_column_types_as_list: ', new_table._column_types_as_list)
-    print(f'HxW: {new_table.table_height} x {new_table.table_width}')
-    print(f'Row count: {new_table.row_count}')
-    print(f'Column count: {new_table.column_count}')
-    print(f'Empty columns: {new_table._empty_column_indexes}')
-    print(f'Empty rows: {new_table._empty_row_indexes}')
+    # print('------PROCESSED COLUMNS------')
+    # print(new_table._processed_columns)
+    # print('------PROCESSED COLUMNS------')
+    # print(new_table.window_size)
+    # print('_column_alignments_as_list: ', new_table._column_alignments_as_list)
+    # print('col_widths_as_list: ', new_table._column_widths_as_list)
+    # print('_column_types_as_list: ', new_table._column_types_as_list)
+    # print(f'HxW: {new_table.table_height} x {new_table.table_width}')
+    # print(f'Row count: {new_table.row_count}')
+    # print(f'Column count: {new_table.column_count}')
+    # print(f'Real Row count: {new_table._real_row_count}')
+    # print(f'Real Column count: {new_table._real_column_count}')
+    # print(f'Empty columns: {new_table._empty_column_indexes}')
+    # print(f'Empty rows: {new_table._empty_row_indexes}')
 
 
 if __name__ == '__main__':

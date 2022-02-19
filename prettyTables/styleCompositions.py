@@ -13,28 +13,28 @@ from options import *
 TableComposition = namedtuple(
     'TableComposition',
     [
-        'horizontal_composition',
-        'vertical_composition',
-        'table_options'
+        'superior_header_line',
+        'inferior_header_line',
+        'superior_header_line_no_header',
+        'table_body_line',
+        'table_end_line',
+        'vertical_header_lines',
+        'vertical_table_body_lines',
+        'margin',
+        'align_sensitive',
+        'align_indicator',
+        'centered_indicator_on_sides'
     ]
 )
 
 HorizontalComposition = namedtuple(
     'HorizontalComposition',
     [
-        'header_superior',
-        'header_inferior',
-        'starts_with_no_header',
-        'table_body',
-        'table_end'
-    ]
-)
-
-VerticalComposition = namedtuple(
-    'VerticalComposition',
-    [
-        'header',
-        'table_body'
+        'superior_header_line',
+        'inferior_header_line',
+        'superior_header_line_no_header',
+        'table_body_line',
+        'table_end_line'
     ]
 )
 
@@ -53,16 +53,6 @@ AlignIndicator = namedtuple(
     [
         'sides',
         'center'
-    ]
-)
-
-TableOptions = namedtuple(
-    'TableOptions',
-    [
-        'margin',
-        'align_sensitive',
-        'align_indicator',
-        'when_centered_put_in_sides'
     ]
 )
 
@@ -125,804 +115,557 @@ Compositions = namedtuple(
 
 __style_compositions = Compositions(
     plain=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=None,
-            header_inferior=None,
-            starts_with_no_header=None,
-            table_body=None,
-            table_end=None,
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
-            table_body=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None)
-        ),
-        table_options=TableOptions(
-            margin=0,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=None,
+        inferior_header_line=None,
+        superior_header_line_no_header=None,
+        table_body_line=None,
+        table_end_line=None,
+        vertical_header_lines=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
+        vertical_table_body_lines=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
+        margin=0,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
 
     ###################################
     ####     Box drawing Tables    ####
     ###################################
     pretty_grid=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=SeparatorLine('╒', '═', '╤', '╕'),
-            header_inferior=SeparatorLine('╞', '═', '╪', '╡'),
-            starts_with_no_header=SeparatorLine('╒', '═', '╤', '╕'),
-            table_body=SeparatorLine('├', '─', '┼', '┤'),
-            table_end=SeparatorLine('╘', '═', '╧', '╛'),
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine('│', '│', None, '│'),
-            table_body=SeparatorLine('│', '│', None, '│')
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=SeparatorLine('╒', '═', '╤', '╕'),
+        inferior_header_line=SeparatorLine('╞', '═', '╪', '╡'),
+        superior_header_line_no_header=SeparatorLine('╒', '═', '╤', '╕'),
+        table_body_line=SeparatorLine('├', '─', '┼', '┤'),
+        table_end_line=SeparatorLine('╘', '═', '╧', '╛'),
+        vertical_header_lines=SeparatorLine('│', '│', None, '│'),
+        vertical_table_body_lines=SeparatorLine('│', '│', None, '│'),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     pretty_columns=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=SeparatorLine('╒', '═', '╤', '╕'),
-            header_inferior=SeparatorLine('╞', '═', '╪', '╡'),
-            starts_with_no_header=SeparatorLine('╒', '═', '╤', '╕'),
-            table_body=None,
-            table_end=SeparatorLine('╘', '═', '╧', '╛'),
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine('│', '│', None, '│'),
-            table_body=SeparatorLine('│', '│', None, '│')
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=SeparatorLine('╒', '═', '╤', '╕'),
+        inferior_header_line=SeparatorLine('╞', '═', '╪', '╡'),
+        superior_header_line_no_header=SeparatorLine('╒', '═', '╤', '╕'),
+        table_body_line=None,
+        table_end_line=SeparatorLine('╘', '═', '╧', '╛'),
+        vertical_header_lines=SeparatorLine('│', '│', None, '│'),
+        vertical_table_body_lines=SeparatorLine('│', '│', None, '│'),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     bold_header=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=SeparatorLine('╔', '═', '╦', '╗'),
-            header_inferior=SeparatorLine('╚', '═', '╩', '╝'),
-            starts_with_no_header=SeparatorLine('┌', '─', '┬', '┐'),
-            table_body=SeparatorLine('├', '─', '┼', '┤'),
-            table_end=SeparatorLine('└', '─', '┴', '┘'),
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine('║', '║', None, '║'),
-            table_body=SeparatorLine('│', '│', None, '│')
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=SeparatorLine('╔', '═', '╦', '╗'),
+        inferior_header_line=SeparatorLine('╚', '═', '╩', '╝'),
+        superior_header_line_no_header=SeparatorLine('┌', '─', '┬', '┐'),
+        table_body_line=SeparatorLine('├', '─', '┼', '┤'),
+        table_end_line=SeparatorLine('└', '─', '┴', '┘'),
+        vertical_header_lines=SeparatorLine('║', '║', None, '║'),
+        vertical_table_body_lines=SeparatorLine('│', '│', None, '│'),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     bheader_columns=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=SeparatorLine('╔', '═', '╦', '╗'),
-            header_inferior=SeparatorLine('╚', '═', '╩', '╝'),
-            starts_with_no_header=SeparatorLine('┌', '─', '┬', '┐'),
-            table_body=None,
-            table_end=SeparatorLine('└', '─', '┴', '┘'),
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine('║', '║', None, '║'),
-            table_body=SeparatorLine('│', '│', None, '│')
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=SeparatorLine('╔', '═', '╦', '╗'),
+        inferior_header_line=SeparatorLine('╚', '═', '╩', '╝'),
+        superior_header_line_no_header=SeparatorLine('┌', '─', '┬', '┐'),
+        table_body_line=None,
+        table_end_line=SeparatorLine('└', '─', '┴', '┘'),
+        vertical_header_lines=SeparatorLine('║', '║', None, '║'),
+        vertical_table_body_lines=SeparatorLine('│', '│', None, '│'),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     bold_eheader=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=SeparatorLine('╔', '═', '═', '╗'),
-            header_inferior=SeparatorLine('╚', '═', '═', '╝'),
-            starts_with_no_header=SeparatorLine('┌', '─', '┬', '┐'),
-            table_body=SeparatorLine('├', '─', '┼', '┤'),
-            table_end=SeparatorLine('└', '─', '┴', '┘'),
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine('║', ' ', None, '║'),
-            table_body=SeparatorLine('│', '│', None, '│')
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=SeparatorLine('╔', '═', '═', '╗'),
+        inferior_header_line=SeparatorLine('╚', '═', '═', '╝'),
+        superior_header_line_no_header=SeparatorLine('┌', '─', '┬', '┐'),
+        table_body_line=SeparatorLine('├', '─', '┼', '┤'),
+        table_end_line=SeparatorLine('└', '─', '┴', '┘'),
+        vertical_header_lines=SeparatorLine('║', ' ', None, '║'),
+        vertical_table_body_lines=SeparatorLine('│', '│', None, '│'),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     beheader_columns=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=SeparatorLine('╔', '═', '═', '╗'),
-            header_inferior=SeparatorLine('╚', '═', '═', '╝'),
-            starts_with_no_header=SeparatorLine('┌', '─', '┬', '┐'),
-            table_body=None,
-            table_end=SeparatorLine('└', '─', '┴', '┘'),
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine('║', ' ', None, '║'),
-            table_body=SeparatorLine('│', '│', None, '│')
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=SeparatorLine('╔', '═', '═', '╗'),
+        inferior_header_line=SeparatorLine('╚', '═', '═', '╝'),
+        superior_header_line_no_header=SeparatorLine('┌', '─', '┬', '┐'),
+        table_body_line=None,
+        table_end_line=SeparatorLine('└', '─', '┴', '┘'),
+        vertical_header_lines=SeparatorLine('║', ' ', None, '║'),
+        vertical_table_body_lines=SeparatorLine('│', '│', None, '│'),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     bheader_ebody=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=SeparatorLine('╔', '═', '═', '╗'),
-            header_inferior=SeparatorLine('╚', '═', '═', '╝'),
-            starts_with_no_header=SeparatorLine('┌', '─', '─', '┐'),
-            table_body=None,
-            table_end=SeparatorLine('└', '─', '─', '┘'),
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine('║', ' ', None, '║'),
-            table_body=SeparatorLine('│', ' ', None, '│')
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=SeparatorLine('╔', '═', '═', '╗'),
+        inferior_header_line=SeparatorLine('╚', '═', '═', '╝'),
+        superior_header_line_no_header=SeparatorLine('┌', '─', '─', '┐'),
+        table_body_line=None,
+        table_end_line=SeparatorLine('└', '─', '─', '┘'),
+        vertical_header_lines=SeparatorLine('║', ' ', None, '║'),
+        vertical_table_body_lines=SeparatorLine('│', ' ', None, '│'),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     round_edges=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=SeparatorLine('╭', '─', '┬', '╮'),
-            header_inferior=SeparatorLine('╞', '═', '╪', '╡'),
-            starts_with_no_header=SeparatorLine('╭', '─', '┬', '╮'),
-            table_body=None,
-            table_end=SeparatorLine('╰', '─', '┴', '╯'),
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine('│', '│', None, '│'),
-            table_body=SeparatorLine('│', '│', None, '│')
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=SeparatorLine('╭', '─', '┬', '╮'),
+        inferior_header_line=SeparatorLine('╞', '═', '╪', '╡'),
+        superior_header_line_no_header=SeparatorLine('╭', '─', '┬', '╮'),
+        table_body_line=None,
+        table_end_line=SeparatorLine('╰', '─', '┴', '╯'),
+        vertical_header_lines=SeparatorLine('│', '│', None, '│'),
+        vertical_table_body_lines=SeparatorLine('│', '│', None, '│'),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     re_eheader=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=SeparatorLine('╭', '─', '─', '╮'),
-            header_inferior=SeparatorLine('╞', '═', '╤', '╡'),
-            starts_with_no_header=SeparatorLine('╭', '─', '┬', '╮'),
-            table_body=None,
-            table_end=SeparatorLine('╰', '─', '┴', '╯'),
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine('│', ' ', None, '│'),
-            table_body=SeparatorLine('│', '│', None, '│')
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=SeparatorLine('╭', '─', '─', '╮'),
+        inferior_header_line=SeparatorLine('╞', '═', '╤', '╡'),
+        superior_header_line_no_header=SeparatorLine('╭', '─', '┬', '╮'),
+        table_body_line=None,
+        table_end_line=SeparatorLine('╰', '─', '┴', '╯'),
+        vertical_header_lines=SeparatorLine('│', ' ', None, '│'),
+        vertical_table_body_lines=SeparatorLine('│', '│', None, '│'),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     re_ebody=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=SeparatorLine('╭', '─', '─', '╮'),
-            header_inferior=SeparatorLine('╞', '═', '═', '╡'),
-            starts_with_no_header=SeparatorLine('╭', '─', '─', '╮'),
-            table_body=None,
-            table_end=SeparatorLine('╰', '─', '─', '╯'),
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine('│', ' ', None, '│'),
-            table_body=SeparatorLine('│', ' ', None, '│')
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=SeparatorLine('╭', '─', '─', '╮'),
+        inferior_header_line=SeparatorLine('╞', '═', '═', '╡'),
+        superior_header_line_no_header=SeparatorLine('╭', '─', '─', '╮'),
+        table_body_line=None,
+        table_end_line=SeparatorLine('╰', '─', '─', '╯'),
+        vertical_header_lines=SeparatorLine('│', ' ', None, '│'),
+        vertical_table_body_lines=SeparatorLine('│', ' ', None, '│'),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     ###########################
     ####  Thin borderline  ####
     ###########################
     thin_borderline=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=SeparatorLine('┌', '─', '┬', '┐'),
-            header_inferior=SeparatorLine('╞', '═', '╪', '╡'),
-            starts_with_no_header=SeparatorLine('┌', '─', '┬', '┐'),
-            table_body=SeparatorLine('├', '─', '┼', '┤'),
-            table_end=SeparatorLine('└', '─', '┴', '┘'),
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine('│', '│', None, '│'),
-            table_body=SeparatorLine('│', '│', None, '│')
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=SeparatorLine('┌', '─', '┬', '┐'),
+        inferior_header_line=SeparatorLine('╞', '═', '╪', '╡'),
+        superior_header_line_no_header=SeparatorLine('┌', '─', '┬', '┐'),
+        table_body_line=SeparatorLine('├', '─', '┼', '┤'),
+        table_end_line=SeparatorLine('└', '─', '┴', '┘'),
+        vertical_header_lines=SeparatorLine('│', '│', None, '│'),
+        vertical_table_body_lines=SeparatorLine('│', '│', None, '│'),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     th_bd_eheader=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=SeparatorLine('┌', '─', '─', '┐'),
-            header_inferior=SeparatorLine('╞', '═', '╤', '╡'),
-            starts_with_no_header=SeparatorLine('┌', '─', '┬', '┐'),
-            table_body=SeparatorLine('├', '─', '┼', '┤'),
-            table_end=SeparatorLine('└', '─', '┴', '┘'),
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine('│', ' ', None, '│'),
-            table_body=SeparatorLine('│', '│', None, '│')
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=SeparatorLine('┌', '─', '─', '┐'),
+        inferior_header_line=SeparatorLine('╞', '═', '╤', '╡'),
+        superior_header_line_no_header=SeparatorLine('┌', '─', '┬', '┐'),
+        table_body_line=SeparatorLine('├', '─', '┼', '┤'),
+        table_end_line=SeparatorLine('└', '─', '┴', '┘'),
+        vertical_header_lines=SeparatorLine('│', ' ', None, '│'),
+        vertical_table_body_lines=SeparatorLine('│', '│', None, '│'),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     th_bd_ebody=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=SeparatorLine('┌', '─', '┬', '┐'),
-            header_inferior=SeparatorLine('╞', '═', '╧', '╡'),
-            starts_with_no_header=SeparatorLine('┌', '─', '─', '┐'),
-            table_body=None,
-            table_end=SeparatorLine('└', '─', '─', '┘'),
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine('│', '│', None, '│'),
-            table_body=SeparatorLine('│', ' ', None, '│')
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=SeparatorLine('┌', '─', '┬', '┐'),
+        inferior_header_line=SeparatorLine('╞', '═', '╧', '╡'),
+        superior_header_line_no_header=SeparatorLine('┌', '─', '─', '┐'),
+        table_body_line=None,
+        table_end_line=SeparatorLine('└', '─', '─', '┘'),
+        vertical_header_lines=SeparatorLine('│', '│', None, '│'),
+        vertical_table_body_lines=SeparatorLine('│', ' ', None, '│'),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     th_bd_empty=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=SeparatorLine('┌', '─', '─', '┐'),
-            header_inferior=SeparatorLine('╞', '═', '═', '╡'),
-            starts_with_no_header=SeparatorLine('┌', '─', '─', '┐'),
-            table_body=None,
-            table_end=SeparatorLine('└', '─', '─', '┘'),
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine('│', ' ', None, '│'),
-            table_body=SeparatorLine('│', ' ', None, '│')
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=SeparatorLine('┌', '─', '─', '┐'),
+        inferior_header_line=SeparatorLine('╞', '═', '═', '╡'),
+        superior_header_line_no_header=SeparatorLine('┌', '─', '─', '┐'),
+        table_body_line=None,
+        table_end_line=SeparatorLine('└', '─', '─', '┘'),
+        vertical_header_lines=SeparatorLine('│', ' ', None, '│'),
+        vertical_table_body_lines=SeparatorLine('│', ' ', None, '│'),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     ###########################
     ####  Bold borderline  ####
     ###########################
     bold_borderline=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=SeparatorLine('╔', '═', '╤', '╗'),
-            header_inferior=SeparatorLine('╠', '═', '╪', '╣'),
-            starts_with_no_header=SeparatorLine('╔', '═', '╤', '╗'),
-            table_body=SeparatorLine('╟', '─', '┼', '╢'),
-            table_end=SeparatorLine('╚', '═', '╧', '╝'),
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine('║', '│', None, '║'),
-            table_body=SeparatorLine('║', '│', None, '║')
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=SeparatorLine('╔', '═', '╤', '╗'),
+        inferior_header_line=SeparatorLine('╠', '═', '╪', '╣'),
+        superior_header_line_no_header=SeparatorLine('╔', '═', '╤', '╗'),
+        table_body_line=SeparatorLine('╟', '─', '┼', '╢'),
+        table_end_line=SeparatorLine('╚', '═', '╧', '╝'),
+        vertical_header_lines=SeparatorLine('║', '│', None, '║'),
+        vertical_table_body_lines=SeparatorLine('║', '│', None, '║'),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     bd_bl_eheader=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=SeparatorLine('╔', '═', '═', '╗'),
-            header_inferior=SeparatorLine('╠', '═', '╤', '╣'),
-            starts_with_no_header=SeparatorLine('╔', '═', '╤', '╗'),
-            table_body=SeparatorLine('╟', '─', '┼', '╢'),
-            table_end=SeparatorLine('╚', '═', '╧', '╝'),
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine('║', ' ', None, '║'),
-            table_body=SeparatorLine('║', '│', None, '║')
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=SeparatorLine('╔', '═', '═', '╗'),
+        inferior_header_line=SeparatorLine('╠', '═', '╤', '╣'),
+        superior_header_line_no_header=SeparatorLine('╔', '═', '╤', '╗'),
+        table_body_line=SeparatorLine('╟', '─', '┼', '╢'),
+        table_end_line=SeparatorLine('╚', '═', '╧', '╝'),
+        vertical_header_lines=SeparatorLine('║', ' ', None, '║'),
+        vertical_table_body_lines=SeparatorLine('║', '│', None, '║'),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     bd_bl_ebody=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=SeparatorLine('╔', '═', '╤', '╗'),
-            header_inferior=SeparatorLine('╠', '═', '╧', '╣'),
-            starts_with_no_header=SeparatorLine('╔', '═', '═', '╗'),
-            table_body=None,
-            table_end=SeparatorLine('╚', '═', '═', '╝'),
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine('║', '│', None, '║'),
-            table_body=SeparatorLine('║', ' ', None, '║')
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=SeparatorLine('╔', '═', '╤', '╗'),
+        inferior_header_line=SeparatorLine('╠', '═', '╧', '╣'),
+        superior_header_line_no_header=SeparatorLine('╔', '═', '═', '╗'),
+        table_body_line=None,
+        table_end_line=SeparatorLine('╚', '═', '═', '╝'),
+        vertical_header_lines=SeparatorLine('║', '│', None, '║'),
+        vertical_table_body_lines=SeparatorLine('║', ' ', None, '║'),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     bd_bl_empty=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=SeparatorLine('╔', '═', '═', '╗'),
-            header_inferior=SeparatorLine('╠', '═', '═', '╣'),
-            starts_with_no_header=SeparatorLine('╔', '═', '═', '╗'),
-            table_body=None,
-            table_end=SeparatorLine('╚', '═', '═', '╝'),
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine('║', ' ', None, '║'),
-            table_body=SeparatorLine('║', ' ', None, '║')
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=SeparatorLine('╔', '═', '═', '╗'),
+        inferior_header_line=SeparatorLine('╠', '═', '═', '╣'),
+        superior_header_line_no_header=SeparatorLine('╔', '═', '═', '╗'),
+        table_body_line=None,
+        table_end_line=SeparatorLine('╚', '═', '═', '╝'),
+        vertical_header_lines=SeparatorLine('║', ' ', None, '║'),
+        vertical_table_body_lines=SeparatorLine('║', ' ', None, '║'),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
 
     ###########################
     ####      +-|~oO:      ####
     ###########################
     pwrshll_alike=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=None,
-            header_inferior=SeparatorLine(None, '-', ' ', None),
-            starts_with_no_header=None,
-            table_body=None,
-            table_end=None,
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine(None, ' ', None, None),
-            table_body=SeparatorLine(None, ' ', None, None)
-        ),
-        table_options=TableOptions(
-            margin=0,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=None,
+        inferior_header_line=SeparatorLine(None, '-', ' ', None),
+        superior_header_line_no_header=None,
+        table_body_line=None,
+        table_end_line=None,
+        vertical_header_lines=SeparatorLine(None, ' ', None, None),
+        vertical_table_body_lines=SeparatorLine(None, ' ', None, None),
+        margin=0,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     presto=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=None,
-            header_inferior=SeparatorLine(None, '-', '+', None),
-            starts_with_no_header=None,
-            table_body=None,
-            table_end=None
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine(None, '|', None, None),
-            table_body=SeparatorLine(None, '|', None, None)
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=None,
+        inferior_header_line=SeparatorLine(None, '-', '+', None),
+        superior_header_line_no_header=None,
+        table_body_line=None,
+        table_end_line=None,
+        vertical_header_lines=SeparatorLine(None, '|', None, None),
+        vertical_table_body_lines=SeparatorLine(None, '|', None, None),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     grid=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=SeparatorLine('+', '-', '+', '+'),
-            header_inferior=SeparatorLine('+', '=', '+', '+'),
-            starts_with_no_header=SeparatorLine('+', '-', '+', '+'),
-            table_body=SeparatorLine('+', '-', '+', '+'),
-            table_end=SeparatorLine('+', '-', '+', '+'),
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine('|', '|', None, '|'),
-            table_body=SeparatorLine('|', '|', None, '|')
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=SeparatorLine('+', '-', '+', '+'),
+        inferior_header_line=SeparatorLine('+', '=', '+', '+'),
+        superior_header_line_no_header=SeparatorLine('+', '-', '+', '+'),
+        table_body_line=SeparatorLine('+', '-', '+', '+'),
+        table_end_line=SeparatorLine('+', '-', '+', '+'),
+        vertical_header_lines=SeparatorLine('|', '|', None, '|'),
+        vertical_table_body_lines=SeparatorLine('|', '|', None, '|'),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     grid_eheader=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=SeparatorLine('+', '-', '-', '+'),
-            header_inferior=SeparatorLine('+', '=', '+', '+'),
-            starts_with_no_header=SeparatorLine('+', '-', '+', '+'),
-            table_body=None,
-            table_end=SeparatorLine('+', '-', '+', '+'),
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine('|', ' ', None, '|'),
-            table_body=SeparatorLine('|', '|', None, '|')
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=SeparatorLine('+', '-', '-', '+'),
+        inferior_header_line=SeparatorLine('+', '=', '+', '+'),
+        superior_header_line_no_header=SeparatorLine('+', '-', '+', '+'),
+        table_body_line=None,
+        table_end_line=SeparatorLine('+', '-', '+', '+'),
+        vertical_header_lines=SeparatorLine('|', ' ', None, '|'),
+        vertical_table_body_lines=SeparatorLine('|', '|', None, '|'),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     grid_ebody=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=SeparatorLine('+', '-', '+', '+'),
-            header_inferior=SeparatorLine('+', '=', '+', '+'),
-            starts_with_no_header=SeparatorLine('+', '-', '-', '+'),
-            table_body=None,
-            table_end=SeparatorLine('+', '-', '-', '+'),
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine('|', '|', None, '|'),
-            table_body=SeparatorLine('|', ' ', None, '|')
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=SeparatorLine('+', '-', '+', '+'),
+        inferior_header_line=SeparatorLine('+', '=', '+', '+'),
+        superior_header_line_no_header=SeparatorLine('+', '-', '-', '+'),
+        table_body_line=None,
+        table_end_line=SeparatorLine('+', '-', '-', '+'),
+        vertical_header_lines=SeparatorLine('|', '|', None, '|'),
+        vertical_table_body_lines=SeparatorLine('|', ' ', None, '|'),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     grid_empty=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=SeparatorLine('+', '-', '-', '+'),
-            header_inferior=SeparatorLine('+', '=', '=', '+'),
-            starts_with_no_header=SeparatorLine('+', '-', '-', '+'),
-            table_body=None,
-            table_end=SeparatorLine('+', '-', '-', '+'),
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine('|', ' ', None, '|'),
-            table_body=SeparatorLine('|', ' ', None, '|')
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=SeparatorLine('+', '-', '-', '+'),
+        inferior_header_line=SeparatorLine('+', '=', '=', '+'),
+        superior_header_line_no_header=SeparatorLine('+', '-', '-', '+'),
+        table_body_line=None,
+        table_end_line=SeparatorLine('+', '-', '-', '+'),
+        vertical_header_lines=SeparatorLine('|', ' ', None, '|'),
+        vertical_table_body_lines=SeparatorLine('|', ' ', None, '|'),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     pipes=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=None,
-            header_inferior=SeparatorLine('|', '-', '|', '|'),
-            starts_with_no_header=SeparatorLine('|', '-', '|', '|'),
-            table_body=None,
-            table_end=None,
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine('|', '|', None, '|'),
-            table_body=SeparatorLine('|', '|', None, '|')
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=True,
-            align_indicator=AlignIndicator(':', ':'),
-            when_centered_put_in_sides=True
-        )
+        superior_header_line=None,
+        inferior_header_line=SeparatorLine('|', '-', '|', '|'),
+        superior_header_line_no_header=SeparatorLine('|', '-', '|', '|'),
+        table_body_line=None,
+        table_end_line=None,
+        vertical_header_lines=SeparatorLine('|', '|', None, '|'),
+        vertical_table_body_lines=SeparatorLine('|', '|', None, '|'),
+        margin=MARGIN,
+        align_sensitive=True,
+        align_indicator=AlignIndicator(':', ':'),
+        centered_indicator_on_sides=True
     ),
     tilde_grid=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=SeparatorLine('+', '-', '+', '+'),
-            header_inferior=SeparatorLine('O', '~', 'O', 'O'),
-            starts_with_no_header=SeparatorLine('O', '~', 'O', 'O'),
-            table_body=SeparatorLine('+', '-', '+', '+'),
-            table_end=SeparatorLine('O', '~', 'O', 'O')
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine('|', '|', None, '|'),
-            table_body=SeparatorLine('|', '|', None, '|')
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=SeparatorLine('+', '-', '+', '+'),
+        inferior_header_line=SeparatorLine('O', '~', 'O', 'O'),
+        superior_header_line_no_header=SeparatorLine('O', '~', 'O', 'O'),
+        table_body_line=SeparatorLine('+', '-', '+', '+'),
+        table_end_line=SeparatorLine('O', '~', 'O', 'O'),
+        vertical_header_lines=SeparatorLine('|', '|', None, '|'),
+        vertical_table_body_lines=SeparatorLine('|', '|', None, '|'),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     tilg_eheader=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=SeparatorLine('+', '-', '-', '+'),
-            header_inferior=SeparatorLine('O', '~', 'O', 'O'),
-            starts_with_no_header=SeparatorLine('O', '~', 'O', 'O'),
-            table_body=SeparatorLine('+', '-', '+', '+'),
-            table_end=SeparatorLine('O', '~', 'O', 'O')
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine('|', ' ', None, '|'),
-            table_body=SeparatorLine('|', '|', None, '|')
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=SeparatorLine('+', '-', '-', '+'),
+        inferior_header_line=SeparatorLine('O', '~', 'O', 'O'),
+        superior_header_line_no_header=SeparatorLine('O', '~', 'O', 'O'),
+        table_body_line=SeparatorLine('+', '-', '+', '+'),
+        table_end_line=SeparatorLine('O', '~', 'O', 'O'),
+        vertical_header_lines=SeparatorLine('|', ' ', None, '|'),
+        vertical_table_body_lines=SeparatorLine('|', '|', None, '|'),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     tilg_columns=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=SeparatorLine('+', '-', '+', '+'),
-            header_inferior=SeparatorLine('O', '~', 'O', 'O'),
-            starts_with_no_header=SeparatorLine('O', '~', 'O', 'O'),
-            table_body=None,
-            table_end=SeparatorLine('O', '~', 'O', 'O')
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine('|', '|', None, '|'),
-            table_body=SeparatorLine('|', '|', None, '|')
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=SeparatorLine('+', '-', '+', '+'),
+        inferior_header_line=SeparatorLine('O', '~', 'O', 'O'),
+        superior_header_line_no_header=SeparatorLine('O', '~', 'O', 'O'),
+        table_body_line=None,
+        table_end_line=SeparatorLine('O', '~', 'O', 'O'),
+        vertical_header_lines=SeparatorLine('|', '|', None, '|'),
+        vertical_table_body_lines=SeparatorLine('|', '|', None, '|'),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     tilg_empty=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=SeparatorLine('+', '-', '-', '+'),
-            header_inferior=SeparatorLine('O', '~', '~', 'O'),
-            starts_with_no_header=SeparatorLine('O', '~', '~', 'O'),
-            table_body=None,
-            table_end=SeparatorLine('O', '~', '~', 'O')
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine('|', ' ', None, '|'),
-            table_body=SeparatorLine('|', ' ', None, '|')
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=SeparatorLine('+', '-', '-', '+'),
+        inferior_header_line=SeparatorLine('O', '~', '~', 'O'),
+        superior_header_line_no_header=SeparatorLine('O', '~', '~', 'O'),
+        table_body_line=None,
+        table_end_line=SeparatorLine('O', '~', '~', 'O'),
+        vertical_header_lines=SeparatorLine('|', ' ', None, '|'),
+        vertical_table_body_lines=SeparatorLine('|', ' ', None, '|'),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     orgtbl=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=None,
-            header_inferior=SeparatorLine('|', '-', '+', '|'),
-            starts_with_no_header=None,
-            table_body=None,
-            table_end=None,
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine('|', '|', None, '|'),
-            table_body=SeparatorLine('|', '|', None, '|')
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=None,
+        inferior_header_line=SeparatorLine('|', '-', '+', '|'),
+        superior_header_line_no_header=None,
+        table_body_line=None,
+        table_end_line=None,
+        vertical_header_lines=SeparatorLine('|', '|', None, '|'),
+        vertical_table_body_lines=SeparatorLine('|', '|', None, '|'),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
 
     ###################################
     #### Simple (horizontal lines) ####
     ###################################
     clean=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=None,
-            header_inferior=SeparatorLine(None, '─', INVISIBLE_SEPARATOR, None),
-            starts_with_no_header=SeparatorLine(None, '─', INVISIBLE_SEPARATOR, None),
-            table_body=None,
-            table_end=SeparatorLine(None, '─', INVISIBLE_SEPARATOR, None),
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
-            table_body=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None)
-        ),
-        table_options=TableOptions(
-            margin=0,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=None,
+        inferior_header_line=SeparatorLine(None, '─', INVISIBLE_SEPARATOR, None),
+        superior_header_line_no_header=SeparatorLine(None, '─', INVISIBLE_SEPARATOR, None),
+        table_body_line=None,
+        table_end_line=SeparatorLine(None, '─', INVISIBLE_SEPARATOR, None),
+        vertical_header_lines=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
+        vertical_table_body_lines=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
+        margin=0,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     simple=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=SeparatorLine(None, '-', '-' * len(INVISIBLE_SEPARATOR), None),
-            header_inferior=SeparatorLine(None, '-', '-' * len(INVISIBLE_SEPARATOR), None),
-            starts_with_no_header=SeparatorLine(None, '-', '-' * len(INVISIBLE_SEPARATOR), None),
-            table_body=None,
-            table_end=SeparatorLine(None, '-', '-' * len(INVISIBLE_SEPARATOR), None)
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
-            table_body=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None)
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=SeparatorLine(None, '-', '-' * len(INVISIBLE_SEPARATOR), None),
+        inferior_header_line=SeparatorLine(None, '-', '-' * len(INVISIBLE_SEPARATOR), None),
+        superior_header_line_no_header=SeparatorLine(None, '-', '-' * len(INVISIBLE_SEPARATOR), None),
+        table_body_line=None,
+        table_end_line=SeparatorLine(None, '-', '-' * len(INVISIBLE_SEPARATOR), None),
+        vertical_header_lines=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
+        vertical_table_body_lines=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     simple_bold=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=SeparatorLine(None, '=', '=' * len(INVISIBLE_SEPARATOR), None),
-            header_inferior=SeparatorLine(None, '=', '=' * len(INVISIBLE_SEPARATOR), None),
-            starts_with_no_header=SeparatorLine(None, '=', '=' * len(INVISIBLE_SEPARATOR), None),
-            table_body=None,
-            table_end=SeparatorLine(None, '=', '=' * len(INVISIBLE_SEPARATOR), None)
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
-            table_body=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None)
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=SeparatorLine(None, '=', '=' * len(INVISIBLE_SEPARATOR), None),
+        inferior_header_line=SeparatorLine(None, '=', '=' * len(INVISIBLE_SEPARATOR), None),
+        superior_header_line_no_header=SeparatorLine(None, '=', '=' * len(INVISIBLE_SEPARATOR), None),
+        table_body_line=None,
+        table_end_line=SeparatorLine(None, '=', '=' * len(INVISIBLE_SEPARATOR), None),
+        vertical_header_lines=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
+        vertical_table_body_lines=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     simple_head=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=None,
-            header_inferior=SeparatorLine(None, '-', '-' * len(INVISIBLE_SEPARATOR), None),
-            starts_with_no_header=None,
-            table_body=None,
-            table_end=None
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
-            table_body=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None)
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=None,
+        inferior_header_line=SeparatorLine(None, '-', '-' * len(INVISIBLE_SEPARATOR), None),
+        superior_header_line_no_header=None,
+        table_body_line=None,
+        table_end_line=None,
+        vertical_header_lines=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
+        vertical_table_body_lines=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     simple_head_bold=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=None,
-            header_inferior=SeparatorLine(None, '=', '=' * len(INVISIBLE_SEPARATOR), None),
-            starts_with_no_header=None,
-            table_body=None,
-            table_end=None
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
-            table_body=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None)
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=None,
+        inferior_header_line=SeparatorLine(None, '=', '=' * len(INVISIBLE_SEPARATOR), None),
+        superior_header_line_no_header=None,
+        table_body_line=None,
+        table_end_line=None,
+        vertical_header_lines=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
+        vertical_table_body_lines=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     sim_th_bl=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=SeparatorLine(None, '─', '─' * len(INVISIBLE_SEPARATOR), None),
-            header_inferior=SeparatorLine(None, '─', '─' * len(INVISIBLE_SEPARATOR), None),
-            starts_with_no_header=SeparatorLine(None, '─', '─' * len(INVISIBLE_SEPARATOR), None),
-            table_body=None,
-            table_end=SeparatorLine(None, '─', '─' * len(INVISIBLE_SEPARATOR), None)
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
-            table_body=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None)
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=SeparatorLine(None, '─', '─' * len(INVISIBLE_SEPARATOR), None),
+        inferior_header_line=SeparatorLine(None, '─', '─' * len(INVISIBLE_SEPARATOR), None),
+        superior_header_line_no_header=SeparatorLine(None, '─', '─' * len(INVISIBLE_SEPARATOR), None),
+        table_body_line=None,
+        table_end_line=SeparatorLine(None, '─', '─' * len(INVISIBLE_SEPARATOR), None),
+        vertical_header_lines=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
+        vertical_table_body_lines=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     sim_bd_bl=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=SeparatorLine(None, '═', '═' * len(INVISIBLE_SEPARATOR), None),
-            header_inferior=SeparatorLine(None, '═', '═' * len(INVISIBLE_SEPARATOR), None),
-            starts_with_no_header=SeparatorLine(None, '═', '═' * len(INVISIBLE_SEPARATOR), None),
-            table_body=None,
-            table_end=SeparatorLine(None, '═', '═' * len(INVISIBLE_SEPARATOR), None)
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
-            table_body=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None)
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=SeparatorLine(None, '═', '═' * len(INVISIBLE_SEPARATOR), None),
+        inferior_header_line=SeparatorLine(None, '═', '═' * len(INVISIBLE_SEPARATOR), None),
+        superior_header_line_no_header=SeparatorLine(None, '═', '═' * len(INVISIBLE_SEPARATOR), None),
+        table_body_line=None,
+        table_end_line=SeparatorLine(None, '═', '═' * len(INVISIBLE_SEPARATOR), None),
+        vertical_header_lines=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
+        vertical_table_body_lines=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     sim_head_th_bl=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=None,
-            header_inferior=SeparatorLine(None, '─', '─' * len(INVISIBLE_SEPARATOR), None),
-            starts_with_no_header=None,
-            table_body=None,
-            table_end=None
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
-            table_body=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None)
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=None,
+        inferior_header_line=SeparatorLine(None, '─', '─' * len(INVISIBLE_SEPARATOR), None),
+        superior_header_line_no_header=None,
+        table_body_line=None,
+        table_end_line=None,
+        vertical_header_lines=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
+        vertical_table_body_lines=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
     sim_head_bd_bl=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=None,
-            header_inferior=SeparatorLine(None, '═', '═' * len(INVISIBLE_SEPARATOR), None),
-            starts_with_no_header=None,
-            table_body=None,
-            table_end=None
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
-            table_body=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None)
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=None,
+        inferior_header_line=SeparatorLine(None, '═', '═' * len(INVISIBLE_SEPARATOR), None),
+        superior_header_line_no_header=None,
+        table_body_line=None,
+        table_end_line=None,
+        vertical_header_lines=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
+        vertical_table_body_lines=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     ),
-
     ##################
     ####   Other  ####
     ##################
     dashes=TableComposition(
-        horizontal_composition=HorizontalComposition(
-            header_superior=SeparatorLine('┌', '┄', '┬', '┐'),
-            header_inferior=SeparatorLine('┝', '╍', '┿', '┥'),
-            starts_with_no_header=SeparatorLine('┌', '┄', '┬', '┐'),
-            table_body=None,
-            table_end=SeparatorLine('└', '┄', '┴', '┘'),
-        ),
-        vertical_composition=VerticalComposition(
-            header=SeparatorLine('┊', '┊', None, '┊'),
-            table_body=SeparatorLine('┊', '┊', None, '┊')
-        ),
-        table_options=TableOptions(
-            margin=MARGIN,
-            align_sensitive=False,
-            align_indicator=None,
-            when_centered_put_in_sides=False
-        )
+        superior_header_line=SeparatorLine('┌', '┄', '┬', '┐'),
+        inferior_header_line=SeparatorLine('┝', '╍', '┿', '┥'),
+        superior_header_line_no_header=SeparatorLine('┌', '┄', '┬', '┐'),
+        table_body_line=None,
+        table_end_line=SeparatorLine('└', '┄', '┴', '┘'),
+        vertical_header_lines=SeparatorLine('┊', '┊', None, '┊'),
+        vertical_table_body_lines=SeparatorLine('┊', '┊', None, '┊'),
+        margin=MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False
     )
 )
