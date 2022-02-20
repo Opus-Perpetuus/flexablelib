@@ -7,13 +7,28 @@ Print formatted tabular data in different styles
 # Main Class.
 # Here the whole table is formed
 
-from styleCompositions import __style_compositions as style_catalogue
-from columns import _column_sizes, _typify_column
-from separators import _get_separators
-from utils import get_window_size
+from styleCompositions import __style_compositions as style_catalogue, HorizontalComposition
+from columns import _column_sizes, _typify_column, _align_columns, _align_headers
+from table_strings import _get_separators, _get_data_rows, DataRows
+from utils import get_window_size, is_multi_row
+from options import NONE_VALUE_REPLACEMENT
 from cells import _wrap_cells
 
 DEFAULT_STYLE = 'pwrshll_alike'
+
+
+def _zip_columns(columns, headers=False):
+    if headers:
+        row = tuple(map(lambda x: x, columns))
+        if is_multi_row(row):
+            return tuple(zip(*row))
+        else:
+            return row
+    else:
+        half_checked_rows = zip(*columns)
+        sub_zipped = tuple(map(lambda s_row: tuple(zip(*s_row)) if is_multi_row(s_row) else s_row,
+                               half_checked_rows))
+        return sub_zipped
 
 
 class Table(object):
@@ -121,6 +136,7 @@ class Table(object):
         self.show_empty_rows = False
         self.generic_column_name = 'column'
         self.style_name = style_name
+
         # +------------------+ TABLE CHARACTERISTICS +-------------------+
         self.show_headers = True
         self.table_height = 0
@@ -158,6 +174,10 @@ class Table(object):
 
     # +-----------------------------------------------------------------------------+
     # start +-------------------------+ PROPERTIES +--------------------------+ start
+
+    @property
+    def _style_composition(self):
+        return style_catalogue.__getattribute__(self._checked_style_name)
 
     @property
     def _checked_style_name(self):
@@ -236,7 +256,7 @@ class Table(object):
                      If not provided, column gets filled
                      with the missing value.
                      If the column is greater than the
-                     table row count, new rows gets
+                     table s_row count, new rows gets
                      added, and the new spaces in other
                      columns filled with missing value,
                      but if smaller, the remaining
@@ -324,8 +344,8 @@ class Table(object):
 
     def add_row(self, data=None):
         """
-        Add a row to the table. Can be left empty to add
-        an empty row.
+        Add a s_row to the table. Can be left empty to add
+        an empty s_row.
 
         :param data: Data provided as any iterable.
         """
@@ -404,7 +424,7 @@ class Table(object):
     def __parse_int_boolean(self):
         pass
 
-    def __pase_exponentials(self):
+    def __parse_exponentials(self):
         pass
 
     def __parse_bytes(self):
@@ -435,7 +455,7 @@ class Table(object):
 
     def _get_column_widths(self):
         sizes = _column_sizes(self._processed_columns)
-        self._column_widths_as_list.append(sizes)
+        list(map(self._column_widths_as_list.append, sizes))
         for i, column in enumerate(self.columns.items()):
             header, _ = column
             self._column_widths[header] = sizes[i]
@@ -458,8 +478,66 @@ class Table(object):
         pass
 
     def _form_string(self):
-        _get_separators(self._checked_style_name, tuple(self._column_widths.values()))
-        return ''
+        # Data from column dict is put in tuples
+        unaligned_columns = self.__get_procesed_columns_data()
+        unaligned_header = self.__get_procesed_columns_data(header=True)
+
+        # Header and body rows get aligned
+        aligned_header = _align_headers(self._style_composition,
+                                        unaligned_header,
+                                        self._column_alignments_as_list,
+                                        self._column_widths_as_list)
+        aligned_header = _zip_columns(aligned_header, headers=True)
+        aligned_columns = _align_columns(self._style_composition,
+                                         unaligned_columns,
+                                         self._column_alignments_as_list,
+                                         self._column_widths_as_list)
+        aligned_columns = _zip_columns(aligned_columns)
+
+        # String separators and data rows are joined
+        separators: HorizontalComposition = _get_separators(
+            self._style_composition,
+            tuple(self._column_widths.values())
+        )
+        data_rows: DataRows = _get_data_rows(self._style_composition, aligned_header, aligned_columns)
+
+        # Table string is formed
+        header_superior = ''.join([separators.superior_header_line, '\n']) if (
+            separators.superior_header_line is not None
+        ) else NONE_VALUE_REPLACEMENT
+        no_header_superior = separators.superior_header_line_no_header
+        header_inferior = ''.join(['\n', separators.inferior_header_line]) if (
+            separators.inferior_header_line is not None
+        ) else NONE_VALUE_REPLACEMENT
+        body_line = ''.join(['\n', separators.table_body_line]) if (
+            separators.table_body_line is not None
+        ) else NONE_VALUE_REPLACEMENT
+        end_line = separators.table_end_line
+
+        header_row = data_rows.header_row
+        body_rows = data_rows.body_rows
+
+        if self.show_headers:
+            superior_row = ''.join([header_superior, header_row, header_inferior])
+        else:
+            superior_row = no_header_superior
+
+        if superior_row is None and end_line is not None:
+            table_string = '\n'.join([f'{body_line}\n'.join(body_rows), end_line])
+        elif end_line is None and superior_row is not None:
+            table_string = '\n'.join([superior_row, f'{body_line}\n'.join(body_rows)])
+        elif superior_row is None and end_line is None:
+            table_string = f'{body_line}\n'.join(body_rows)
+        else:
+            table_string = '\n'.join([superior_row, f'{body_line}\n'.join(body_rows), end_line])
+
+        return table_string
+
+    def __get_procesed_columns_data(self, header=False):
+        columns_with_headers = self._processed_columns.values()
+        for column_w_h in columns_with_headers:
+            get = 'header' if header else 'data'
+            yield column_w_h[get]
 
     # +------------------------+ TABLE BODY +------------------------+
 
@@ -511,42 +589,45 @@ def test():
     import json
 
     new_table = Table()
-    new_table.show_empty_columns = False
-    new_table.show_empty_rows = False
-    new_table.show_headers = True
-    new_table.missing_val = None
+    # new_table.show_empty_columns = False
+    new_table.show_empty_rows = True
+    # new_table.show_headers = False
+    # new_table.missing_val = None
     new_table.add_column('Header 1', [1, 2, True, False, True, True])
     new_table.add_column()
     new_table.add_column('Another\nColumn', ['e', 'e', 'e', 'Data 4-1'])
-    new_table.add_column('Header 1.1', [b'data1', b'2', b'\x01', b'', b'b16asd65', b'1177'])
-    new_table.add_column('Header 1.1', [2.112, .1651, 5156.1, 12.23, 98.1, 10.0135, .165165])
+    # new_table.add_column('Header 1.1', [b'data1', b'2', b'\x01', b'', b'b16asd65', b'1177'])
+    # new_table.add_column('Header 1.1', [2.112, .1651, 5156.1, 12.23, 98.1, 10.0135, .165165])
     new_table.add_column('another', data=['Very wide\nsentence', 'Another wrapped\nphrase', 'Yes\nINDEED\nit is'])
     new_table.add_column()
     new_table.add_column('another', data=[True, False])
     new_table.add_row()
-    new_table.add_row(['Data 7-1',
-                       'Data 7-2',
-                       'Data 7-3',
-                       'Data 7-4',
-                       'Data 7-5',
-                       'Data 7-6',
-                       'Data 7-7',
-                       'Data 7-8',
-                       'Data 7-9',
-                       'Data 7-10',
-                       'Data 7-11'])
-    new_table.style_name = 'asd'
-    print(new_table)
-    print(new_table._column_widths)
+    # new_table.add_row(['Data 7-1',
+    #                    'Data 7-2',
+    #                    'Data 7-3',
+    #                    'Data 7-4',
+    #                    'Data 7-5',
+    #                    'Data 7-6',
+    #                    'Data 7-7',
+    #                    'Data 7-8',
+    #                    'Data 7-9',
+    #                    'Data 7-10',
+    #                    'Data 7-11'])
+    for style in new_table.possible_styles:
+        new_table.style_name = style
+        print(new_table, end='\n\n')
+    # print('\nColumns', new_table.column_count)
+    # print('Rows', new_table.row_count)
+
     # print('-------------ROWS------------')
     # print(new_table.headers, end='\n\n')
     # list(map(print, new_table.rows))
     # print('-------------ROWS------------')
-    print('-------PROCESSED ROWS--------')
-    list(map(print, new_table._processed_headers))
-    print('\n')
-    list(map(lambda x: print('\n'.join(list(map(str, x))), '\n'), new_table._processed_rows))
-    print('-------PROCESSED ROWS--------')
+    # print('-------PROCESSED ROWS--------')
+    # list(map(print, new_table._processed_headers))
+    # print('\n')
+    # list(map(lambda x: print('\n'.join(list(map(str, x))), '\n'), new_table._processed_rows))
+    # print('-------PROCESSED ROWS--------')
     # print('------PROCESSED COLUMNS------')
     # print(new_table._processed_columns)
     # print('------PROCESSED COLUMNS------')

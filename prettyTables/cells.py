@@ -1,182 +1,63 @@
-""" CELLS OF THE TABLE """
+""" CELL WRAPPING AND ADJUSTMENT """
 
-from utils import is_array
+from utils import is_some_instance, is_list
 
 
-""" 
-Cells
+def _add_cell_spacing(cell, left: int, right: int, diff_if_empty: int):
+    left = ' ' * left  # Space for the left
+    right = ' ' * right  # Space for the right
+    diff = ' ' * diff_if_empty
 
-Cells of data that conforms the table.
-headers : list[any] | tuple[any] | str
-body    : list[list[any]] | tuple[tuple[any]]
+    if is_some_instance(cell, tuple, list):
+        spaced = list(map(str, cell))
+        for part_i, cell_part in enumerate(cell):
+            if diff_if_empty != 0 and part_i != 0:
+                spaced[part_i] = ''.join([left, diff, right])
+            else:
+                spaced[part_i] = ''.join([left, cell_part, right])
+    else:
+        if diff_if_empty != 0:
+            spaced = ''.join([left, diff, right])
+        else:
+            spaced = ''.join([left, cell, right])
 
-# Where to adjust body and headers
-exBoTo  : 'l' | 'r' 
-exHeTo  : 'l' | 'r' 
-"""
+    return spaced
 
-# def __init__(self, headers, body, exBoTo, exHeTo) -> None:
-#     self.headers = headers
-#     self.body = body
-#     self.exBoTo = exBoTo
-#     self.exHeTo = exHeTo
-#
-# def _addBodySpacing(self, x: int, y: int, left: int, right: int, diffIfEmpty: int):
-#     """
-#     ### Add Body Spacing
-#
-#     Add spaces to a specific cell of the body
-#     ```
-#     x     : int (column)
-#     y     : int (row)
-#     left  : int (space to ad to the left)
-#     right : int (space to ad to the right)
-#     ```
-#     """
-#     l = ' ' * left  # Space for the left
-#     r = ' ' * right  # Space for the right
-#     d = ' ' * diffIfEmpty
-#
-#     if is_array(self.body[x][y]):
-#         for i in range(len(self.body[x][y])):
-#             if diffIfEmpty != 0 and i != 0:
-#                 self.body[x][y][i] = ''.join([l, d, r])
-#             else:
-#                 self.body[x][y][i] = ''.join([l, str(self.body[x][y][i]), r])
-#     else:
-#         if diffIfEmpty != 0 and i != 0:
-#             self.body[x][y] = ''.join([l, f, r])
-#         else:
-#             self.body[x][y] = ''.join([l, str(self.body[x][y]), r])
-#
-#     return self.body[x][y]
-#
-# def _addHeaderSpacing(self, x: int, left: int, right: int):
-#     """
-#     ### Add Header Spacing
-#
-#     Add spaces to a specific cell of the header
-#     ```
-#     x     : int (column)
-#     left  : int (space to ad to the left)
-#     right : int (space to ad to the right)
-#     ```
-#     """
-#     l = ' ' * left  # Space for the left
-#     r = ' ' * right  # Space for the right
-#
-#     if is_array(self.headers[x]):
-#         for i in range(len(self.headers[x])):
-#             self.headers[x][i] = ''.join([l, str(self.headers[x][i]), r])
-#     else:
-#         self.headers[x] = ''.join([l, str(self.headers[x]), r])
-#
-#     return self.headers[x]
-#
-# def _centerBodyCell(self, x: int, y: int, cellLen: int, fillchar: str):
-#     """
-#     ### Center Body Cell
-#     ```
-#     x        : int (column)
-#     y        : int (row)
-#     cellLen  : int (width of the cell or column)
-#     fillchar : int (char to fill the space)
-#     ```
-#     """
-#     if is_array(self.body[x][y]):
-#         for i in range(len(self.body[x][y])):
-#             self.body[x][y][i] = str(self.body[x][y][i]).center(cellLen, fillchar)
-#     else:
-#         self.body[x][y] = str(self.body[x][y]).center(cellLen, fillchar)
-#
-#     return self.body[x][y]
-#
-# def _ljustBodyCell(self, x: int, y: int, cellLen: int, fillchar: str):
-#     """
-#     ### Left Adjust Body Cell
-#     ```
-#     x        : int (column)
-#     y        : int (row)
-#     cellLen  : int (width of the cell or column)
-#     fillchar : int (char to fill the space)
-#     ```
-#     """
-#     if is_array(self.body[x][y]):
-#         for i in range(len(self.body[x][y])):
-#             self.body[x][y][i] = str(self.body[x][y][i]).ljust(cellLen, fillchar)
-#     else:
-#         self.body[x][y] = str(self.body[x][y]).ljust(cellLen, fillchar)
-#
-#     return self.body[x][y]
-#
-# def _rjustBodyCell(self, x: int, y: int, cellLen: int, fillchar: str):
-#     """
-#     ### Right Adjust Body Cell
-#     ```
-#     x        : int (column)
-#     y        : int (row)
-#     cellLen  : int (width of the cell or column)
-#     fillchar : int (char to fill the space)
-#     ```
-#     """
-#     if is_array(self.body[x][y]):
-#         for i in range(len(self.body[x][y])):
-#             self.body[x][y][i] = str(self.body[x][y][i]).rjust(cellLen, fillchar)
-#     else:
-#         self.body[x][y] = str(self.body[x][y]).rjust(cellLen, fillchar)
-#
-#     return self.body[x][y]
-#
-# def _centerHeadCell(self, x: int, cellLen: int, fillchar: str):
-#     """
-#     ### Center Head Cell
-#     ```
-#     x        : int (column)
-#     cellLen  : int (width of the cell or column)
-#     fillchar : int (char to fill the space)
-#     ```
-#     """
-#     if is_array(self.headers[x]):
-#         for i in range(len(self.headers[x])):
-#             self.headers[x][i] = str(self.headers[x][i]).center(cellLen, fillchar)
-#     else:
-#         self.headers[x] = str(self.headers[x]).center(cellLen, fillchar)
-#
-#     return self.headers[x]
-#
-# def _ljustHeadCell(self, x: int, cellLen: int, fillchar: str):
-#     """
-#     ### Left Adjust Head Cell
-#     ```
-#     x        : int (column)
-#     cellLen  : int (width of the cell or column)
-#     fillchar : int (char to fill the space)
-#     ```
-#     """
-#     if is_array(self.headers[x]):
-#         for i in range(len(self.headers[x])):
-#             self.headers[x][i] = str(self.headers[x][i]).ljust(cellLen, fillchar)
-#     else:
-#         self.headers[x] = str(self.headers[x]).ljust(cellLen, fillchar)
-#
-#     return self.headers[x]
-#
-# def _rjustHeadCell(self, x: int, cellLen: int, fillchar: str):
-#     """
-#     ### Right Adjust Head Cell
-#     ```
-#     x        : int (column)
-#     cellLen  : int (width of the cell or column)
-#     fillchar : int (char to fill the space)
-#     ```
-#     """
-#     if is_array(self.headers[x]):
-#         for i in range(len(self.headers[x])):
-#             self.headers[x][i] = str(self.headers[x][i]).rjust(cellLen, fillchar)
-#     else:
-#         self.headers[x] = str(self.headers[x]).rjust(cellLen, fillchar)
-#
-#     return self.headers[x]
+
+def _center_cell(cell, cell_length, fill_char):
+    if is_some_instance(cell, tuple, list):
+        centered = list(map(str, cell))
+        for part_i, cell_part in enumerate(centered):
+            centered[part_i] = cell_part.center(cell_length, fill_char)
+        centered = tuple(centered)
+    else:
+        centered = str(cell).center(cell_length, fill_char)
+
+    return centered
+
+
+def _ljust_cell(cell, cell_length, fill_char):
+    if is_some_instance(cell, list, tuple):
+        ljusted = list(map(str, cell))
+        for part_i, cell_part in enumerate(ljusted):
+            ljusted[part_i] = cell_part.ljust(cell_length, fill_char)
+        ljusted = tuple(ljusted)
+    else:
+        ljusted = str(cell).ljust(cell_length, fill_char)
+
+    return ljusted
+
+
+def _rjust_cell(cell, cell_length, fill_char):
+    if is_some_instance(cell, list, tuple):
+        rjusted = list(map(str, cell))
+        for part_i, cell_part in enumerate(rjusted):
+            rjusted[part_i] = cell_part.rjust(cell_length, fill_char)
+        rjusted = tuple(rjusted)
+    else:
+        rjusted = str(cell).rjust(cell_length, fill_char)
+
+    return rjusted
 
 
 def _wrap_cells(headers, data, columns=False):

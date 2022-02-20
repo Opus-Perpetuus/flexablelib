@@ -1,4 +1,10 @@
-from utils import is_array, is_tuple
+from cells import _center_cell, _ljust_cell, _rjust_cell, _add_cell_spacing
+from styleCompositions import TableComposition
+from utils import is_some_instance
+from typing import List, Union
+
+
+DEFAULT_FILL_CHAR = ' '
 
 
 def __get_column_type(column):
@@ -18,8 +24,8 @@ def __get_column_type(column):
         return 'str'
     else:
         return 'NoneType'
-#
-#
+
+
 # def __get_side_size(formatted):
 #     if formatted != '':
 #         if '.' in formatted:
@@ -28,21 +34,6 @@ def __get_column_type(column):
 #         else:
 #             return len(formatted), -1
 
-
-# class Columns(object):
-#     def __init__(self, data, headers, column_types=None, float_spaces=None, format_exponential=False):
-#         self.data = data
-#         self.headers = headers
-#         self.row_count = row_count
-#         self.column_count = colum
-#         self.columns = None
-#         self.column_alignment = []
-#         self.format_exponential = format_exponential
-#         self.float_spaces = float_spaces
-#         self.float_column_ind = None
-#         self.column_types = column_types
-#         self.fully_formed = None
-#         self.cell_types = None
 
 _alignments_per_type = {
     'bool': 'r',
@@ -59,14 +50,14 @@ def _column_sizes(columns):
 
     head_sizes = [
         max([len(str(row)) for row in column['header']]) if (
-            (is_array(column['header']) or is_tuple(column['header']))
+            is_some_instance(column['header'], tuple, list)
         ) else len(str(column['header']))
         for _, column in columns.items()
     ]
     body_sizes = [
         max([
             max([len(str(sbRow)) for sbRow in row]) if (
-                (is_array(row) or is_tuple(row))
+                is_some_instance(row, tuple, list)
             ) else len(str(row))
             for row in column['data']
         ])
@@ -100,7 +91,53 @@ def _typify_column(column):
     column_alignment = _alignments_per_type[column_type]
 
     return identified_types, column_type, column_alignment
-#
+
+
+def __align_single_cell(cell, col_width, to_where, margin):
+    new_cell = cell
+    if to_where == 'l':
+        new_cell = _ljust_cell(cell, col_width, DEFAULT_FILL_CHAR)
+    elif to_where == 'c':
+        new_cell = _center_cell(cell, col_width, DEFAULT_FILL_CHAR)
+    elif to_where in ['r']:
+        new_cell = _rjust_cell(cell, col_width, DEFAULT_FILL_CHAR)
+    new_cell = _add_cell_spacing(new_cell, margin, margin, 0)
+    return new_cell
+
+
+def _align_columns(style_composition: TableComposition, columns,
+                   col_alignments: List[str], col_widths: List[int]):
+    margin = style_composition.margin
+
+    for column_i, column in enumerate(columns):
+        aligned_column = list()
+        to_where = col_alignments[column_i]
+        col_width = col_widths[column_i]
+        for row_i, cell in enumerate(column):
+            new_cell = __align_single_cell(cell, col_width, to_where, margin)
+            if is_some_instance(new_cell, tuple, list):
+                aligned_column.append(tuple(new_cell))
+            else:
+                aligned_column.append(new_cell)
+        yield tuple(aligned_column)
+
+
+def _align_headers(style_composition: TableComposition, headers,
+                   col_alignments: List[str], col_widths: List[int]):
+    margin = style_composition.margin
+
+    for column_i, column in enumerate(headers):
+        to_where = col_alignments[column_i]
+        col_width = col_widths[column_i]
+        if is_some_instance(column, tuple, list):
+            yield tuple(map(
+                lambda cell: __align_single_cell(cell, col_width, to_where, margin),
+                column
+            ))
+        else:
+            yield __align_single_cell(column, col_width, to_where, margin)
+
+
 #     def _align_float_columns(self):
 #         """ This must be done before calculating col sizes """
 #         float_column_ind = [
@@ -152,20 +189,7 @@ def _typify_column(column):
 #         aligned = list(map(self.__alignFloatColum, float_column_ind, left_spaces, right_spaces, diffs))
 #         return aligned
 #
-#     def _align_columns(self):
-#         margin = self.style.table_options.margin
-#         if self.colSizes != None:
-#             for x in range(len(self.body)):
-#                 toWhere = self.column_alignment[x]
-#                 colSize = self.colSizes[x]
-#                 for y in range(len(self.body[x])):
-#                     if toWhere == 'l':
-#                         self._ljustBodyCell(x, y, colSize, ' ')
-#                     elif toWhere == 'c':
-#                         self._centerBodyCell(x, y, colSize, ' ')
-#                     elif toWhere == 'r' or toWhere == 'f':
-#                         self._rjustBodyCell(x, y, colSize, ' ')
-#                     self._addBodySpacing(x, y, margin, margin, 0)
+
 #
 #         return self.body
 #
@@ -209,11 +233,11 @@ def _typify_column(column):
 #
 #             multiRows = []
 #             midChar = self.__checkNone(
-#                 self.style.vertical_composition.table_body.middle)
+#                 self.style.vertical_composition.columns.middle)
 #             leftChar = self.__checkNone(
-#                 self.style.vertical_composition.table_body.left)
+#                 self.style.vertical_composition.columns.left)
 #             rightChar = self.__checkNone(
-#                 self.style.vertical_composition.table_body.right)
+#                 self.style.vertical_composition.columns.right)
 #             for row in range(len(self.body)):
 #                 multiRows.append([])
 #                 for subRow in range(len(self.body[row])):
@@ -239,7 +263,7 @@ def _typify_column(column):
 #             head_sup = self.__checkNoneHeader(hor_comp.header_superior)
 #             head_inf = self.__checkNoneHeader(hor_comp.header_inferior, True)
 #             none_hea = self.__checkNoneHeader(hor_comp.starts_with_no_header)
-#             tab_body = self.__checkNoneHeader(hor_comp.table_body, True)
+#             tab_body = self.__checkNoneHeader(hor_comp.columns, True)
 #             tab_end = self.__checkNoneHeader(hor_comp.table_end)
 #
 #             if self.headers is not None:
