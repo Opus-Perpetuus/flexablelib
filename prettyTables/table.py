@@ -14,7 +14,7 @@ from utils import get_window_size, is_multi_row
 from options import NONE_VALUE_REPLACEMENT
 from cells import _wrap_cells
 
-DEFAULT_STYLE = 'pwrshll_alike'
+DEFAULT_STYLE = 'grid_eheader'
 
 
 def _zip_columns(columns, headers=False):
@@ -95,7 +95,7 @@ class Table(object):
 
     # _headers_added_to_count = False
 
-    _real_row_count = 1
+    _real_row_count = 0
     _real_column_count = 0
 
     def __init__(self, rows=None, columns=None, headers=None, style_name='',
@@ -155,9 +155,12 @@ class Table(object):
         self._cells_alignment = []
         # +------------------------+ TABLE BODY +------------------------+
         self.columns = {} if columns is None else columns
-        self.headers = [] if headers is None else headers
-        self.rows = [] if rows is None else rows
+        self.headers = [] if headers is None else headers  # TODO fix header adding
+        self.rows = []
+        if rows is not None:
+            [self.add_row(row) for row in rows]
         # TODO add table structure
+        self._auto_headers = []  # TODO add auto headers independency of headers
         self._processed_columns = {}
         self._processed_headers = []
         self._processed_rows = []
@@ -291,10 +294,9 @@ class Table(object):
 
     def _add_column_data(self, data, column_header):
         if data is not None:
-            if len(data) > self._real_row_count:
-                self._real_row_count += len(data)
+            self._real_column_count += 1
+            self._real_row_count += len(data) - self._real_row_count
             self.columns[column_header] += data
-        self._real_column_count += 1
 
         return column_header, self.columns[column_header]
 
@@ -316,13 +318,13 @@ class Table(object):
                     self.__fill_row_from_column(row_i, column_i, data)
 
     def __fill_row_from_empty_column(self, row_i, column_i):
-        if column_i == self._real_column_count - 1:
+        if column_i + 1 == self._real_column_count:  # +1 because column count starts from 1
             self.rows[row_i].append(self.missing_val)
         else:
             self.__fill_row_missing_values_from_column(row_i, column_i)
 
     def __fill_row_from_column(self, row_i, column_i, data):
-        if column_i == self._real_column_count - 1:
+        if column_i + 1 == self._real_column_count:  # +1 because column count starts from 1
             try:
                 self.rows[row_i].append(data[row_i])
             except IndexError:
@@ -479,8 +481,8 @@ class Table(object):
 
     def _form_string(self):
         # Data from column dict is put in tuples
-        unaligned_columns = self.__get_procesed_columns_data()
-        unaligned_header = self.__get_procesed_columns_data(header=True)
+        unaligned_columns = self.__get_processed_columns_data()
+        unaligned_header = self.__get_processed_columns_data(header=True)
 
         # Header and body rows get aligned
         aligned_header = _align_headers(self._style_composition,
@@ -533,7 +535,7 @@ class Table(object):
 
         return table_string
 
-    def __get_procesed_columns_data(self, header=False):
+    def __get_processed_columns_data(self, header=False):
         columns_with_headers = self._processed_columns.values()
         for column_w_h in columns_with_headers:
             get = 'header' if header else 'data'
@@ -589,59 +591,13 @@ def test():
     import json
 
     new_table = Table()
-    # new_table.show_empty_columns = False
-    new_table.show_empty_rows = True
     # new_table.show_headers = False
-    # new_table.missing_val = None
-    new_table.add_column('Header 1', [1, 2, True, False, True, True])
-    new_table.add_column()
-    new_table.add_column('Another\nColumn', ['e', 'e', 'e', 'Data 4-1'])
-    # new_table.add_column('Header 1.1', [b'data1', b'2', b'\x01', b'', b'b16asd65', b'1177'])
-    # new_table.add_column('Header 1.1', [2.112, .1651, 5156.1, 12.23, 98.1, 10.0135, .165165])
-    new_table.add_column('another', data=['Very wide\nsentence', 'Another wrapped\nphrase', 'Yes\nINDEED\nit is'])
-    new_table.add_column()
-    new_table.add_column('another', data=[True, False])
-    new_table.add_row()
-    # new_table.add_row(['Data 7-1',
-    #                    'Data 7-2',
-    #                    'Data 7-3',
-    #                    'Data 7-4',
-    #                    'Data 7-5',
-    #                    'Data 7-6',
-    #                    'Data 7-7',
-    #                    'Data 7-8',
-    #                    'Data 7-9',
-    #                    'Data 7-10',
-    #                    'Data 7-11'])
-    for style in new_table.possible_styles:
-        new_table.style_name = style
-        print(new_table, end='\n\n')
-    # print('\nColumns', new_table.column_count)
-    # print('Rows', new_table.row_count)
-
-    # print('-------------ROWS------------')
-    # print(new_table.headers, end='\n\n')
-    # list(map(print, new_table.rows))
-    # print('-------------ROWS------------')
-    # print('-------PROCESSED ROWS--------')
-    # list(map(print, new_table._processed_headers))
-    # print('\n')
-    # list(map(lambda x: print('\n'.join(list(map(str, x))), '\n'), new_table._processed_rows))
-    # print('-------PROCESSED ROWS--------')
-    # print('------PROCESSED COLUMNS------')
-    # print(new_table._processed_columns)
-    # print('------PROCESSED COLUMNS------')
-    # print(new_table.window_size)
-    # print('_column_alignments_as_list: ', new_table._column_alignments_as_list)
-    # print('col_widths_as_list: ', new_table._column_widths_as_list)
-    # print('_column_types_as_list: ', new_table._column_types_as_list)
-    # print(f'HxW: {new_table.table_height} x {new_table.table_width}')
-    # print(f'Row count: {new_table.row_count}')
-    # print(f'Column count: {new_table.column_count}')
-    # print(f'Real Row count: {new_table._real_row_count}')
-    # print(f'Real Column count: {new_table._real_column_count}')
-    # print(f'Empty columns: {new_table._empty_column_indexes}')
-    # print(f'Empty rows: {new_table._empty_row_indexes}')
+    new_table.add_row(data=[1])
+    new_table.add_column(data=['Kg', 'ml'])
+    new_table.headers = ['Amount', 'Unit']
+    print(new_table)
+    print('rows: ', new_table.row_count)
+    print('columns: ', new_table.column_count)
 
 
 if __name__ == '__main__':
