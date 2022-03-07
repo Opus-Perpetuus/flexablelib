@@ -7,7 +7,7 @@ Print formatted tabular data in different styles
 # Main Class.
 # Here the whole table is formed
 
-from styleCompositions import __style_compositions as style_catalogue, HorizontalComposition, TableComposition
+from style_compositions import __style_compositions as style_catalogue, HorizontalComposition, TableComposition
 from columns import _column_sizes, _typify_column, _align_columns, _align_headers
 from table_strings import _get_separators, _get_data_rows, DataRows
 from utils import get_window_size, is_multi_row
@@ -153,7 +153,7 @@ class Table(object):
         # +------------------------+ TABLE BODY +------------------------+
         self.__columns = columns if columns is not None else {}
         self.__headers = headers if headers is not None else []
-        self.__auto_headers = []  # TODO make auto headers work
+        self.__auto_headers = []  # _TODO make auto headers work
         self.__rows = []
         self.__processed_columns = {}
         self.__processed_headers = []
@@ -171,8 +171,8 @@ class Table(object):
     # end +-----------------------------+ METHODS +-----------------------------+ end
     # +-----------------------------------------------------------------------------+
 
-    # TODO add set_style_composition setter
-    # TODO add the rest of setters
+    # _TODO add set_style_composition setter
+    # _TODO add the rest of setters
     # +-----------------------------------------------------------------------------+
     # start +---------------------------+ SETTERS +---------------------------+ start
 
@@ -235,7 +235,7 @@ class Table(object):
     # end +-----------------------------+ SETTERS +-----------------------------+ end
     # +-----------------------------------------------------------------------------+
 
-    # TODO add the rest of getters
+    # _TODO add the rest of getters
     # +-----------------------------------------------------------------------------+
     # start +---------------------------+ GETTERS +---------------------------+ start
 
@@ -339,7 +339,7 @@ class Table(object):
             return DEFAULT_STYLE
 
     @property
-    def __empty_row_indexes(self):  # TODO make empty row indexes work with missing val (only works with None)
+    def __empty_row_indexes(self):  # _TODO make empty row indexes work with missing val (only works with None)
         none_type_rows = []
         for i, row in enumerate(self.__rows):
             if row.count(None) == len(row):
@@ -347,7 +347,7 @@ class Table(object):
         return none_type_rows
 
     @property
-    def __empty_column_indexes(self):  # TODO make empty column indexes work with missing val (doesn't seem to work)
+    def __empty_column_indexes(self):  # _TODO make empty column indexes work with missing val (doesn't seem to work)
         none_type_columns = []
         for i, type_name in enumerate(self.__column_types_as_list):
             if type_name == 'NoneType':
@@ -359,7 +359,7 @@ class Table(object):
         return style_catalogue._fields
 
     @property
-    def __row_count(self):  # TODO fix row count
+    def __row_count(self):  # _TODO fix row count
         checked_real_row_count = self.__real_row_count
         if self.__show_empty_rows:
             return checked_real_row_count
@@ -368,7 +368,7 @@ class Table(object):
             return updated_row_count
 
     @property
-    def __column_count(self):  # TODO fix column count
+    def __column_count(self):  # _TODO fix column count
         if self.__show_empty_columns:
             return self.__real_column_count
         else:
@@ -573,7 +573,7 @@ class Table(object):
     def compose(self):
         if len(self.__columns) != 0:
             self.__typify_table()
-            self.__parse_data()  # TODO add parsing
+            self.__parse_data()  # _TODO add parsing
             self.__wrap_data()
             self.__get_column_widths()
 

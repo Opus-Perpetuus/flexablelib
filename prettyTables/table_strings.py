@@ -3,7 +3,7 @@
 from typing import List, Generator
 from collections import namedtuple
 
-from styleCompositions import HorizontalComposition, TableComposition, SeparatorLine
+from style_compositions import HorizontalComposition, TableComposition, SeparatorLine
 from options import NONE_VALUE_REPLACEMENT
 from utils import is_multi_row
 
