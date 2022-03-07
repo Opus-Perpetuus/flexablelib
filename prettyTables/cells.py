@@ -124,21 +124,21 @@ def __wrap_cell(cell):
 #
 #     This makes the cells per row the same  (if different)
 #     """
-#     if self.headers is not None:
-#         hlen = len(self.headers)
+#     if self.__headers is not None:
+#         hlen = len(self.__headers)
 #     else:
 #         hlen = 0
 #     mlen = max([len(x) for x in self.body] + [hlen])
 #
-#     if self.headers is not None:
+#     if self.__headers is not None:
 #         if hlen < mlen:
-#             self.headers = self.__adjustSingleRow(self.headers, mlen - hlen, True)
+#             self.__headers = self.__adjustSingleRow(self.__headers, mlen - hlen, True)
 #     for row in range(len(self.body)):
 #         blen = len(self.body[row])
 #         if blen < mlen:
 #             self.body[row] = self.__adjustSingleRow(self.body[row], mlen - blen)
 #
-#     return self.headers, self.body
+#     return self.__headers, self.body
 #
 
 #

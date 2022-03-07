@@ -69,7 +69,7 @@ def _column_sizes(columns):
     return sizes
 
 
-def _typify_column(column):
+def _typify_column(column):  # TODO make typify work with missing val to not alter column type
     """
     Get the types of the column and it's alignments
     """
@@ -195,8 +195,8 @@ def _align_headers(style_composition: TableComposition, headers,
 #
 #     def _alignHeaders(self):
 #         margin = margin = self.style.table_options.margin
-#         if self.colSizes != None and self.headers != None:
-#             for x in range(len(self.headers)):
+#         if self.colSizes != None and self.__headers != None:
+#             for x in range(len(self.__headers)):
 #                 toWhere = self.column_alignment[x]
 #                 colSize = self.colSizes[x]
 #                 if toWhere == 'l':
@@ -207,37 +207,37 @@ def _align_headers(style_composition: TableComposition, headers,
 #                     self._rjustHeadCell(x, colSize, ' ')
 #                 self._addHeaderSpacing(x, margin, margin)
 #
-#         return self.headers
+#         return self.__headers
 #
 #     def _addVerticalSeparators(self):
 #         if not self.asColumns:
-#             if self.headers != None:
-#                 rows = []
+#             if self.__headers != None:
+#                 __rows = []
 #                 midChar = self.__checkNone(
 #                     self.style.vertical_composition.header.middle)
 #                 leftChar = self.__checkNone(
 #                     self.style.vertical_composition.header.left)
 #                 rightChar = self.__checkNone(
 #                     self.style.vertical_composition.header.right)
-#                 if isarray(self.headers[0]):
-#                     for row in range(len(self.headers)):
-#                         middle = f'{midChar}'.join(self.headers[row])
+#                 if isarray(self.__headers[0]):
+#                     for row in range(len(self.__headers)):
+#                         middle = f'{midChar}'.join(self.__headers[row])
 #                         fullHeadRow = ''.join([leftChar, middle, rightChar])
-#                         rows.append(fullHeadRow)
+#                         __rows.append(fullHeadRow)
 #                 else:
-#                     middle = f'{midChar}'.join(self.headers)
+#                     middle = f'{midChar}'.join(self.__headers)
 #                     fullHeadRow = ''.join([leftChar, middle, rightChar])
-#                     rows.append(fullHeadRow)
+#                     __rows.append(fullHeadRow)
 #
-#                 self.headers = rows
+#                 self.__headers = __rows
 #
 #             multiRows = []
 #             midChar = self.__checkNone(
-#                 self.style.vertical_composition.columns.middle)
+#                 self.style.vertical_composition.__columns.middle)
 #             leftChar = self.__checkNone(
-#                 self.style.vertical_composition.columns.left)
+#                 self.style.vertical_composition.__columns.left)
 #             rightChar = self.__checkNone(
-#                 self.style.vertical_composition.columns.right)
+#                 self.style.vertical_composition.__columns.right)
 #             for row in range(len(self.body)):
 #                 multiRows.append([])
 #                 for subRow in range(len(self.body[row])):
@@ -254,7 +254,7 @@ def _align_headers(style_composition: TableComposition, headers,
 #
 #             self.body = multiRows
 #
-#         return self.headers, self.body
+#         return self.__headers, self.body
 #
 # # -----------------------------------------------
 #     def _unifyAll(self):
@@ -263,11 +263,11 @@ def _align_headers(style_composition: TableComposition, headers,
 #             head_sup = self.__checkNoneHeader(hor_comp.header_superior)
 #             head_inf = self.__checkNoneHeader(hor_comp.header_inferior, True)
 #             none_hea = self.__checkNoneHeader(hor_comp.starts_with_no_header)
-#             tab_body = self.__checkNoneHeader(hor_comp.columns, True)
+#             tab_body = self.__checkNoneHeader(hor_comp.__columns, True)
 #             tab_end = self.__checkNoneHeader(hor_comp.table_end)
 #
-#             if self.headers is not None:
-#                 headInterior = '\n'.join(self.headers)
+#             if self.__headers is not None:
+#                 headInterior = '\n'.join(self.__headers)
 #                 header = ''.join([head_sup, headInterior, head_inf])
 #                 subrows = []
 #                 for multiRow in self.body:
@@ -292,7 +292,7 @@ def _align_headers(style_composition: TableComposition, headers,
 #             return x
 #
 #     def __checkFlatDot(self, number):
-#         if not self.format_exponential:
+#         if not self.__format_exponential:
 #             if isinstance(number, float):
 #                 return '{:.2f}'.format(number)
 #         else:
@@ -338,8 +338,8 @@ def _align_headers(style_composition: TableComposition, headers,
 #     def __getUnifyedHeaderAndBody(self):
 #         if self.asColumns:
 #             body = self.body
-#             for i in range(len(self.headers)):
-#                 body[i].insert(0, self.headers[i])
+#             for i in range(len(self.__headers)):
+#                 body[i].insert(0, self.__headers[i])
 #             return body
 #         else:
 #             pass

@@ -82,25 +82,5 @@ def _get_data_rows(style_composition: TableComposition, header: tuple, body: tup
     return DataRows(str_header, strs_body)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 if __name__ == '__main__':
     print('Don\'t do it')
