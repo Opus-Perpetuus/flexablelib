@@ -1,6 +1,6 @@
 """ CELL WRAPPING AND ADJUSTMENT """
 
-from utils import is_some_instance, is_list
+from .utils import is_some_instance, is_list
 
 
 def _add_cell_spacing(cell, left: int, right: int, diff_if_empty: int):
@@ -115,49 +115,6 @@ def __wrap_cell(cell):
             return ['']
     else:
         return [cell]
-
-
-#
-# def _adjustCellsPerRow(self):
-#     """
-#     ### Adjust Cells Per Row
-#
-#     This makes the cells per row the same  (if different)
-#     """
-#     if self.__headers is not None:
-#         hlen = len(self.__headers)
-#     else:
-#         hlen = 0
-#     mlen = max([len(x) for x in self.body] + [hlen])
-#
-#     if self.__headers is not None:
-#         if hlen < mlen:
-#             self.__headers = self.__adjustSingleRow(self.__headers, mlen - hlen, True)
-#     for row in range(len(self.body)):
-#         blen = len(self.body[row])
-#         if blen < mlen:
-#             self.body[row] = self.__adjustSingleRow(self.body[row], mlen - blen)
-#
-#     return self.__headers, self.body
-#
-
-#
-
-#
-# def __adjustSingleRow(self, row, diff, header=False):
-#     for _ in range(diff):
-#         if header:
-#             if self.exHeTo == 'l':
-#                 row.insert(0, '')
-#             elif self.exHeTo == 'r':
-#                 row.append('')
-#         else:
-#             if self.exBoTo == 'l':
-#                 row.insert(0, '')
-#             elif self.exBoTo == 'r':
-#                 row.append('')
-#
-#     return row
 
 
 if __name__ == '__main__':

@@ -8,7 +8,8 @@ for each part of the table. Here are are the ones currently added.
 """
 
 from collections import namedtuple
-from options import *
+
+from .options import INVISIBLE_SEPARATOR, MARGIN
 
 TableComposition = namedtuple(
     'TableComposition',

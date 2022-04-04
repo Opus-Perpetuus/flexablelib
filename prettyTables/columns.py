@@ -1,7 +1,8 @@
-from cells import _center_cell, _ljust_cell, _rjust_cell, _add_cell_spacing
-from style_compositions import TableComposition
-from utils import is_some_instance
 from typing import List, Union
+
+from .cells import _center_cell, _ljust_cell, _rjust_cell, _add_cell_spacing
+from .style_compositions import TableComposition
+from .utils import is_some_instance
 
 
 DEFAULT_FILL_CHAR = ' '
@@ -69,7 +70,7 @@ def _column_sizes(columns):
     return sizes
 
 
-def _typify_column(column):  # _TODO make typify work with missing val to not alter column type
+def _typify_column(column):  # TODO make typify work with missing val to not alter column type
     """
     Get the types of the column and it's alignments
     """

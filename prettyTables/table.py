@@ -7,12 +7,12 @@ Print formatted tabular data in different styles
 # Main Class.
 # Here the whole table is formed
 
-from style_compositions import __style_compositions as style_catalogue, HorizontalComposition, TableComposition
-from columns import _column_sizes, _typify_column, _align_columns, _align_headers
-from table_strings import _get_separators, _get_data_rows, DataRows
-from utils import get_window_size, is_multi_row
-from options import NONE_VALUE_REPLACEMENT
-from cells import _wrap_cells
+from .style_compositions import __style_compositions as style_catalogue, HorizontalComposition, TableComposition
+from .columns import _column_sizes, _typify_column, _align_columns, _align_headers
+from .table_strings import _get_separators, _get_data_rows, DataRows
+from .utils import get_window_size, is_multi_row
+from .options import NONE_VALUE_REPLACEMENT
+from .cells import _wrap_cells
 
 DEFAULT_STYLE = 'grid_eheader'
 
@@ -34,63 +34,64 @@ def _zip_columns(columns, headers=False):
 class Table(object):
     """
     TABLE
+    =====
 
-    Makes a table out of tabular like data
+    Makes a table out of tabular data
 
-        STYLE NAMES LIST
+    ---------------
+    POSSIBLE STYLES
+    ---------------
+    ```
+     plain
+    ```
+    
+    ### BOX DRAWING TABLES
+    ```
+     BOX DRAWING        THIN BORDERLINE   BOLD BORDERLINE
+    ------------------ ----------------- -----------------
+     pretty_grid        thin_borderline   bold_borderline
+     pretty_columns     th_bd_eheader     bd_bl_eheader
+     bold_header        th_bd_ebody       bd_bl_ebody
+     bheader_columns    th_bd_empty       bd_bl_empty
+     bold_eheader
+     beheader_columns
+     bheader_ebody
+     round_edges
+     re_eheader
+     re_ebody
+    ```
 
-            plain
+    ### GRIDS AND PIPES        
+    ```
+     pwrshll_alike
+     presto
+     grid
+     grid_eheader
+     grid_ebody
+     grid_empty
+     pipes
+     tilde_grid
+     tilg_eheader
+     tilg_columns
+     tilg_empty
+     orgtbl
+    ```
+    
+    ### SIMPLE (HORIZONTAL LINES)        
+    ```
+     NORMAL           BOLD               THIN
+    ---------------- ------------------ ----------------
+     clean            
+     simple           simple_bold
+     simple_head      simple_head_bold   
+                      sim_head_bd_bl     sim_th_bl      
+                      sim_bd_bl          sim_head_th_bl
+    ```
 
-        # Box drawing Tables
-            pretty_grid
-            pretty_columns
-            bold_header
-            bheader_columns
-            bold_eheader
-            beheader_columns
-            bheader_ebody
-            round_edges
-            re_eheader
-            re_ebody
-
-            # Thin borderline
-                thin_borderline
-                th_bd_eheader
-                th_bd_ebody
-                th_bd_empty
-            # Bold Borderline
-                bold_borderline
-                bd_bl_eheader
-                bd_bl_ebody
-                bd_bl_empty
-
-        # +-|~oO:
-            pwrshll_alike
-            presto
-            grid
-            grid_eheader
-            grid_ebody
-            grid_empty
-            pipes
-            tilde_grid
-            tilg_eheader
-            tilg_columns
-            tilg_empty
-            orgtbl
-
-        # Simple (horizontal lines)
-            clean
-            simple
-            simple_bold
-            simple_head
-            simple_head_bold
-            sim_th_bl
-            sim_bd_bl
-            sim_head_th_bl
-            sim_head_bd_bl
-
-        # Other
-            dashes
+    ### OTHER
+    ```
+     dashes
+    ```
     """
 
     def __init__(self, rows=None, columns=None, headers=None, style_name='',
@@ -116,7 +117,7 @@ class Table(object):
         self.__auto_wrap_text = False
         self.__expand_body_to = 'r'
         self.__expand_header_to = 'r'
-        self.__spaces = spaces
+        self.__leading_zeros = spaces
         self.__float_spaces = 2
         self.__format_exponential = True
         # +--------------------------+ STYLE +---------------------------+
@@ -128,8 +129,8 @@ class Table(object):
         #   c: capitalized
         self.__header_style = header_style
         self.__show_margin = True
-        self.__show_empty_columns = False
-        self.__show_empty_rows = False
+        self.__show_empty_columns = True
+        self.__show_empty_rows = True
         self.__generic_column_name = 'column'
         self.__style_name = style_name
         # +------------------+ TABLE CHARACTERISTICS +-------------------+
@@ -153,7 +154,7 @@ class Table(object):
         # +------------------------+ TABLE BODY +------------------------+
         self.__columns = columns if columns is not None else {}
         self.__headers = headers if headers is not None else []
-        self.__auto_headers = []  # _TODO make auto headers work
+        self.__auto_headers = []  # TODO make auto headers work
         self.__rows = []
         self.__processed_columns = {}
         self.__processed_headers = []
@@ -171,123 +172,80 @@ class Table(object):
     # end +-----------------------------+ METHODS +-----------------------------+ end
     # +-----------------------------------------------------------------------------+
 
-    # _TODO add set_style_composition setter
-    # _TODO add the rest of setters
-    # +-----------------------------------------------------------------------------+
-    # start +---------------------------+ SETTERS +---------------------------+ start
 
-    def set_columns(self, value: dict):
-        self.__columns = {} if value is None else value
-
-    def set_headers(self, value: list):
-        self.__headers = [] if value is None else value
-
-    def set_style_name(self, value):
-        self.__style_name = value
-
-    def set_missing_val(self, value):
-        self.__missing_val = value
-
-    def set_str_align(self, value):
-        self.__str_align = value
-
-    def set_int_align(self, value):
-        self.__int_align = value
-
-    def set_float_align(self, value):
-        self.__float_align = value
-
-    def set_bool_align(self, value):
-        self.__float_align = value
-
-    def set_table_align(self, value):
-        self.__table_align = value
-
-    def set_col_alignment(self, value):
-        self.__column_align = value
-
-    def set_spaces(self, value):
-        """
-        set_spaces(5)
-
-        00001
-        00012
-        01235
-        00023
-        00000
-        """
-        self.__spaces = value
-
-    # +----------------------+ SHOW SETTERS +------------------------+
-
-    def set_show_headers(self, value: bool):
-        self.__show_headers = value
-
-    def set_show_margin(self, value: bool):
-        self.__show_margin = value
-
-    def set_show_empty_rows(self, value: bool):
-        self.__show_empty_rows = value
-
-    def set_show_empty_columns(self, value: bool):
-        self.__show_empty_columns = value
-
-    # end +-----------------------------+ SETTERS +-----------------------------+ end
-    # +-----------------------------------------------------------------------------+
-
-    # _TODO add the rest of getters
+    # TODO add the rest of getters
     # +-----------------------------------------------------------------------------+
     # start +---------------------------+ GETTERS +---------------------------+ start
 
-    def get_columns(self):
+    @property
+    def columns(self):
         return self.__columns
 
-    def get_headers(self):
+    @property
+    def headers(self):
         return self.__headers
+        
+    @property
+    def rows(self):
+        return self.__rows
 
-    def get_style_name(self):
+    @property
+    def style_name(self):
         return self.__checked_style_name
 
-    def get_missing_val(self):
+    @property
+    def missing_val(self):
         return self.__missing_val
 
-    def get_str_align(self):
+    @property
+    def str_align(self):
         return self.__str_align
 
-    def get_int_align(self):
+    @property
+    def int_align(self):
         return self.__int_align
 
-    def get_float_align(self):
+    @property
+    def float_align(self):
         return self.__float_align
 
-    def get_bool_align(self):
+    @property
+    def bool_align(self):
         return self.__float_align
 
-    def get_table_align(self):
+    @property
+    def table_align(self):
         return self.__table_align
 
-    def get_col_alignment(self):
+    @property
+    def col_alignment(self):
         return self.__column_align
 
-    def get_spaces(self):
-        return self.__spaces
+    @property
+    def leading_zeros(self):
+        return self.__leading_zeros
 
-    def get_style_composition(self) -> TableComposition:
+    @property
+    def style_composition(self) -> TableComposition:
         return self.__style_composition
 
-    def get_empty_rows(self):
+    @property
+    def empty_rows_i(self):
         return self.__empty_row_indexes
 
-    def get_empty_columns(self):
+    @property
+    def empty_columns_i(self):
         return self.__empty_column_indexes
 
-    def get_possible_styles(self):
+    @property
+    def possible_styles(self):
         """
         Returns a tuple with the admitted style names.
         """
         return self.__possible_styles
 
-    def get_row_count(self):
+    @property
+    def row_count(self):
         """
         This counts the rows of the table conditioned by
         the show_empty_rows property.
@@ -297,6 +255,7 @@ class Table(object):
         """
         return self.__row_count
 
+    @property
     def get_column_count(self):
         """
         This counts the rows of the table conditioned by
@@ -307,25 +266,122 @@ class Table(object):
         """
         return self.__column_count
 
+
+    @property
+    def internal_row_count(self):
+        return self.__real_row_count
+
+
+    @property
+    def internal_column_count(self):
+        return self.__real_column_count
+
     # +----------------------+ SHOW GETTERS +------------------------+
 
-    def get_show_headers(self, value: bool):
+    @property
+    def show_headers(self):
         return self.__show_headers
-
-    def get_show_margin(self, value: bool):
+    
+    @property    
+    def show_margin(self):
         return self.__show_margin
 
-    def get_show_empty_rows(self, value: bool):
+    @property
+    def show_empty_rows(self):
         return self.__show_empty_rows
 
-    def get_show_empty_columns(self, value: bool):
+    @property
+    def show_empty_columns(self):
         return self.__show_empty_columns
 
     # end +-----------------------------+ GETTERS +-----------------------------+ end
     # +-----------------------------------------------------------------------------+
+    
+    
+    # TODO add set_style_composition setter
+    # TODO add the rest of setters
+    # +-----------------------------------------------------------------------------+
+    # start +---------------------------+ SETTERS +---------------------------+ start
+
+    @columns.setter
+    def columns(self, value: dict):
+        self.__columns = {} if value is None else value
+
+    @headers.setter
+    def headers(self, value: list):
+        self.__headers = [] if value is None else value
+
+    @style_name.setter
+    def style_name(self, value):
+        self.__style_name = value
+
+    @missing_val.setter
+    def missing_val(self, value):
+        self.__missing_val = value
+
+    @str_align.setter
+    def str_align(self, value):
+        self.__str_align = value
+
+    @int_align.setter
+    def int_align(self, value):
+        self.__int_align = value
+
+    @float_align.setter
+    def float_align(self, value):
+        self.__float_align = value
+
+    @bool_align.setter
+    def bool_align(self, value):
+        self.__float_align = value
+
+    @table_align.setter
+    def table_align(self, value):
+        self.__table_align = value
+
+    @col_alignment.setter
+    def col_alignment(self, value):
+        self.__column_align = value
+
+    @leading_zeros.setter
+    def leading_zeros(self, value):
+        """
+        leading_zeros = 5
+
+        ```
+        00001
+        00012
+        01235
+        00023
+        00000
+        ```
+        """
+        self.__leading_zeros = value
+
+    # +----------------------+ SHOW SETTERS +------------------------+
+
+    @show_headers.setter
+    def show_headers(self, value: bool):
+        self.__show_headers = value
+
+    @show_margin.setter
+    def show_margin(self, value: bool):
+        self.__show_margin = value
+
+    @show_empty_rows.setter
+    def show_empty_rows(self, value: bool):
+        self.__show_empty_rows = value
+
+    @show_empty_columns.setter
+    def show_empty_columns(self, value: bool):
+        self.__show_empty_columns = value
+
+    # end +-----------------------------+ SETTERS +-----------------------------+ end
+    # +-----------------------------------------------------------------------------+
+
 
     # +-----------------------------------------------------------------------------+
-    # start +-------------------------+ PROPERTIES +--------------------------+ start
+    # start +-------------------------+ PRIVATE PROPERTIES +--------------------------+ start
 
     @property
     def __style_composition(self):
@@ -339,15 +395,15 @@ class Table(object):
             return DEFAULT_STYLE
 
     @property
-    def __empty_row_indexes(self):  # _TODO make empty row indexes work with missing val (only works with None)
-        none_type_rows = []
+    def __empty_row_indexes(self):  # FIX make empty row indexes work with missing val (only works with None)
+        empty_rows = []
         for i, row in enumerate(self.__rows):
-            if row.count(None) == len(row):
-                none_type_rows.append(i)
-        return none_type_rows
+            if row.count(self.__missing_val) == len(row):
+                empty_rows.append(i)
+        return empty_rows
 
     @property
-    def __empty_column_indexes(self):  # _TODO make empty column indexes work with missing val (doesn't seem to work)
+    def __empty_column_indexes(self):  # FIX make empty column indexes work with missing val (doesn't seem to work)
         none_type_columns = []
         for i, type_name in enumerate(self.__column_types_as_list):
             if type_name == 'NoneType':
@@ -359,7 +415,7 @@ class Table(object):
         return style_catalogue._fields
 
     @property
-    def __row_count(self):  # _TODO fix row count
+    def __row_count(self):  # FIX row count
         checked_real_row_count = self.__real_row_count
         if self.__show_empty_rows:
             return checked_real_row_count
@@ -368,14 +424,14 @@ class Table(object):
             return updated_row_count
 
     @property
-    def __column_count(self):  # _TODO fix column count
+    def __column_count(self):  # FIX column count
         if self.__show_empty_columns:
             return self.__real_column_count
         else:
             updated_column_count = self.__real_column_count - len(self.__empty_column_indexes)
             return updated_column_count
 
-    # end +---------------------------+ PROPERTIES +----------------------------+ end
+    # end +-----------------------+ PRIVATE PROPERTIES +------------------------+ end
     # +-----------------------------------------------------------------------------+
 
     # +-----------------------------------------------------------------------------+
@@ -573,7 +629,7 @@ class Table(object):
     def compose(self):
         if len(self.__columns) != 0:
             self.__typify_table()
-            self.__parse_data()  # _TODO add parsing
+            self.__parse_data()  # TODO add parsing
             self.__wrap_data()
             self.__get_column_widths()
 
@@ -720,34 +776,5 @@ class Table(object):
     #     return self.fullyFormed
 
 
-def test():
-    import json
-
-    new_table = Table()
-
-    new_table.set_missing_val(None)
-    new_table.set_style_name('pretty_grid')
-    new_table.set_show_headers(False)
-    # new_table.set_show_empty_rows(False)
-    # new_table.set_show_empty_columns(False)
-
-    new_table.add_row(data=[1])
-    new_table.add_column(data=['Kg', 'ml'])
-    new_table.add_row()
-    new_table.add_column()
-
-    rows = new_table.get_row_count()
-    columns = new_table.get_column_count()
-    empty_rows = new_table.get_empty_rows()
-    empty_columns = new_table.get_empty_columns()
-
-    print(f'empty_rows: {empty_rows}, empty_cols: {empty_columns}')
-    print(f'rows: {rows}, columns: {columns}')
-    print(new_table.get_style_name())
-    print(new_table.get_style_composition())
-    print(new_table)
-
-
 if __name__ == '__main__':
-    test()
-    # print('This is not supposed to be shown!')
+    print('This is not supposed to be shown!')
