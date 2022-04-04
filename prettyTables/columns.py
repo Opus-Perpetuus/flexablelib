@@ -46,15 +46,16 @@ _alignments_per_type = {
 }
 
 
-def _column_sizes(columns):
+def _column_sizes(columns: dict, show_headers: bool):
     # TODO add support for colouring codes
 
-    head_sizes = [
-        max([len(str(row)) for row in column['header']]) if (
-            is_some_instance(column['header'], tuple, list)
-        ) else len(str(column['header']))
-        for _, column in columns.items()
-    ]
+    if show_headers:
+        head_sizes = [
+            max([len(str(row)) for row in column['header']]) if (
+                is_some_instance(column['header'], tuple, list)
+            ) else len(str(column['header']))
+            for _, column in columns.items()
+        ]
     body_sizes = [
         max([
             max([len(str(sbRow)) for sbRow in row]) if (
@@ -65,7 +66,10 @@ def _column_sizes(columns):
         for _, column in columns.items()
     ]
 
-    sizes = list(map(lambda x, y: max(x, y), head_sizes, body_sizes))
+    if show_headers:
+        sizes = list(map(lambda x, y: max(x, y), head_sizes, body_sizes))
+    else:    
+        sizes = body_sizes
 
     return sizes
 

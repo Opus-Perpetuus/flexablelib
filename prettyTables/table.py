@@ -442,19 +442,15 @@ class Table(object):
         Add a column to the table.
         Can be left empty to add an empty column.
 
-        :param header: The title of the column.
-                       If not provided, gets filled with
-                       a generic name.
-        :param data: Data provided as any iterable.
-                     If not provided, column gets filled
-                     with the missing value.
-                     If the column is greater than the
-                     table s_row count, new __rows gets
-                     added, and the new __spaces in other
-                     __columns filled with missing value,
-                     but if smaller, the remaining
-                     __spaces of the column get those
-                     instead.
+        ``header``: The title of the column. If not provided, 
+        gets filled with a generic name.
+        
+        ``data``: Data provided as any iterable. If not 
+        provided, column gets filled with the missing value.
+        If the column is greater than the table s_row count, 
+        new rows gets added, and the new spaces in other
+        columns filled with missing value, but if smaller, 
+        the remaining spaces of the column get those instead.
         """
         column_header = self.__add_column_header(header)
         self.__add_column_data(data, column_header)
@@ -538,7 +534,7 @@ class Table(object):
         Add a s_row to the table. Can be left empty to add
         an empty s_row.
 
-        :param data: Data provided as any iterable.
+        ``data``: Data provided as any iterable
         """
         added_to_column_count = self.__add_row_data(data)
         add_headers = True if added_to_column_count is not None else False
@@ -645,7 +641,7 @@ class Table(object):
             self.__column_types_as_list.append(column_type)
 
     def __get_column_widths(self):
-        sizes = _column_sizes(self.__processed_columns)
+        sizes = _column_sizes(self.__processed_columns, show_headers=self.__show_headers)
         list(map(self.__column_widths_as_list.append, sizes))
         for i, column in enumerate(self.__columns.items()):
             header, _ = column
