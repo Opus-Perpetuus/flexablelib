@@ -96,7 +96,7 @@ class Table(object):
 
     def __init__(self, rows=None, columns=None, headers=None, style_name='',
                  missing_val='', str_align=None, int_align=None, float_align=None,
-                 bool_align=None, table_align=None, col_alignment=None, spaces=0,
+                 bool_align=None, table_align=None, col_alignment=None, leading_zeros=0,
                  header_style=None):
         # +------------------------+ PARAMETERS +------------------------+
         self.__missing_val = missing_val
@@ -117,7 +117,7 @@ class Table(object):
         self.__auto_wrap_text = False
         self.__expand_body_to = 'r'
         self.__expand_header_to = 'r'
-        self.__leading_zeros = spaces
+        self.__leading_zeros = leading_zeros
         self.__float_spaces = 2
         self.__format_exponential = True
         # +--------------------------+ STYLE +---------------------------+
@@ -166,7 +166,11 @@ class Table(object):
     # +-----------------------------------------------------------------------------+
     # start +---------------------------+ METHODS +---------------------------+ start
 
-    def __str__(self):
+    def __str__(self) -> str:
+        return self.compose()
+    
+    
+    def __repr__(self) -> str:
         return self.compose()
 
     # end +-----------------------------+ METHODS +-----------------------------+ end
@@ -256,7 +260,7 @@ class Table(object):
         return self.__row_count
 
     @property
-    def get_column_count(self):
+    def column_count(self):
         """
         This counts the rows of the table conditioned by
         the show_empty_columns property.
@@ -459,8 +463,6 @@ class Table(object):
         self.__transpose_column_to_rows(data)
         self.__adjust_rows_to_column_count(False, 1)
 
-        return self.__columns
-
     def __add_column_header(self, header):
         if header is None:
             header = f'{self.__generic_column_name} {len(self.__headers) + 1}'
@@ -642,7 +644,7 @@ class Table(object):
 
     def __get_column_widths(self):
         sizes = _column_sizes(self.__processed_columns, show_headers=self.__show_headers)
-        list(map(self.__column_widths_as_list.append, sizes))
+        self.__column_widths_as_list = sizes
         for i, column in enumerate(self.__columns.items()):
             header, _ = column
             self.__column_widths[header] = sizes[i]
