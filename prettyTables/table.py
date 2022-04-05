@@ -1389,28 +1389,6 @@ class Table(object):
     # end +--------------------------+ DATA READING +---------------------------+ end
     # +-----------------------------------------------------------------------------+
 
-    # def make(self):
-    #     self._checkHeader()
-    #     self._adjustCellsPerRow()
-    #     self._wrapCells()
-    #     self._transformToColumns()
-    #     self._typify()
-    #     self._alignFloatColumns()
-    #     self._columnSizes()
-    #     self._makeSeparators()
-    #     self._alignHeaders()
-    #     self._alignColumns()
-    #     self._transformToRows()
-    #     self._addVerticalSeparators()
-    #     self.fullyFormed = self._unifyAll()
-    #
-    #     if self.__spaces != 0:
-    #         spaced = map(lambda x: ''.join([' ' * self.__spaces, x]),
-    #                      self.fullyFormed.splitlines())
-    #         self.fullyFormed = '\n'.join(spaced)
-    #
-    #     return self.fullyFormed
-
 
 if __name__ == '__main__':
     print('This is not supposed to be shown!')
