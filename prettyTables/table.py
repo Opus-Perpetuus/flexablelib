@@ -1114,9 +1114,10 @@ class Table(object):
         return header
 
     def __add_column_data(self, data, column_header):
+        self.__real_column_count += 1
         if data is not None:
-            self.__real_column_count += 1
-            self.__real_row_count += len(data) - self.__real_row_count
+            if len(data) > self.__real_row_count:
+                self.__real_row_count += len(data) - self.__real_row_count
             self.__columns[column_header] += data
 
         return column_header, self.__columns[column_header]
@@ -1134,21 +1135,22 @@ class Table(object):
         for column_i in range(self.__real_column_count):
             for row_i in range(self.__real_row_count):
                 if data is None:
-                    self.__fill_row_from_empty_column(row_i, column_i)
+                    self.__distribute_empty_column_to_rows(row_i, column_i)
                 else:
-                    self.__fill_row_from_column(row_i, column_i, data)
+                    self.__distribute_column_to_rows(row_i, column_i, data)
 
-    def __fill_row_from_empty_column(self, row_i, column_i):
+    def __distribute_empty_column_to_rows(self, row_i, column_i):
         if column_i + 1 == self.__real_column_count:  # +1 because column count starts from 1
             self.__rows[row_i].append(self.__missing_val)
         else:
             self.__fill_row_missing_values_from_column(row_i, column_i)
 
-    def __fill_row_from_column(self, row_i, column_i, data):
+    def __distribute_column_to_rows(self, row_i, column_i, data):
         if column_i + 1 == self.__real_column_count:  # +1 because column count starts from 1
             try:
                 self.__rows[row_i].append(data[row_i])
             except IndexError:
+                self.__rows[row_i].append(self.__missing_val)
                 pass
         else:
             self.__fill_row_missing_values_from_column(row_i, column_i)
