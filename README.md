@@ -71,7 +71,7 @@ print(new_table)
 ```
 ## 2. Using the **add** functions included and setting values
 
-We can change some of the properties of a Table instance. ``missing_val`` by default is ``''``, but accpets any value. Setting ``style_name`` tells the Table class which style to look at, but if it doesnt exist it picks ``grid_eheader`` by default. Here you can see a list of style examples.
+We can change some of the properties of a Table instance. ``missing_val`` by default is ``''``, but accpets any value. Setting ``style_name`` tells the Table class which style to look at, but if it doesnt exist it picks ``grid_eheader`` by default. [Here](/style_examples.md)  you can see a list of style examples.
 
 To add columns or rows you can use both ``add_column`` and ``add_row`` indiscriminately.
 ```
