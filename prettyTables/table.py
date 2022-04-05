@@ -11,10 +11,8 @@ from .style_compositions import __style_compositions as style_catalogue, Horizon
 from .columns import _column_sizes, _typify_column, _align_columns, _align_headers
 from .table_strings import _get_separators, _get_data_rows, DataRows
 from .utils import get_window_size, is_multi_row
-from .options import NONE_VALUE_REPLACEMENT
+from .options import NONE_VALUE_REPLACEMENT, DEFAULT_STYLE
 from .cells import _wrap_cells
-
-DEFAULT_STYLE = 'grid_eheader'
 
 
 def _zip_columns(columns, headers=False):
@@ -788,7 +786,6 @@ class Table(object):
         # +------------------------+ TABLE BODY +------------------------+
         self.__columns = columns if columns is not None else {}
         self.__headers = headers if headers is not None else []
-        self.__auto_headers = []  # TODO make auto headers work
         self.__rows = []
         self.__processed_columns = {}
         self.__processed_headers = []
@@ -936,7 +933,6 @@ class Table(object):
     # +-----------------------------------------------------------------------------+
     
     
-    # TODO add set_style_composition setter
     # TODO add the rest of setters
     # +-----------------------------------------------------------------------------+
     # start +---------------------------+ SETTERS +---------------------------+ start
@@ -1053,7 +1049,7 @@ class Table(object):
         return style_catalogue._fields
 
     @property
-    def __row_count(self):  # FIX row count
+    def __row_count(self):
         checked_real_row_count = self.__real_row_count
         if self.__show_empty_rows:
             return checked_real_row_count
@@ -1062,7 +1058,7 @@ class Table(object):
             return updated_row_count
 
     @property
-    def __column_count(self):  # FIX column count
+    def __column_count(self):
         if self.__show_empty_columns:
             return self.__real_column_count
         else:
@@ -1268,6 +1264,12 @@ class Table(object):
             self.__get_column_widths()
 
         return self.__form_string()
+    
+
+    # TODO create index adding function
+    # def __add_indexes(self):
+    #     self.columns
+        
 
     def __typify_table(self):
         for header, column_content in self.__columns.items():
