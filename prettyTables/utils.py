@@ -1,4 +1,5 @@
 import os
+import json
 
 
 def float_format(number, decimal_spaces):
@@ -92,3 +93,8 @@ def flatten(list_to_flatten, i=0, c=0):
             return flatten(list_to_flatten, i + 1, c)
     else:
         return list_to_flatten
+
+
+def read_json(file):
+    with open(file) as json_file:
+        return json.load(json_file)
