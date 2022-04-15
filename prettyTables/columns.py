@@ -63,7 +63,7 @@ def _column_sizes(columns: dict, show_headers: bool):
     return sizes
 
 
-def _typify_column(column):  # TODO make typify work with missing val to not alter column type
+def _typify_column(column, index_column=False):  # TODO make typify work with missing val to not alter column type
     """
     Get the types of the column and it's alignments
     """
@@ -76,7 +76,9 @@ def _typify_column(column):  # TODO make typify work with missing val to not alt
     identified_types = []
 
     for row in column:
-        if row != '':
+        if index_column:
+            identified_types.append(int.__name__)
+        elif row != '':
             identified_types.append(type(row).__name__)
         else:
             identified_types.append(type(None).__name__)

@@ -142,8 +142,136 @@ print(new_table)
 ╰─────────┴────┴───────┴─────────┴─────────╯
 ```
 
+### Showing row indexes
+Using another example to show the usage of the ``show_index`` option. You can also set the start of the count and the step if you want.
+```
+from prettyTables import Table
+
+new_table = Table()
+new_table.index_step = 3
+new_table.index_start = 6
+new_table.add_column('Topic', ['Matter State', 'Check'])
+new_table.add_column('Borium', [1, True])
+new_table.add_column('Helium', [2, True])
+new_table.add_column('Corium', [7, False])
+new_table.add_column('Uranium', [-1, True])
+new_table.add_row(['Bus', 25, 115, 30, 31])
+new_table.add_row(['Set', int(4e2), int(25e-1), int(21e-6), int(1e2)])
+new_table.add_row(['Critic Mass', False, False, False, False])
+new_table.add_row(['Critic Heat', False, False, True, True])
+new_table.add_row(['Critic Pressure', False, False, False, True])
+new_table.add_row(['Urgent Cleaning', False, False, True, False])
+new_table.add_row(['Cuadrant vals', 10, 1, 11, 12])
+new_table.add_row(['Inherent mass', 425345, -2, 453213453, 242224532])
+new_table.add_row(['Calamity count', 0, 0, 999, 0])
+new_table.add_row(['Calamity count', 0, 0, 999, 0])
+new_table.style_name = 'simple'
+
+new_table.show_headers = False
+new_table.show_index = True
+print(new_table)
+```
+
+#### Output
+```
+---------------------------------------------------------------
+  6   Matter State           1       2           7          -1
+  9   Check               True    True       False        True
+ 12   Bus                   25     115          30          31
+ 15   Set                  400       2           0         100
+ 18   Critic Mass        False   False       False       False
+ 21   Critic Heat        False   False        True        True
+ 24   Critic Pressure    False   False       False        True
+ 27   Urgent Cleaning    False   False        True       False
+ 30   Cuadrant vals         10       1          11          12
+ 33   Inherent mass     425345      -2   453213453   242224532
+ 36   Calamity count         0       0         999           0
+ 39   Calamity count         0       0         999           0
+---------------------------------------------------------------
+```
+A column of integers is placed on the left of the table. For now, try no not name columns ``"i"`` as that may conflict with the index column, directly not showing the column you added (if named like that) when ``show_index`` is set to ``True``.
+
+```
+new_table.show_index = False
+print(new_table)
+```
+Is possible to hide again the index column
+
+#### Output
+```
+----------------------------------------------------------
+ Matter State           1       2           7          -1
+ Check               True    True       False        True
+ Bus                   25     115          30          31
+ Set                  400       2           0         100
+ Critic Mass        False   False       False       False
+ Critic Heat        False   False        True        True
+ Critic Pressure    False   False       False        True
+ Urgent Cleaning    False   False        True       False
+ Cuadrant vals         10       1          11          12
+ Inherent mass     425345      -2   453213453   242224532
+ Calamity count         0       0         999           0
+ Calamity count         0       0         999           0
+----------------------------------------------------------
+```
+
+```
+new_table.show_headers = True
+new_table.show_index = True
+print(new_table)
+```
+Here the index and headers are put back.
+
+#### Output
+```
+----------------------------------------------------------------
+  i   Topic             Borium   Helium      Corium     Uranium
+----------------------------------------------------------------
+  6   Matter State           1        2           7          -1
+  9   Check               True     True       False        True
+ 12   Bus                   25      115          30          31
+ 15   Set                  400        2           0         100
+ 18   Critic Mass        False    False       False       False
+ 21   Critic Heat        False    False        True        True
+ 24   Critic Pressure    False    False       False        True
+ 27   Urgent Cleaning    False    False        True       False
+ 30   Cuadrant vals         10        1          11          12
+ 33   Inherent mass     425345       -2   453213453   242224532
+ 36   Calamity count         0        0         999           0
+ 39   Calamity count         0        0         999           0
+----------------------------------------------------------------
+```
+
+```
+new_table.show_index = False
+print(new_table)
+```
+And the index column is removed once again.
+
+#### Output
+```
+-----------------------------------------------------------
+ Topic             Borium   Helium      Corium     Uranium
+-----------------------------------------------------------
+ Matter State           1        2           7          -1
+ Check               True     True       False        True
+ Bus                   25      115          30          31
+ Set                  400        2           0         100
+ Critic Mass        False    False       False       False
+ Critic Heat        False    False        True        True
+ Critic Pressure    False    False       False        True
+ Urgent Cleaning    False    False        True       False
+ Cuadrant vals         10        1          11          12
+ Inherent mass     425345       -2   453213453   242224532
+ Calamity count         0        0         999           0
+ Calamity count         0        0         999           0
+-----------------------------------------------------------
+```
+
 
 # Known Issues
 - Alignment is still incomplete. It wont work with all data types and it hasn't been tested if it is possible to change.
 - Table doesn't adjust to console size (previusly did).
-- Setting the missing value after adding data working in unintended ways.
+- Setting the ``missing_value`` after adding data working in unintended ways.
+- Setting the ``index_start`` and ``index_step`` properties after adding data wont make anything
+- Naming a column ``"i`` will cause it to not be shown when the index column is.
