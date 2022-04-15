@@ -191,11 +191,11 @@ print(new_table)
 ```
 A column of integers is placed on the left of the table. For now, try no not name columns ``"i"`` as that may conflict with the index column, directly not showing the column you added (if named like that) when ``show_index`` is set to ``True``.
 
+Is possible to hide again the index column.
 ```
 new_table.show_index = False
 print(new_table)
 ```
-Is possible to hide again the index column
 
 #### Output
 ```
@@ -215,12 +215,12 @@ Is possible to hide again the index column
 ----------------------------------------------------------
 ```
 
+Here the index and headers are put back.
 ```
 new_table.show_headers = True
 new_table.show_index = True
 print(new_table)
 ```
-Here the index and headers are put back.
 
 #### Output
 ```
@@ -242,11 +242,11 @@ Here the index and headers are put back.
 ----------------------------------------------------------------
 ```
 
+And the index column is removed once again.
 ```
 new_table.show_index = False
 print(new_table)
 ```
-And the index column is removed once again.
 
 #### Output
 ```
@@ -274,4 +274,4 @@ And the index column is removed once again.
 - Table doesn't adjust to console size (previusly did).
 - Setting the ``missing_value`` after adding data working in unintended ways.
 - Setting the ``index_start`` and ``index_step`` properties after adding data wont make anything
-- Naming a column ``"i`` will cause it to not be shown when the index column is.
+- Naming a column ``"i"`` will cause it to not be shown when the index column is.
