@@ -101,37 +101,93 @@ def __align_single_cell(cell, col_width, to_where, margin):
     return new_cell
 
 
-def _align_columns(style_composition: TableComposition, columns,
-                   col_alignments: List[str], col_widths: List[int]):
-    margin = style_composition.margin
+def __align_one_column_row(cell, col_width, to_where, margin):
+    new_cell = __align_single_cell(cell, col_width, to_where, margin)
+    if is_some_instance(new_cell, tuple, list):
+        return tuple(new_cell)
+    else:
+        return new_cell
 
+
+def __align_one_column(column, column_i, col_alignments, col_widths,
+                       margin, show_empty, empty_row_i):
+    aligned_column = list()
+    to_where = col_alignments[column_i]
+    col_width = col_widths[column_i]
+    for row_i, cell in enumerate(column):
+        if not show_empty and row_i not in empty_row_i:
+            aligned_column.append(
+                __align_one_column_row(cell, col_width, to_where, margin)
+            )
+        elif show_empty:
+            aligned_column.append(
+                __align_one_column_row(cell, col_width, to_where, margin)
+            )
+        else:
+            continue
+
+    yield tuple(aligned_column)
+
+
+def _align_columns(style_composition: TableComposition, columns,
+                   col_alignments: List[str], col_widths: List[int],
+                   empty_columns_i: List[int], empty_rows_i: List[int],
+                   show_empty: bool):
+    margin = style_composition.margin
     for column_i, column in enumerate(columns):
-        aligned_column = list()
-        to_where = col_alignments[column_i]
-        col_width = col_widths[column_i]
-        for row_i, cell in enumerate(column):
-            new_cell = __align_single_cell(cell, col_width, to_where, margin)
-            if is_some_instance(new_cell, tuple, list):
-                aligned_column.append(tuple(new_cell))
-            else:
-                aligned_column.append(new_cell)
-        yield tuple(aligned_column)
+        if not show_empty and column_i not in empty_columns_i:
+            yield from __align_one_column(
+                column, 
+                column_i, 
+                col_alignments, 
+                col_widths, 
+                margin,
+                show_empty,
+                empty_rows_i
+            )
+        elif show_empty:
+            yield from __align_one_column(
+                column, 
+                column_i, 
+                col_alignments, 
+                col_widths, 
+                margin,
+                show_empty,
+                empty_rows_i
+            )
+        else:
+            continue
+    
+        
+def __align_one_header(column, col_width, to_where, margin):
+    if is_some_instance(column, tuple, list):
+        yield tuple(map(
+            lambda cell: __align_single_cell(
+                cell, 
+                col_width, 
+                to_where, 
+                margin),
+            column
+        ))
+    else:
+        yield __align_single_cell(column, col_width, to_where, margin)
 
 
 def _align_headers(style_composition: TableComposition, headers,
-                   col_alignments: List[str], col_widths: List[int]):
+                   col_alignments: List[str], col_widths: List[int],
+                   empty_columns_i: List[int], show_empty: bool):
     margin = style_composition.margin
 
     for column_i, column in enumerate(headers):
         to_where = col_alignments[column_i]
         col_width = col_widths[column_i]
-        if is_some_instance(column, tuple, list):
-            yield tuple(map(
-                lambda cell: __align_single_cell(cell, col_width, to_where, margin),
-                column
-            ))
+        if not show_empty and column_i not in empty_columns_i:
+            yield from __align_one_header(column, col_width, to_where, margin)
+        elif show_empty:
+            yield from __align_one_header(column, col_width, to_where, margin)
         else:
-            yield __align_single_cell(column, col_width, to_where, margin)
+            continue
+             
 
 
 if __name__ == '__main__':

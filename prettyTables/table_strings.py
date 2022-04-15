@@ -17,9 +17,15 @@ DataRows = namedtuple(
 )
 
 
-def __get_single_column_group(line_style: SeparatorLine, widths: tuple, margin: int) -> Generator:
-    for width in widths:
-        yield line_style.middle * (width + margin)
+def __get_single_column_group(line_style: SeparatorLine, widths: tuple, margin: int,
+                              empty_column_i: List[int], show_empty: bool) -> Generator:
+    for width_i, width in enumerate(widths):
+        if not show_empty and width_i not in empty_column_i:
+            yield line_style.middle * (width + margin)
+        elif show_empty:
+            yield line_style.middle * (width + margin)
+        else:
+            pass
 
 
 def __join_group(line_style: SeparatorLine, group: Generator) -> str:
@@ -29,15 +35,26 @@ def __join_group(line_style: SeparatorLine, group: Generator) -> str:
     return ''.join([left, intersection.join(group), right])
 
 
-def __get_column_lines(line_styles: List[SeparatorLine], widths: tuple, margin: int) -> Generator:
+def __get_column_lines(line_styles: List[SeparatorLine], widths: tuple, margin: int,
+                       empty_column_i: List[int], show_empty: bool) -> Generator:
     for line_style in line_styles:
         if line_style is not None:
-            yield __join_group(line_style, __get_single_column_group(line_style, widths, margin))
+            yield __join_group(
+                line_style, 
+                __get_single_column_group(
+                    line_style,
+                    widths, 
+                    margin,
+                    empty_column_i,
+                    show_empty
+                )
+            )
         else:
             yield None
 
 
-def _get_separators(style_composition: TableComposition, col_widths: tuple) -> HorizontalComposition:
+def _get_separators(style_composition: TableComposition, col_widths: tuple,
+                    empty_column_i: List[int], show_empty: bool) -> HorizontalComposition:
     superior_header: SeparatorLine = style_composition.superior_header_line
     superior_no_header: SeparatorLine = style_composition.superior_header_line_no_header
     inferior_header: SeparatorLine = style_composition.inferior_header_line
@@ -45,8 +62,20 @@ def _get_separators(style_composition: TableComposition, col_widths: tuple) -> H
     table_end: SeparatorLine = style_composition.table_end_line
     margin: int = style_composition.margin * 2  # multiplied by the sides of a cell
 
-    line_styles = [superior_header, inferior_header, superior_no_header, table_body, table_end]
-    separator_lines = __get_column_lines(line_styles, col_widths, margin)
+    line_styles = [
+        superior_header, 
+        inferior_header, 
+        superior_no_header, 
+        table_body, 
+        table_end
+    ]
+    separator_lines = __get_column_lines(
+        line_styles, 
+        col_widths, 
+        margin,
+        empty_column_i,
+        show_empty
+    )
     horizontal_composition = HorizontalComposition(*separator_lines)
 
     return horizontal_composition

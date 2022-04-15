@@ -1374,49 +1374,55 @@ class Table(object):
             self.__get_column_widths()
 
         return self.__form_string(table_with_i=self.__show_index)
-    
-
-    # TODO create index adding function
-    # def __add_indexes(self):
-    #     self.columns
-        
 
     def __typify_table(self):
         for column_i, column in enumerate(self.__columns.items()):
-            header, column_content = column
-            cell_types, column_type, column_alignment = _typify_column(column_content)
-            self.__column_types[header] = column_type
-            self.__cell_types[header] = cell_types
-            self.__column_alignments[header] = column_alignment
-            try:
-                self.__column_alignments_as_list[column_i] = column_alignment
-                self.__column_types_as_list[column_i] = column_type
-            except IndexError:
-                self.__column_alignments_as_list.append(column_alignment)
-                self.__column_types_as_list.append(column_type)
+            self.__tipify_single_column(column, column_i)
         for column_i, column in enumerate(self.__columns_with_i.items()):
-            header, column_content = column
-            if column_i == 0:
-                is_index = True
-            else:
-                is_index = False
-            cell_types, column_type, column_alignment = _typify_column(
-                column_content,
-                index_column=is_index
-            )
-            self.__column_types_with_i[header] = column_type
-            self.__cell_types_with_i[header] = cell_types
-            self.__column_alignments_with_i[header] = column_alignment
-            try:
-                self.__column_alignments_as_list_with_i[column_i] = column_alignment
-                self.__column_types_as_list_with_i[column_i] = column_type
-            except IndexError:
-                self.__column_alignments_as_list_with_i.append(column_alignment)
-                self.__column_types_as_list_with_i.append(column_type)
+            self.__tipify_single_column_with_i(column, column_i)
+                
+    def __tipify_single_column(self, column, column_i):
+        header, column_content = column
+        cell_types, column_type, column_alignment = _typify_column(column_content)
+        self.__column_types[header] = column_type
+        self.__cell_types[header] = cell_types
+        self.__column_alignments[header] = column_alignment
+        try:
+            self.__column_alignments_as_list[column_i] = column_alignment
+            self.__column_types_as_list[column_i] = column_type
+        except IndexError:
+            self.__column_alignments_as_list.append(column_alignment)
+            self.__column_types_as_list.append(column_type)
+        
+    def __tipify_single_column_with_i(self, column, column_i):
+        header, column_content = column
+        if column_i == 0:
+            is_index = True
+        else:
+            is_index = False
+        cell_types, column_type, column_alignment = _typify_column(
+            column_content,
+            index_column=is_index
+        )
+        self.__column_types_with_i[header] = column_type
+        self.__cell_types_with_i[header] = cell_types
+        self.__column_alignments_with_i[header] = column_alignment
+        try:
+            self.__column_alignments_as_list_with_i[column_i] = column_alignment
+            self.__column_types_as_list_with_i[column_i] = column_type
+        except IndexError:
+            self.__column_alignments_as_list_with_i.append(column_alignment)
+            self.__column_types_as_list_with_i.append(column_type)
                 
     def __get_column_widths(self):
-        sizes = _column_sizes(self.__processed_columns, show_headers=self.__show_headers)
-        sizes_with_i = _column_sizes(self.__processed_columns_with_i, show_headers=self.__show_headers)
+        sizes = _column_sizes(
+            self.__processed_columns, 
+            show_headers=self.__show_headers
+        )
+        sizes_with_i = _column_sizes(
+            self.__processed_columns_with_i, 
+            show_headers=self.__show_headers
+        )
         self.__column_widths_as_list = sizes
         self.__column_widths_as_list_with_i = sizes_with_i
         for column_i, column in enumerate(self.__columns.items()):
@@ -1489,21 +1495,28 @@ class Table(object):
             self.__style_composition,
             unaligned_header,
             column_alignments_list,
-            column_widths_list
+            column_widths_list,
+            self.__empty_column_indexes,
+            self.__show_empty_columns
         )
         aligned_header = _zip_columns(aligned_header, headers=True)
         aligned_columns = _align_columns(
             self.__style_composition,
             unaligned_columns,
             column_alignments_list,
-            column_widths_list
+            column_widths_list,
+            self.__empty_column_indexes,
+            self.__empty_row_indexes,
+            self.__show_empty_columns
         )
         aligned_columns = _zip_columns(aligned_columns)
 
         # String separators and data rows are joined
         separators: HorizontalComposition = _get_separators(
             self.__style_composition,
-            tuple(column_widths.values())
+            tuple(column_widths.values()),
+            self.__empty_column_indexes,
+            self.__show_empty_columns
         )
         data_rows: DataRows = _get_data_rows(
             self.__style_composition, 
