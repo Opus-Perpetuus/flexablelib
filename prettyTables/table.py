@@ -784,8 +784,6 @@ class Table(object):
         self.__roman_index = False
         self.__i_start = 0
         self.__i_step = 1
-        # self.__last_i = 0
-        # self.__index_added = False
         self.__index_counter = IndexCounter()
         self.__parse_numbers = True
         self.__parse_str_numbers = False
@@ -1290,12 +1288,8 @@ class Table(object):
                 if len(self.__rows_with_i[row_i]) == 0:
                     self.__rows_with_i[row_i].append(self.__index_counter)
                 self.__rows_with_i[row_i].append(self.__missing_val)
-        # else:
-        #     self.__fill_row_missing_values_from_column(row_i, column_i)
-        # if len(data) > self.__real_row_count:
-        #     difference = len(data) - self.__real_row_count
-        #     for new_index in range(difference):
-        #         self.__columns_with_i[I_COL_TIT].append(self.__index_counter)
+        else:
+            self.__fill_row_missing_values_from_column(row_i, column_i)
 
     def __fill_row_missing_values_from_column(self, row_i, column_i):
         try:
@@ -1327,16 +1321,6 @@ class Table(object):
         self.__transpose_row_to_columns(data)
         self.__adjust_columns_to_row_count(rows_added_before=True)
         
-    # def __next_index(self):
-    #     rows_len = len(self.__rows_with_i)
-    #     is_first = rows_len == 0
-    #     if is_first:
-    #         self.__last_i = self.__i_start
-    #     else:
-    #         self.__last_i += self.__i_step
-            
-    #     return self.__last_i      
-
     def __add_row_data(self, data):
         self.__rows.append([])
         self.__rows_with_i.append([self.__index_counter])
@@ -1428,9 +1412,7 @@ class Table(object):
     # +------------------------+ TABLE BODY +------------------------+
 
     def compose(self):
-        # self.__index_counter.reset_count()
         if len(self.__columns) != 0:
-            # self.__render_indexes()
             self.__typify_table()
             self.__parse_data()  # TODO add parsing
             self.__wrap_data()
