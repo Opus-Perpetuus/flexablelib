@@ -97,4 +97,7 @@ def flatten(list_to_flatten, i=0, c=0):
 
 def read_json(file):
     with open(file) as json_file:
-        return json.load(json_file)
+        data = json.load(json_file)
+    json_file.close()
+    return data
+    
