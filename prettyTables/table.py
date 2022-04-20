@@ -21,6 +21,7 @@ from .options import (
     I_COL_TIT, 
     DEFAULT_TABLE_ALIGNMENT
 )
+from copy import deepcopy
 from .cells import _wrap_cells
 from .columns import _alignments_per_type as typealings
 
@@ -45,7 +46,28 @@ def _ndict(key, value):
     """
     new_dict = {}
     new_dict[key] = value
-    return new_dict 
+    return new_dict
+
+
+class IndexCounter(object):
+    """
+    A simple class to keep track of the index
+    """
+    def __init__(self):
+        self.index = 0
+        self.start_added = False
+    
+    def __call__(self, start=0, step=1, add_step=True):
+        if not self.start_added:
+            self.index = start - step
+            self.start_added = True
+        if add_step:
+            self.index += step
+        return self.index
+    
+    def reset_count(self):
+        self.index = 0
+        self.start_added = False
 
 
 class Table(object):
@@ -762,8 +784,9 @@ class Table(object):
         self.__roman_index = False
         self.__i_start = 0
         self.__i_step = 1
-        self.__last_i = 0
-        self.__index_added = False
+        # self.__last_i = 0
+        # self.__index_added = False
+        self.__index_counter = IndexCounter()
         self.__parse_numbers = True
         self.__parse_str_numbers = False
         self.__window_size = get_window_size()
@@ -814,7 +837,11 @@ class Table(object):
         self.__cells_alignment = []
         # +------------------------+ TABLE BODY +------------------------+
         self.__columns = columns if columns is not None else {}
-        self.__columns_with_i = {I_COL_TIT: [], **columns}  if columns is not None else {I_COL_TIT: []}
+        self.__columns_with_i = {
+            I_COL_TIT: [], **columns
+        }  if columns is not None else {
+            I_COL_TIT: []
+        }
         self.__headers = headers if headers is not None else []
         self.__headers_with_i = [I_COL_TIT, *headers] if headers is not None else [I_COL_TIT]
         self.__rows = []
@@ -1198,10 +1225,10 @@ class Table(object):
         self.__real_column_count += 1
         if data is not None:
             if len(data) > self.__real_row_count:
-                self.__real_row_count += len(data) - self.__real_row_count
                 difference = len(data) - self.__real_row_count
+                self.__real_row_count += difference
                 for _ in range(difference):
-                    self.__columns_with_i[I_COL_TIT].append(self.__next_index())
+                    self.__columns_with_i[I_COL_TIT].append(self.__index_counter)
             self.__columns[column_header] += data
 
         return column_header, self.__columns[column_header]
@@ -1211,16 +1238,24 @@ class Table(object):
             if len(column_body) < self.__real_row_count:
                 difference = self.__real_row_count - len(column_body)
                 if rows_added_before:
-                    [self.__columns[header].insert(0, self.__missing_val) for _ in range(difference)]
+                    [self.__columns[header].insert(0, self.__missing_val) 
+                     for _ in range(difference)]
                 else:
-                    self.__columns[header] += [self.__missing_val for _ in range(difference)]
+                    self.__columns[header] += [
+                        self.__missing_val 
+                        for _ in range(difference)
+                    ]
         for header, column_body in self.__columns_with_i.items():
             if len(column_body) < self.__real_row_count:
                 difference = self.__real_row_count - len(column_body)
                 if rows_added_before:
-                    [self.__columns_with_i[header].insert(0, self.__missing_val) for _ in range(difference)]
+                    [self.__columns_with_i[header].insert(0, self.__missing_val) 
+                     for _ in range(difference)]
                 else:
-                    self.__columns_with_i[header] += [self.__missing_val for _ in range(difference)]
+                    self.__columns_with_i[header] += [
+                        self.__missing_val 
+                        for _ in range(difference)
+                    ]
 
     def __transpose_column_to_rows(self, data):
         for column_i in range(self.__checked_real_column_count):
@@ -1232,24 +1267,35 @@ class Table(object):
 
     def __distribute_empty_column_to_rows(self, row_i, column_i):
         # +1 because column count starts from 1
-        if column_i + 1 + (1 if self.__show_index else 0) == self.__checked_real_column_count:  
+        lef_side = column_i + 1 + (1 if self.__show_index else 0)
+        is_last_column = lef_side == self.__checked_real_column_count
+        if is_last_column:  
             self.__rows[row_i].append(self.__missing_val)
+            if len(self.__rows_with_i[row_i]) == 0:
+                self.__rows_with_i[row_i].append(self.__index_counter)
             self.__rows_with_i[row_i].append(self.__missing_val)
         else:
             self.__fill_row_missing_values_from_column(row_i, column_i)
 
     def __distribute_column_to_rows(self, row_i, column_i, data):
         # +1 because column count starts from 1
-        if column_i + 1 + (1 if self.__show_index else 0) == self.__checked_real_column_count:
+        lef_side = column_i + 1 + (1 if self.__show_index else 0)
+        is_last_column = lef_side == self.__checked_real_column_count
+        if is_last_column:
             try:
                 self.__rows[row_i].append(data[row_i])
                 self.__rows_with_i[row_i].append(data[row_i])
             except IndexError:
                 self.__rows[row_i].append(self.__missing_val)
+                if len(self.__rows_with_i[row_i]) == 0:
+                    self.__rows_with_i[row_i].append(self.__index_counter)
                 self.__rows_with_i[row_i].append(self.__missing_val)
-                pass
-        else:
-            self.__fill_row_missing_values_from_column(row_i, column_i)
+        # else:
+        #     self.__fill_row_missing_values_from_column(row_i, column_i)
+        # if len(data) > self.__real_row_count:
+        #     difference = len(data) - self.__real_row_count
+        #     for new_index in range(difference):
+        #         self.__columns_with_i[I_COL_TIT].append(self.__index_counter)
 
     def __fill_row_missing_values_from_column(self, row_i, column_i):
         try:
@@ -1257,6 +1303,8 @@ class Table(object):
             self.__rows_with_i[row_i][column_i]
         except IndexError:
             self.__rows[row_i].append(self.__missing_val)
+            if len(self.__rows_with_i[row_i]) == 0:
+                self.__rows_with_i[row_i].append(self.__index_counter)
             self.__rows_with_i[row_i].append(self.__missing_val)
 
     # end +--------------------------+ COLUMN ADDING +--------------------------+ end
@@ -1272,29 +1320,31 @@ class Table(object):
 
         ``data``: Data provided as any iterable
         """
+        self.__columns_with_i[I_COL_TIT].append(self.__index_counter)
         added_to_column_count = self.__add_row_data(data)
         add_headers = True if added_to_column_count is not None else False
         self.__adjust_rows_to_column_count(add_headers, added_to_column_count)
         self.__transpose_row_to_columns(data)
         self.__adjust_columns_to_row_count(rows_added_before=True)
         
-    def __next_index(self):
-        rows_len = len(self.__rows_with_i)
-        is_first = rows_len == 0
-        if is_first:
-            self.__last_i = self.__i_start
-        else:
-            self.__last_i += self.__i_step
+    # def __next_index(self):
+    #     rows_len = len(self.__rows_with_i)
+    #     is_first = rows_len == 0
+    #     if is_first:
+    #         self.__last_i = self.__i_start
+    #     else:
+    #         self.__last_i += self.__i_step
             
-        return self.__last_i      
+    #     return self.__last_i      
 
     def __add_row_data(self, data):
         self.__rows.append([])
-        self.__rows_with_i.append([self.__next_index()])
+        self.__rows_with_i.append([self.__index_counter])
         self.__real_row_count += 1
         if data is None:
-            [self.__rows[-1].append(self.__missing_val) for _ in range(self.__checked_real_column_count)]
-            [self.__rows_with_i[-1].append(self.__missing_val) for _ in range(self.__checked_real_column_count)]
+            for _ in range(self.__checked_real_column_count):
+                self.__rows[-1].append(self.__missing_val)
+                self.__rows_with_i[-1].append(self.__missing_val)
         else:
             return self.__check_data_and_fill_last_row(data)
 
@@ -1304,11 +1354,11 @@ class Table(object):
         for row_i in range(self.__real_row_count):
             if len(self.__rows[row_i]) < self.__checked_real_column_count:
                 difference = self.__checked_real_column_count - len(self.__rows[row_i])
-                [self.__rows[row_i].append(self.__missing_val) for _ in range(difference)]
-                [self.__rows_with_i[row_i].append(self.__missing_val) for _ in range(difference)]
+                for _ in range(difference):
+                    self.__rows[row_i].append(self.__missing_val)
+                    self.__rows_with_i[row_i].append(self.__missing_val)
 
     def __transpose_row_to_columns(self, data):
-        # self.__columns_with_i[I_COL_TIT].append(self.__next_index())
         column_headers = tuple(self.__columns.keys())
         for column_i in range(self.__checked_real_column_count):
             if data is None:
@@ -1319,8 +1369,9 @@ class Table(object):
     def __check_existent_rows_vs_row_count(self):
         if len(self.__rows) < self.__real_row_count:
             rows_to_add = self.__real_row_count - len(self.__rows)
-            [self.__rows.append([]) for _ in range(rows_to_add)]
-            [self.__rows_with_i.append([self.__next_index()]) for _ in range(rows_to_add)]
+            for _ in range(rows_to_add):
+                self.__rows.append([])
+                self.__rows_with_i.append([self.__index_counter])
 
     def __check_data_and_fill_last_row(self, data):
         added_columns_to_count = None
@@ -1377,14 +1428,16 @@ class Table(object):
     # +------------------------+ TABLE BODY +------------------------+
 
     def compose(self):
+        # self.__index_counter.reset_count()
         if len(self.__columns) != 0:
+            # self.__render_indexes()
             self.__typify_table()
             self.__parse_data()  # TODO add parsing
             self.__wrap_data()
             self.__get_column_widths()
 
         return self.__form_string(table_with_i=self.__show_index)
-
+    
     def __typify_table(self):
         for column_i, column in enumerate(self.__columns.items()):
             self.__tipify_single_column(column, column_i)
@@ -1443,14 +1496,27 @@ class Table(object):
             self.__column_widths_with_i[header] = sizes_with_i[column_i]
 
     def __wrap_data(self):
-        rows_with_i = self.__rows_with_i
+        rows_with_i = deepcopy(self.__rows_with_i)
+        for row_i, row in enumerate(rows_with_i):
+            if self.__show_empty_rows:
+                rows_with_i[row_i][0] = row[0](
+                    self.__i_start,
+                    self.__i_step,
+                )
+            else:
+                rows_with_i[row_i][0] = row[0](
+                    self.__i_start,
+                    self.__i_step,
+                    row_i not in self.__empty_row_indexes
+                )
+        
         headers_with_i = self.__headers_with_i
         rows = self.__rows
         headers = self.__headers
         processed_headers, processed_rows = _wrap_cells(
             headers, 
             rows
-            )
+        )
         processed_columns, transformed_headers = _wrap_cells(
             processed_headers, 
             processed_rows, 

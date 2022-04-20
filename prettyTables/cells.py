@@ -65,21 +65,20 @@ def _wrap_cells(headers, data, columns=False):
         wrapped = __wrap_columns(headers, data)
     else:
         wrapped = __wrap_rows(headers, data)
-
     return wrapped
 
 
 def __wrap_columns(wrapped_headers: list, wrapped_rows: list):
-    medium_zipped_rows = []
-    for row in wrapped_rows:
-        medium_zipped_rows.append(__zip_single_row(row))
-    fully_zipped_rows = list(zip(*medium_zipped_rows))
-    zipped_columns = __zip_single_row(wrapped_headers)
+    medium_zipped_columns = []
+    for column_i, column in enumerate(wrapped_rows):
+        medium_zipped_columns.append(__zip_single_column(column))
+    fully_zipped_columns = list(zip(*medium_zipped_columns))
+    zipped_headers = __zip_single_column(wrapped_headers)
 
-    return fully_zipped_rows, zipped_columns
+    return fully_zipped_columns, zipped_headers
 
 
-def __zip_single_row(row: list):
+def __zip_single_column(row: list):
     if len(row) > 1:
         return list(zip(*row))
     else:
