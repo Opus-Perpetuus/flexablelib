@@ -905,6 +905,11 @@ class Table(object):
 
     @property
     def empty_columns_i(self):
+        if self.__show_index:
+            return list(map(
+                lambda empty_col_i: empty_col_i - 1,
+                self.__empty_column_indexes
+            ))
         return self.__empty_column_indexes
 
     @property
@@ -934,6 +939,8 @@ class Table(object):
         If it is set to True, empty columns are counted.
         If it is set to False, empty columns are not counted.
         """
+        if self.__show_index:
+            return self.__column_count - 1
         return self.__column_count
 
     @property
@@ -1098,7 +1105,10 @@ class Table(object):
         none_type_columns = []
         for i, type_name in enumerate(self.__column_types_as_list):
             if type_name == 'NoneType':
-                none_type_columns.append(i)
+                if self.__show_index:
+                    none_type_columns.append(i + 1)
+                else:
+                    none_type_columns.append(i)
         return none_type_columns
 
     @property
