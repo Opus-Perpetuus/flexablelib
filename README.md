@@ -380,5 +380,4 @@ internal count of rows:  18
 - Alignment is still incomplete. It wont work with all data types and it hasn't been tested if it is possible to change.
 - Table doesn't adjust to console size (previusly did).
 - Setting the ``missing_value`` after adding data working in unintended ways.
-- Setting the ``index_start`` and ``index_step`` properties after adding data wont make anything
 - Naming a column ``"i"`` will cause it to not be shown when the index column is.
