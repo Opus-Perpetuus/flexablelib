@@ -332,14 +332,14 @@ print('internal count of rows: ', new_table.internal_row_count)
 │  1 │ Check           │   True │   True │     False │      True │
 │  2 │ Bus             │     25 │    115 │        30 │        31 │
 │  3 │ Set             │    400 │      2 │         0 │       100 │
-│  7 │ Critic Mass     │  False │  False │     False │     False │
-│  8 │ Critic Heat     │  False │  False │      True │      True │
-│  9 │ Critic Pressure │  False │  False │     False │      True │
-│ 10 │ Urgent Cleaning │  False │  False │      True │     False │
-│ 11 │ Cuadrant vals   │     10 │      1 │        11 │        12 │
-│ 14 │ Inherent mass   │ 425345 │     -2 │ 453213453 │ 242224532 │
-│ 15 │ Calamity count  │      0 │      0 │       999 │         0 │
-│ 17 │ Calamity count  │      0 │      0 │       999 │         0 │
+│  4 │ Critic Mass     │  False │  False │     False │     False │
+│  5 │ Critic Heat     │  False │  False │      True │      True │
+│  6 │ Critic Pressure │  False │  False │     False │      True │
+│  7 │ Urgent Cleaning │  False │  False │      True │     False │
+│  8 │ Cuadrant vals   │     10 │      1 │        11 │        12 │
+│  9 │ Inherent mass   │ 425345 │     -2 │ 453213453 │ 242224532 │
+│ 10 │ Calamity count  │      0 │      0 │       999 │         0 │
+│ 11 │ Calamity count  │      0 │      0 │       999 │         0 │
 └────┴─────────────────┴────────┴────────┴───────────┴───────────┘
 columns:  5
 rows:  12
