@@ -141,6 +141,7 @@ print(new_table)
 │ Jade    │ 26 │  True │ What!?  │ Unknown │
 ╰─────────┴────┴───────┴─────────┴─────────╯
 ```
+---
 
 ### Showing row indexes
 Using another example to show the usage of the ``show_index`` option. You can also set the start of the count and the step if you want.
@@ -266,6 +267,112 @@ print(new_table)
  Calamity count         0        0         999           0
  Calamity count         0        0         999           0
 -----------------------------------------------------------
+```
+---
+### Hiding empty columns and rows
+As previously mentioned, empty rows and/or columns are allowed. There's also a way of hidding them by setting ``show_empty_rows`` and ``show_empty_columns`` to ``False``.
+
+This example shows also how some of the metadata of the table changes (and can be obtained).
+```
+from prettyTables import Table
+
+new_table = Table()
+new_table.show_empty_columns = False
+new_table.show_empty_rows = False
+new_table.add_column('Topic', ['Matter State', 'Check'])
+new_table.add_column('Borium', [1, True])
+new_table.add_column('Helium', [2, True])
+new_table.add_column('Corium', [7, False])
+new_table.add_column('Uranium', [-1, True])
+new_table.add_row(['Bus', 25, 115, 30, 31])
+new_table.add_row(['Set', 400, 2, 0, 100])
+new_table.add_row()
+new_table.add_row()
+new_table.add_row()
+new_table.add_row(['Critic Mass', False, False, False, False])
+new_table.add_row(['Critic Heat', False, False, True, True])
+new_table.add_row(['Critic Pressure', False, False, False, True])
+new_table.add_row(['Urgent Cleaning', False, False, True, False])
+new_table.add_row(['Cuadrant vals', 10, 1, 11, 12])
+new_table.add_row()
+new_table.add_row()
+new_table.add_row(['Inherent mass', 425345, -2, 453213453, 242224532])
+new_table.add_row(['Calamity count', 0, 0, 999, 0])
+new_table.add_row()
+new_table.add_row(['Calamity count', 0, 0, 999, 0])
+new_table.add_column()
+new_table.add_column()
+new_table.add_column()
+new_table.style_name = 'bheader_columns'
+new_table.show_index = True
+
+print(new_table)
+print('columns: ', new_table.column_count)
+print('rows: ', new_table.row_count)
+print('internal count of columns: ', new_table.internal_column_count)
+print('internal count of rows: ', new_table.internal_row_count)
+print('empty column indexes: ', new_table.empty_columns_i)
+print('empty row indexes: ', new_table.empty_rows_i)
+new_table.show_index = False
+new_table.show_empty_columns = True
+new_table.show_empty_rows = True
+print(new_table)
+print('columns: ', new_table.column_count)
+print('rows: ', new_table.row_count)
+print('internal count of columns: ', new_table.internal_column_count)
+print('internal count of rows: ', new_table.internal_row_count)
+```
+
+#### Output
+```
+╔════╦═════════════════╦════════╦════════╦═══════════╦═══════════╗
+║  i ║ Topic           ║ Borium ║ Helium ║    Corium ║   Uranium ║
+╚════╩═════════════════╩════════╩════════╩═══════════╩═══════════╝
+│  0 │ Matter State    │      1 │      2 │         7 │        -1 │
+│  1 │ Check           │   True │   True │     False │      True │
+│  2 │ Bus             │     25 │    115 │        30 │        31 │
+│  3 │ Set             │    400 │      2 │         0 │       100 │
+│  7 │ Critic Mass     │  False │  False │     False │     False │
+│  8 │ Critic Heat     │  False │  False │      True │      True │
+│  9 │ Critic Pressure │  False │  False │     False │      True │
+│ 10 │ Urgent Cleaning │  False │  False │      True │     False │
+│ 11 │ Cuadrant vals   │     10 │      1 │        11 │        12 │
+│ 14 │ Inherent mass   │ 425345 │     -2 │ 453213453 │ 242224532 │
+│ 15 │ Calamity count  │      0 │      0 │       999 │         0 │
+│ 17 │ Calamity count  │      0 │      0 │       999 │         0 │
+└────┴─────────────────┴────────┴────────┴───────────┴───────────┘
+columns:  5
+rows:  12
+internal count of columns:  9
+internal count of rows:  18
+empty column indexes:  [5, 6, 7]
+empty row indexes:  [4, 5, 6, 12, 13, 16]
+╔═════════════════╦════════╦════════╦═══════════╦═══════════╦══════════╦══════════╦══════════╗
+║ Topic           ║ Borium ║ Helium ║    Corium ║   Uranium ║ column 6 ║ column 7 ║ column 8 ║
+╚═════════════════╩════════╩════════╩═══════════╩═══════════╩══════════╩══════════╩══════════╝
+│ Matter State    │      1 │      2 │         7 │        -1 │          │          │          │
+│ Check           │   True │   True │     False │      True │          │          │          │
+│ Bus             │     25 │    115 │        30 │        31 │          │          │          │
+│ Set             │    400 │      2 │         0 │       100 │          │          │          │
+│                 │        │        │           │           │          │          │          │
+│                 │        │        │           │           │          │          │          │
+│                 │        │        │           │           │          │          │          │
+│ Critic Mass     │  False │  False │     False │     False │          │          │          │
+│ Critic Heat     │  False │  False │      True │      True │          │          │          │
+│ Critic Pressure │  False │  False │     False │      True │          │          │          │
+│ Urgent Cleaning │  False │  False │      True │     False │          │          │          │
+│ Cuadrant vals   │     10 │      1 │        11 │        12 │          │          │          │
+│                 │        │        │           │           │          │          │          │
+│                 │        │        │           │           │          │          │          │
+│ Inherent mass   │ 425345 │     -2 │ 453213453 │ 242224532 │          │          │          │
+│ Calamity count  │      0 │      0 │       999 │         0 │          │          │          │
+│                 │        │        │           │           │          │          │          │
+│ Calamity count  │      0 │      0 │       999 │         0 │          │          │          │
+└─────────────────┴────────┴────────┴───────────┴───────────┴──────────┴──────────┴──────────┘
+columns:  8
+rows:  18
+internal count of columns:  8
+internal count of rows:  18
 ```
 
 
