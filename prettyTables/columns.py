@@ -1,31 +1,140 @@
-from typing import List
-
-from .cells import _center_cell, _ljust_cell, _rjust_cell, _add_cell_spacing
+from .cells import (
+    _center_cell, 
+    _ljust_cell, 
+    _rjust_cell, 
+    _add_cell_spacing
+)
 from .style_compositions import TableComposition
-from .utils import is_some_instance
+from .utils import (
+    is_some_instance,
+    IndexCounter,
+    ValuePlacer
+)
 from .options import DEFAULT_FILL_CHAR
 
+from typing import List
+from collections import namedtuple
 
-def __get_column_type(column):
-    if 'str' in column:
-        return 'str'
-    elif 'bytes' in column and 'float' not in column and 'bool' not in column and 'int' not in column:
-        return 'bytes'
-    elif 'int' in column and 'float' not in column and 'bool' not in column:
-        return 'int'
-    elif 'float' in column or 'int' in column and 'bool' not in column:
-        return 'float'
-    elif 'bool' in column and 'int' not in column and 'float' not in column:
-        return 'bool'
-    elif 'bool' in column or 'int' in column and 'float' not in column:
-        return 'int'
-    elif 'bool' in column or 'int' in column or 'float' in column:
-        return 'str'
+
+TypeNames = namedtuple(
+    'TypeNames',
+    [
+        'bool_',
+        'str_',
+        'int_',
+        'float_',
+        'bytes_',
+        'none_type_',
+        'index_counter_',
+        'value_placer_',
+    ]
+) 
+
+
+TYPE_NAMES = TypeNames(
+    bool_=bool.__name__,
+    str_=str.__name__,
+    int_=int.__name__,
+    float_=float.__name__,
+    bytes_=bytes.__name__,
+    none_type_=type(None).__name__,
+    index_counter_=IndexCounter.__name__,
+    value_placer_=ValuePlacer.__name__,
+)
+
+
+def __check_for_types_in_column(column_types: list, 
+                                accepted_types: list):
+    for type_ in column_types:
+        if type_ not in accepted_types:
+            return False
+                
+    return True
+
+
+def __is_str_column(column_types: list):
+    comprobation = __check_for_types_in_column(
+        column_types=column_types,
+        accepted_types=list(TYPE_NAMES)
+    )
+    return comprobation
+
+
+def __is_byte_column(column_types: list):
+    comprobation = __check_for_types_in_column(
+        column_types=column_types,
+        accepted_types=[
+            TYPE_NAMES.bytes_,
+            TYPE_NAMES.value_placer_
+        ]
+    )
+    return comprobation
+
+
+def __is_int_column(column_types: list):
+    comprobation = __check_for_types_in_column(
+        column_types=column_types,
+        accepted_types=[
+            TYPE_NAMES.int_,
+            TYPE_NAMES.bool_,
+            TYPE_NAMES.value_placer_,
+            TYPE_NAMES.index_counter_
+        ]
+    )
+    return comprobation
+    
+    
+def __is_float_column(column_types: list):
+    comprobation = __check_for_types_in_column(
+        column_types=column_types,
+        accepted_types=[
+            TYPE_NAMES.float_,
+            TYPE_NAMES.int_,
+        ]
+    )
+    return comprobation
+
+
+def __is_bool_column(column_types: bool):
+    comprobation = __check_for_types_in_column(
+        column_types=column_types,
+        accepted_types=[
+            TYPE_NAMES.bool_,
+            TYPE_NAMES.value_placer_
+        ]
+    )
+    return comprobation
+
+
+def __is_none_type(column_types: list):
+    comprobation = __check_for_types_in_column(
+        column_types=column_types,
+        accepted_types=[
+            TYPE_NAMES.none_type_,
+            TYPE_NAMES.value_placer_
+        ]
+    )
+    return comprobation
+
+
+def __get_column_type(column_types):
+    if __is_none_type(column_types):
+        return TYPE_NAMES.none_type_
+    if __is_byte_column(column_types):
+        return TYPE_NAMES.bytes_
+    if __is_int_column(column_types):
+        return TYPE_NAMES.int_
+    if __is_float_column(column_types):
+        return TYPE_NAMES.float_
+    if __is_bool_column(column_types):
+        return TYPE_NAMES.bool_
+    if __is_str_column(column_types):
+        return TYPE_NAMES.str_
     else:
-        return 'NoneType'
+        return TYPE_NAMES.none_type_
 
 
-_alignments_per_type = {
+ALIGNMENST_PER_TYPE = {
     'bool': 'r',
     'str': 'l',
     'int': 'r',
@@ -84,7 +193,7 @@ def _typify_column(column, index_column=False):  # TODO make typify work with mi
             identified_types.append(type(None).__name__)
 
     column_type = __get_column_type(identified_types)
-    column_alignment = _alignments_per_type[column_type]
+    column_alignment = ALIGNMENST_PER_TYPE[column_type]
 
     return identified_types, column_type, column_alignment
 

@@ -100,4 +100,36 @@ def read_json(file):
         data = json.load(json_file)
     json_file.close()
     return data
+
+
+class IndexCounter(object):
+    """
+    A simple class to keep track of the index
+    """
+    def __init__(self):
+        self.index = 0
+        self.start_added = False
+    
+    def __call__(self, start=0, step=1, add_step=True):
+        if not self.start_added:
+            self.index = start - step
+            self.start_added = True
+        if add_step:
+            self.index += step
+        return self.index
+    
+    def reset_count(self):
+        self.index = 0
+        self.start_added = False
+
+
+class ValuePlacer(object):
+    """
+    A little class to place a value in a cell
+    """
+    def __init__(self):
+        pass
+    
+    def __call__(self, value):
+        return value
     

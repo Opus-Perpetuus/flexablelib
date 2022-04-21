@@ -14,7 +14,12 @@ from .style_compositions import (
 )
 from .columns import _column_sizes, _typify_column, _align_columns, _align_headers
 from .table_strings import _get_separators, _get_data_rows, DataRows
-from .utils import get_window_size, is_multi_row
+from .utils import (
+    get_window_size, 
+    is_multi_row,
+    ValuePlacer,
+    IndexCounter
+)
 from .options import (
     NONE_VALUE_REPLACEMENT, 
     DEFAULT_STYLE, 
@@ -23,7 +28,7 @@ from .options import (
 )
 from copy import deepcopy
 from .cells import _wrap_cells
-from .columns import _alignments_per_type as typealings
+from .columns import ALIGNMENST_PER_TYPE as typealings
 
 
 def _zip_columns(columns, headers=False):
@@ -47,27 +52,6 @@ def _ndict(key, value):
     new_dict = {}
     new_dict[key] = value
     return new_dict
-
-
-class IndexCounter(object):
-    """
-    A simple class to keep track of the index
-    """
-    def __init__(self):
-        self.index = 0
-        self.start_added = False
-    
-    def __call__(self, start=0, step=1, add_step=True):
-        if not self.start_added:
-            self.index = start - step
-            self.start_added = True
-        if add_step:
-            self.index += step
-        return self.index
-    
-    def reset_count(self):
-        self.index = 0
-        self.start_added = False
 
 
 class Table(object):
@@ -773,7 +757,8 @@ class Table(object):
                  bool_align=None, table_align=None, col_alignment=None, leading_zeros=0,
                  header_style=None):
         # +------------------------+ PARAMETERS +------------------------+
-        self.__missing_val = missing_val
+        self.__missing_value = missing_val
+        self.__value_placer = ValuePlacer()
         self.__str_align = str_align
         self.__int_align = int_align
         self.__float_align = float_align
@@ -889,8 +874,8 @@ class Table(object):
         return self.__checked_style_name
 
     @property
-    def missing_val(self):
-        return self.__missing_val
+    def missing_value(self):
+        return self.__missing_value
 
     @property
     def str_align(self):
@@ -1026,9 +1011,9 @@ class Table(object):
     def style_name(self, value):
         self.__style_name = value
 
-    @missing_val.setter
-    def missing_val(self, value):
-        self.__missing_val = value
+    @missing_value.setter
+    def missing_value(self, value):
+        self.__missing_value = value
 
     @str_align.setter
     def str_align(self, value):
@@ -1121,7 +1106,7 @@ class Table(object):
     def __empty_row_indexes(self):  # FIX make empty row indexes work with missing val (only works with None)
         empty_rows = []
         for i, row in enumerate(self.__rows):
-            if row.count(self.__missing_val) == len(row):
+            if row.count(self.__value_placer) == len(row):
                 empty_rows.append(i)
         return empty_rows
 
@@ -1236,22 +1221,22 @@ class Table(object):
             if len(column_body) < self.__real_row_count:
                 difference = self.__real_row_count - len(column_body)
                 if rows_added_before:
-                    [self.__columns[header].insert(0, self.__missing_val) 
+                    [self.__columns[header].insert(0, self.__value_placer) 
                      for _ in range(difference)]
                 else:
                     self.__columns[header] += [
-                        self.__missing_val 
+                        self.__value_placer 
                         for _ in range(difference)
                     ]
         for header, column_body in self.__columns_with_i.items():
             if len(column_body) < self.__real_row_count:
                 difference = self.__real_row_count - len(column_body)
                 if rows_added_before:
-                    [self.__columns_with_i[header].insert(0, self.__missing_val) 
+                    [self.__columns_with_i[header].insert(0, self.__value_placer) 
                      for _ in range(difference)]
                 else:
                     self.__columns_with_i[header] += [
-                        self.__missing_val 
+                        self.__value_placer 
                         for _ in range(difference)
                     ]
 
@@ -1268,10 +1253,10 @@ class Table(object):
         lef_side = column_i + 1 + (1 if self.__show_index else 0)
         is_last_column = lef_side == self.__checked_real_column_count
         if is_last_column:  
-            self.__rows[row_i].append(self.__missing_val)
+            self.__rows[row_i].append(self.__value_placer)
             if len(self.__rows_with_i[row_i]) == 0:
                 self.__rows_with_i[row_i].append(self.__index_counter)
-            self.__rows_with_i[row_i].append(self.__missing_val)
+            self.__rows_with_i[row_i].append(self.__value_placer)
         else:
             self.__fill_row_missing_values_from_column(row_i, column_i)
 
@@ -1284,10 +1269,10 @@ class Table(object):
                 self.__rows[row_i].append(data[row_i])
                 self.__rows_with_i[row_i].append(data[row_i])
             except IndexError:
-                self.__rows[row_i].append(self.__missing_val)
+                self.__rows[row_i].append(self.__value_placer)
                 if len(self.__rows_with_i[row_i]) == 0:
                     self.__rows_with_i[row_i].append(self.__index_counter)
-                self.__rows_with_i[row_i].append(self.__missing_val)
+                self.__rows_with_i[row_i].append(self.__value_placer)
         else:
             self.__fill_row_missing_values_from_column(row_i, column_i)
 
@@ -1296,10 +1281,10 @@ class Table(object):
             self.__rows[row_i][column_i]
             self.__rows_with_i[row_i][column_i]
         except IndexError:
-            self.__rows[row_i].append(self.__missing_val)
+            self.__rows[row_i].append(self.__value_placer)
             if len(self.__rows_with_i[row_i]) == 0:
                 self.__rows_with_i[row_i].append(self.__index_counter)
-            self.__rows_with_i[row_i].append(self.__missing_val)
+            self.__rows_with_i[row_i].append(self.__value_placer)
 
     # end +--------------------------+ COLUMN ADDING +--------------------------+ end
     # +-----------------------------------------------------------------------------+
@@ -1327,8 +1312,8 @@ class Table(object):
         self.__real_row_count += 1
         if data is None:
             for _ in range(self.__checked_real_column_count):
-                self.__rows[-1].append(self.__missing_val)
-                self.__rows_with_i[-1].append(self.__missing_val)
+                self.__rows[-1].append(self.__value_placer)
+                self.__rows_with_i[-1].append(self.__value_placer)
         else:
             return self.__check_data_and_fill_last_row(data)
 
@@ -1339,8 +1324,8 @@ class Table(object):
             if len(self.__rows[row_i]) < self.__checked_real_column_count:
                 difference = self.__checked_real_column_count - len(self.__rows[row_i])
                 for _ in range(difference):
-                    self.__rows[row_i].append(self.__missing_val)
-                    self.__rows_with_i[row_i].append(self.__missing_val)
+                    self.__rows[row_i].append(self.__value_placer)
+                    self.__rows_with_i[row_i].append(self.__value_placer)
 
     def __transpose_row_to_columns(self, data):
         column_headers = tuple(self.__columns.keys())
@@ -1367,13 +1352,13 @@ class Table(object):
                 self.__rows[-1].append(data[column_i])
                 self.__rows_with_i[-1].append(data[column_i])
             except IndexError:
-                self.__rows_with_i[-1].append(self.__missing_val)
+                self.__rows_with_i[-1].append(self.__value_placer)
         return added_columns_to_count
 
     def __fil_column_from_empty_row(self, column_headers, column_i):
         try:
-            self.__columns[column_headers[column_i]].append(self.__missing_val)
-            self.__columns_with_i[column_headers[column_i]].append(self.__missing_val)
+            self.__columns[column_headers[column_i]].append(self.__value_placer)
+            self.__columns_with_i[column_headers[column_i]].append(self.__value_placer)
         except IndexError:
             pass
 
@@ -1413,9 +1398,10 @@ class Table(object):
 
     def compose(self):
         if len(self.__columns) != 0:
+            # self.__parse_data()  # TODO add parsing
+            rows, rows_with_i = self.__call_table_objects()
             self.__typify_table()
-            self.__parse_data()  # TODO add parsing
-            self.__wrap_data()
+            self.__wrap_data(rows, rows_with_i)
             self.__get_column_widths()
 
         return self.__form_string(table_with_i=self.__show_index)
@@ -1476,8 +1462,19 @@ class Table(object):
         for column_i, column in enumerate(self.__columns_with_i.items()):
             header, _ = column
             self.__column_widths_with_i[header] = sizes_with_i[column_i]
-
-    def __wrap_data(self):
+            
+    
+    def __call_table_objects(self):
+        """
+        This is to call the ``__call__`` method of the 
+        stored objects in the table.
+        
+        ```
+        returns: rows, rows_with_i 
+        ```
+        """
+        # For adding the index. The index is in the first column
+        # or the index 0.
         rows_with_i = deepcopy(self.__rows_with_i)
         for row_i, row in enumerate(rows_with_i):
             if self.__show_empty_rows:
@@ -1491,9 +1488,28 @@ class Table(object):
                     self.__i_step,
                     row_i not in self.__empty_row_indexes
                 )
+            # For adding the missing value where the ValuePlacer
+            # is used (in the rows with index).
+            for column_i, column in enumerate(row):
+                if isinstance(column, ValuePlacer):
+                    rows_with_i[row_i][column_i] = column(
+                        self.__missing_value
+                    )
+                
+        # For adding the missing value where the ValuePlacer
+        # is used.
+        rows = deepcopy(self.__rows)
+        for row_i, row in enumerate(rows):
+            for column_i, column in enumerate(row):
+                if isinstance(column, ValuePlacer):
+                    rows[row_i][column_i] = column(
+                        self.__missing_value
+                    )
         
+        return rows, rows_with_i
+
+    def __wrap_data(self, rows, rows_with_i):
         headers_with_i = self.__headers_with_i
-        rows = self.__rows
         headers = self.__headers
         processed_headers, processed_rows = _wrap_cells(
             headers, 
