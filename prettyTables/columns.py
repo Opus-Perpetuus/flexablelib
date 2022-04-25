@@ -202,11 +202,11 @@ def __get_float_column_width(column, show_headers):
             )
         else:
             head_size += (len(str(header)))
-            
+        
     def compare_one_side(side_i):
         if sides_len[side_i] > max_len_of_sides[side_i]:
                 max_len_of_sides[side_i] = sides_len[side_i]
-    
+                
     max_len_of_sides = []
     for row in column['data']:
         row_ = str(row)
@@ -223,8 +223,13 @@ def __get_float_column_width(column, show_headers):
                 compare_one_side(side_i)
             except IndexError:
                 max_len_of_sides.append(sides_len[side_i])
+                
+    sum_of_len_of_sides = sum(max_len_of_sides)
+    if sum_of_len_of_sides < head_size > 0:
+        max_len_of_sides[0] += head_size - sum_of_len_of_sides
+        sum_of_len_of_sides = sum(max_len_of_sides)
     
-    return head_size, sum(max_len_of_sides), max_len_of_sides
+    return head_size, sum_of_len_of_sides, max_len_of_sides
 
 
 def _column_sizes(processed_columns: dict, column_types: dict,  show_headers: bool):
