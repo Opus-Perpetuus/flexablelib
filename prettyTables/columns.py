@@ -168,27 +168,33 @@ def __get_single_column_size(column, show_headers):
             
     return head_size, max(body_sizes)
             
-    
-    
-            
 
-def __get_max_side_len(row: str, is_float):
+def __get_max_side_len(row: str, is_float, max_len_of_sides, head_size):
     sides_len = []
+    separator = '.'
+    row_len = len(row)
+    biggest_float_len = sum(max_len_of_sides)
+    if head_size > biggest_float_len:
+        current_column_size = head_size
+    else:
+        current_column_size = biggest_float_len
     if is_float and is_float is not None:
-        separator = '.'
         all_sides = row.split(separator)
         sides_len.append(len(all_sides[0]))
-        sides_len.append(len(separator))  # size of the dot
+        sides_len.append(len(separator))  # Size of the dot
         sides_len.append(len(all_sides[1]))
     elif not is_float and is_float is not None:
-        sides_len.append(len(row))
-        sides_len.append(0)
+        sides_len.append(row_len)
+        sides_len.append(0)  # No dot
         sides_len.append(0)
     else:
-        sides_len.append(0)
-        sides_len.append(0)
-        sides_len.append(len(row))
-    
+        if row_len > current_column_size:
+            right_and_dot = max_len_of_sides[1] + max_len_of_sides[2]
+            corrected_new_len = row_len - right_and_dot
+            sides_len.append(corrected_new_len)
+            sides_len.append(0)  # No dot
+            sides_len.append(0)
+            
     return sides_len
 
 
@@ -213,11 +219,26 @@ def __get_float_column_width(column, show_headers):
         is_float = FLT_FILTER(row_) is not None
         is_int = INT_FILTER(row_) is not None
         if is_float:
-            sides_len = __get_max_side_len(row_, is_float=True)
+            sides_len = __get_max_side_len(
+                row_, 
+                is_float=True,
+                max_len_of_sides=max_len_of_sides,
+                head_size=head_size
+            )
         elif is_int:
-            sides_len = __get_max_side_len(row_, is_float=False)
+            sides_len = __get_max_side_len(
+                row_, 
+                is_float=False,
+                max_len_of_sides=max_len_of_sides,
+                head_size=head_size
+            )
         else:
-            sides_len = __get_max_side_len(row_, is_float=None)
+            sides_len = __get_max_side_len(
+                row_, 
+                is_float=None,
+                max_len_of_sides=max_len_of_sides,
+                head_size=head_size
+            )
         for side_i in range(len(sides_len)):
             try:
                 compare_one_side(side_i)
