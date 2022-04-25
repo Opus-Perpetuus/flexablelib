@@ -291,12 +291,6 @@ def _typify_column(column, index_column=False):  # TODO make typify work with mi
     """
     Get the types of the column and it's alignments
     """
-    # create = False
-    # if column_alignment is not None:
-    #     return colSizes
-    # else:
-    #     create = True
-
     identified_types = []
 
     for row in column:
