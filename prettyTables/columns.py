@@ -1,7 +1,9 @@
+from pickle import FALSE
 from .cells import (
     _center_cell, 
     _ljust_cell, 
-    _rjust_cell, 
+    _rjust_cell,
+    _fljust_cell,
     _add_cell_spacing
 )
 from .style_compositions import TableComposition
@@ -10,7 +12,7 @@ from .utils import (
     IndexCounter,
     ValuePlacer
 )
-from .options import DEFAULT_FILL_CHAR
+from .options import DEFAULT_FILL_CHAR, FLT_FILTER, INT_FILTER
 
 from typing import List
 from collections import namedtuple
@@ -90,6 +92,7 @@ def __is_float_column(column_types: list):
         accepted_types=[
             TYPE_NAMES.float_,
             TYPE_NAMES.int_,
+            TYPE_NAMES.value_placer_,
         ]
     )
     return comprobation
@@ -144,32 +147,118 @@ ALIGNMENST_PER_TYPE = {
 }
 
 
-def _column_sizes(columns: dict, show_headers: bool):
+def __get_single_column_size(column, show_headers):
+    head_size = 0
+    body_sizes = []
+    if show_headers:
+        header = column['header']
+        if is_some_instance(header, tuple, list):
+            head_size += (
+                max([len(str(sub_row)) for sub_row in header])
+            )
+        else:
+            head_size += (len(str(header)))
+    for row in column['data']:
+        if is_some_instance(row, tuple, list):
+            body_sizes.append(
+                max([len(str(sub_row)) for sub_row in row])
+            )
+        else:
+            body_sizes.append(len(str(row)))
+            
+    return head_size, max(body_sizes)
+            
+    
+    
+            
+
+def __get_max_side_len(row: str, is_float):
+    sides_len = []
+    if is_float and is_float is not None:
+        separator = '.'
+        all_sides = row.split(separator)
+        sides_len.append(len(all_sides[0]))
+        sides_len.append(len(separator))  # size of the dot
+        sides_len.append(len(all_sides[1]))
+    elif not is_float and is_float is not None:
+        sides_len.append(len(row))
+        sides_len.append(0)
+        sides_len.append(0)
+    else:
+        sides_len.append(0)
+        sides_len.append(0)
+        sides_len.append(len(row))
+    
+    return sides_len
+
+
+def __get_float_column_width(column, show_headers):
+    head_size = 0
+    if show_headers:
+        header = column['header']
+        if is_some_instance(header, tuple, list):
+            head_size += (
+                max([len(str(sub_row)) for sub_row in header])
+            )
+        else:
+            head_size += (len(str(header)))
+            
+    def compare_one_side(side_i):
+        if sides_len[side_i] > max_len_of_sides[side_i]:
+                max_len_of_sides[side_i] = sides_len[side_i]
+    
+    max_len_of_sides = []
+    for row in column['data']:
+        row_ = str(row)
+        is_float = FLT_FILTER(row_) is not None
+        is_int = INT_FILTER(row_) is not None
+        if is_float:
+            sides_len = __get_max_side_len(row_, is_float=True)
+        elif is_int:
+            sides_len = __get_max_side_len(row_, is_float=False)
+        else:
+            sides_len = __get_max_side_len(row_, is_float=None)
+        for side_i in range(len(sides_len)):
+            try:
+                compare_one_side(side_i)
+            except IndexError:
+                max_len_of_sides.append(sides_len[side_i])
+    
+    return head_size, sum(max_len_of_sides), max_len_of_sides
+
+
+def _column_sizes(processed_columns: dict, column_types: dict,  show_headers: bool):
     # TODO add support for colouring codes
 
-    if show_headers:
-        head_sizes = [
-            max([len(str(row)) for row in column['header']]) if (
-                is_some_instance(column['header'], tuple, list)
-            ) else len(str(column['header']))
-            for _, column in columns.items()
-        ]
-    body_sizes = [
-        max([
-            max([len(str(sbRow)) for sbRow in row]) if (
-                is_some_instance(row, tuple, list)
-            ) else len(str(row))
-            for row in column['data']
-        ])
-        for _, column in columns.items()
-    ]
+    head_sizes = []
+    body_sizes = []
+    float_column_sizes = None
+    for header, column in processed_columns.items():
+        if column_types[header] == TYPE_NAMES.float_:
+            head_size, body_size, decimal_sides = __get_float_column_width(
+                column,
+                show_headers
+            )
+            head_sizes.append(head_size)
+            body_sizes.append(body_size)
+            try:
+                float_column_sizes[header] = decimal_sides
+            except TypeError:
+                float_column_sizes = {header: decimal_sides}
+        else:
+            head_size, body_size = __get_single_column_size(
+                column, 
+                show_headers
+            )
+            head_sizes.append(head_size)
+            body_sizes.append(body_size)
 
     if show_headers:
         sizes = list(map(lambda x, y: max(x, y), head_sizes, body_sizes))
     else:    
         sizes = body_sizes
 
-    return sizes
+    return sizes, float_column_sizes
 
 
 def _typify_column(column, index_column=False):  # TODO make typify work with missing val to not alter column type
@@ -198,39 +287,79 @@ def _typify_column(column, index_column=False):  # TODO make typify work with mi
     return identified_types, column_type, column_alignment
 
 
-def __align_single_cell(cell, col_width, to_where, margin):
+def __align_single_cell(cell, col_width, to_where, 
+                        margin, float_column_sizes: list=None):
     new_cell = cell
     if to_where == 'l':
-        new_cell = _ljust_cell(cell, col_width, DEFAULT_FILL_CHAR)
+        new_cell = _ljust_cell(
+            cell, 
+            col_width, 
+            DEFAULT_FILL_CHAR
+        )
     elif to_where == 'c':
-        new_cell = _center_cell(cell, col_width, DEFAULT_FILL_CHAR)
-    elif to_where in ['r']:
-        new_cell = _rjust_cell(cell, col_width, DEFAULT_FILL_CHAR)
+        new_cell = _center_cell(
+            cell, 
+            col_width, 
+            DEFAULT_FILL_CHAR
+        )
+    elif to_where == 'r':
+        new_cell = _rjust_cell(
+            cell, 
+            col_width, 
+            DEFAULT_FILL_CHAR
+        )
+    elif to_where == 'f':
+        new_cell = _fljust_cell(
+            cell, 
+            col_width, 
+            DEFAULT_FILL_CHAR, 
+            float_column_sizes
+        )
     new_cell = _add_cell_spacing(new_cell, margin, margin, 0)
     return new_cell
 
 
-def __align_one_column_row(cell, col_width, to_where, margin):
-    new_cell = __align_single_cell(cell, col_width, to_where, margin)
+def __align_one_column_row(cell, col_width, to_where,
+                           margin, float_column_sizes: dict=None):
+    new_cell = __align_single_cell(
+        cell, 
+        col_width, 
+        to_where, 
+        margin,
+        float_column_sizes
+    )
     if is_some_instance(new_cell, tuple, list):
         return tuple(new_cell)
     else:
         return new_cell
 
 
-def __align_one_column(column, column_i, col_alignments, col_widths,
-                       margin, show_empty, empty_row_i):
+def __align_one_column(column, column_i, col_alignments, 
+                       col_widths, margin, show_empty, 
+                       empty_row_i, float_column_sizes: dict = None):
     aligned_column = list()
     to_where = col_alignments[column_i]
     col_width = col_widths[column_i]
     for row_i, cell in enumerate(column):
         if not show_empty and row_i not in empty_row_i:
             aligned_column.append(
-                __align_one_column_row(cell, col_width, to_where, margin)
+                __align_one_column_row(
+                    str(cell), 
+                    col_width, 
+                    to_where, 
+                    margin,
+                    float_column_sizes
+                )
             )
         elif show_empty:
             aligned_column.append(
-                __align_one_column_row(cell, col_width, to_where, margin)
+                __align_one_column_row(
+                    str(cell), 
+                    col_width, 
+                    to_where, 
+                    margin,
+                    float_column_sizes
+                )
             )
         else:
             continue
@@ -238,12 +367,17 @@ def __align_one_column(column, column_i, col_alignments, col_widths,
     yield tuple(aligned_column)
 
 
-def _align_columns(style_composition: TableComposition, columns,
+def _align_columns(style_composition: TableComposition, columns, headers,
                    col_alignments: List[str], col_widths: List[int],
                    empty_columns_i: List[int], empty_rows_i: List[int],
-                   show_empty: bool):
+                   show_empty: bool, float_cols_sizes: dict):
     margin = style_composition.margin
     for column_i, column in enumerate(columns):
+        header = headers[column_i]
+        try:
+            float_column_sizes = float_cols_sizes[header]
+        except KeyError:
+            float_column_sizes = None
         if not show_empty and column_i not in empty_columns_i:
             yield from __align_one_column(
                 column, 
@@ -252,7 +386,8 @@ def _align_columns(style_composition: TableComposition, columns,
                 col_widths, 
                 margin,
                 show_empty,
-                empty_rows_i
+                empty_rows_i,
+                float_column_sizes
             )
         elif show_empty:
             yield from __align_one_column(
@@ -262,7 +397,8 @@ def _align_columns(style_composition: TableComposition, columns,
                 col_widths, 
                 margin,
                 show_empty,
-                empty_rows_i
+                empty_rows_i,
+                float_column_sizes
             )
         else:
             continue
@@ -272,7 +408,7 @@ def __align_one_header(column, col_width, to_where, margin):
     if is_some_instance(column, tuple, list):
         yield tuple(map(
             lambda cell: __align_single_cell(
-                cell, 
+                str(cell), 
                 col_width, 
                 to_where, 
                 margin),

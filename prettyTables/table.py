@@ -806,6 +806,8 @@ class Table(object):
         self.__column_types_with_i = {I_COL_TIT: 'int'}
         self.__column_types_as_list = []
         self.__column_types_as_list_with_i = []
+        self.__float_columns_widths = {}
+        self.__float_columns_widths_with_i = {}
         self.__column_widths = {}
         self.__column_widths_with_i = {}
         self.__column_widths_as_list = []
@@ -813,7 +815,7 @@ class Table(object):
         self.__table_alignment = 'l'
         self.__column_alignments = {}
         self.__column_alignments_with_i = {I_COL_TIT: typealings['int']}
-        self.__column_alignments_as_list = [typealings['int']]
+        self.__column_alignments_as_list = []
         self.__column_alignments_as_list_with_i = []
         self.__row_alignments = {}
         self.__row_alignments_as_list = []
@@ -999,13 +1001,13 @@ class Table(object):
     # +-----------------------------------------------------------------------------+
     # start +---------------------------+ SETTERS +---------------------------+ start
 
-    @columns.setter
-    def columns(self, value: dict):
-        self.__columns = {} if value is None else value
+    # @columns.setter
+    # def columns(self, value: dict):
+    #     self.__columns = {} if value is None else value
 
-    @headers.setter
-    def headers(self, value: list):
-        self.__headers = [] if value is None else value
+    # @headers.setter
+    # def headers(self, value: list):
+    #     self.__headers = [] if value is None else value
 
     @style_name.setter
     def style_name(self, value):
@@ -1376,23 +1378,24 @@ class Table(object):
     # start +-------------------+ STRING TABLE COMPOSITION +------------------+ start
 
     # +----------------------+ NUMBER PARSING +----------------------+
-    def __parse_numbers(self):
-        pass
+    
+    # def __parse_numbers(self):
+    #     pass
 
-    def __parse_float(self):
-        pass
+    # def __parse_float(self):
+    #     pass
 
-    def __parse_int_boolean(self):
-        pass
+    # def __parse_int_boolean(self):
+    #     pass
 
-    def __parse_exponentials(self):
-        pass
+    # def __parse_exponentials(self):
+    #     pass
 
-    def __parse_bytes(self):
-        pass
+    # def __parse_bytes(self):
+    #     pass
 
-    def __parse_escape_codes(self):
-        pass
+    # def __parse_escape_codes(self):
+    #     pass
 
     # +------------------------+ TABLE BODY +------------------------+
 
@@ -1405,64 +1408,6 @@ class Table(object):
             self.__get_column_widths()
 
         return self.__form_string(table_with_i=self.__show_index)
-    
-    def __typify_table(self):
-        for column_i, column in enumerate(self.__columns.items()):
-            self.__tipify_single_column(column, column_i)
-        for column_i, column in enumerate(self.__columns_with_i.items()):
-            self.__tipify_single_column_with_i(column, column_i)
-                
-    def __tipify_single_column(self, column, column_i):
-        header, column_content = column
-        cell_types, column_type, column_alignment = _typify_column(column_content)
-        self.__column_types[header] = column_type
-        self.__cell_types[header] = cell_types
-        self.__column_alignments[header] = column_alignment
-        try:
-            self.__column_alignments_as_list[column_i] = column_alignment
-            self.__column_types_as_list[column_i] = column_type
-        except IndexError:
-            self.__column_alignments_as_list.append(column_alignment)
-            self.__column_types_as_list.append(column_type)
-        
-    def __tipify_single_column_with_i(self, column, column_i):
-        header, column_content = column
-        if column_i == 0:
-            is_index = True
-        else:
-            is_index = False
-        cell_types, column_type, column_alignment = _typify_column(
-            column_content,
-            index_column=is_index
-        )
-        self.__column_types_with_i[header] = column_type
-        self.__cell_types_with_i[header] = cell_types
-        self.__column_alignments_with_i[header] = column_alignment
-        try:
-            self.__column_alignments_as_list_with_i[column_i] = column_alignment
-            self.__column_types_as_list_with_i[column_i] = column_type
-        except IndexError:
-            self.__column_alignments_as_list_with_i.append(column_alignment)
-            self.__column_types_as_list_with_i.append(column_type)
-                
-    def __get_column_widths(self):
-        sizes = _column_sizes(
-            self.__processed_columns, 
-            show_headers=self.__show_headers
-        )
-        sizes_with_i = _column_sizes(
-            self.__processed_columns_with_i, 
-            show_headers=self.__show_headers
-        )
-        self.__column_widths_as_list = sizes
-        self.__column_widths_as_list_with_i = sizes_with_i
-        for column_i, column in enumerate(self.__columns.items()):
-            header, _ = column
-            self.__column_widths[header] = sizes[column_i]
-        for column_i, column in enumerate(self.__columns_with_i.items()):
-            header, _ = column
-            self.__column_widths_with_i[header] = sizes_with_i[column_i]
-            
     
     def __call_table_objects(self):
         """
@@ -1507,6 +1452,45 @@ class Table(object):
                     )
         
         return rows, rows_with_i
+    
+    def __typify_table(self):
+        for column_i, column in enumerate(self.__columns.items()):
+            self.__tipify_single_column(column, column_i)
+        for column_i, column in enumerate(self.__columns_with_i.items()):
+            self.__tipify_single_column_with_i(column, column_i)
+                
+    def __tipify_single_column(self, column, column_i):
+        header, column_content = column
+        cell_types, column_type, column_alignment = _typify_column(column_content)
+        self.__column_types[header] = column_type
+        self.__cell_types[header] = cell_types
+        self.__column_alignments[header] = column_alignment
+        try:
+            self.__column_alignments_as_list[column_i] = column_alignment
+            self.__column_types_as_list[column_i] = column_type
+        except IndexError:
+            self.__column_alignments_as_list.append(column_alignment)
+            self.__column_types_as_list.append(column_type)
+        
+    def __tipify_single_column_with_i(self, column, column_i):
+        header, column_content = column
+        if column_i == 0:
+            is_index = True
+        else:
+            is_index = False
+        cell_types, column_type, column_alignment = _typify_column(
+            column_content,
+            index_column=is_index
+        )
+        self.__column_types_with_i[header] = column_type
+        self.__cell_types_with_i[header] = cell_types
+        self.__column_alignments_with_i[header] = column_alignment
+        try:
+            self.__column_alignments_as_list_with_i[column_i] = column_alignment
+            self.__column_types_as_list_with_i[column_i] = column_type
+        except IndexError:
+            self.__column_alignments_as_list_with_i.append(column_alignment)
+            self.__column_types_as_list_with_i.append(column_type)
 
     def __wrap_data(self, rows, rows_with_i):
         headers_with_i = self.__headers_with_i
@@ -1545,6 +1529,36 @@ class Table(object):
                 'header': transformed_headers_with_i[i],
                 'data': processed_columns_with_i[i]
             }
+                
+    def __get_column_widths(self):
+        sizes, float_sizes = _column_sizes(
+            self.__processed_columns,
+            column_types=self.__column_types,
+            show_headers=self.__show_headers
+        )
+        sizes_with_i, float_sizes_with_i = _column_sizes(
+            self.__processed_columns_with_i,
+            column_types=self.__column_types_with_i,
+            show_headers=self.__show_headers
+        )
+        self.__column_widths_as_list = sizes
+        self.__column_widths_as_list_with_i = sizes_with_i
+        if float_sizes is not None:
+            self.__float_columns_widths = {
+                **self.__float_columns_widths,
+                **float_sizes
+            }
+        if float_sizes_with_i is not None:
+            self.__float_columns_widths_with_i = {
+                **self.__float_columns_widths_with_i,
+                **float_sizes_with_i
+            }
+        for column_i, column in enumerate(self.__columns.items()):
+            header, _ = column
+            self.__column_widths[header] = sizes[column_i]
+        for column_i, column in enumerate(self.__columns_with_i.items()):
+            header, _ = column
+            self.__column_widths_with_i[header] = sizes_with_i[column_i]
 
     def __parse_data(self):
         pass
@@ -1557,13 +1571,17 @@ class Table(object):
             columns_with_i=table_with_i
         )
         if table_with_i:
+            column_titles = self.__headers_with_i
             column_alignments_list = self.__column_alignments_as_list_with_i
             column_widths_list = self.__column_widths_as_list_with_i
             column_widths = self.__column_widths_with_i
+            float_column_widths = self.__float_columns_widths_with_i
         else:
+            column_titles = self.__headers
             column_alignments_list = self.__column_alignments_as_list
             column_widths_list = self.__column_widths_as_list
             column_widths = self.__column_widths
+            float_column_widths = self.__float_columns_widths
         # Header and body rows get aligned
         aligned_header = _align_headers(
             self.__style_composition,
@@ -1577,11 +1595,13 @@ class Table(object):
         aligned_columns = _align_columns(
             self.__style_composition,
             unaligned_columns,
+            column_titles,  # here the header is used to know the title of the column
             column_alignments_list,
             column_widths_list,
             self.__empty_column_indexes,
             self.__empty_row_indexes,
-            self.__show_empty_columns
+            self.__show_empty_columns,
+            float_column_widths
         )
         aligned_columns = _zip_columns(aligned_columns)
 

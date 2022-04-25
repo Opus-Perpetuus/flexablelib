@@ -1,6 +1,8 @@
 """ CELL WRAPPING AND ADJUSTMENT """
 
+from numpy import left_shift
 from .utils import is_some_instance, is_list
+from .options import FLT_FILTER, INT_FILTER
 
 
 def _add_cell_spacing(cell, left: int, right: int, diff_if_empty: int):
@@ -58,6 +60,72 @@ def _rjust_cell(cell, cell_length, fill_char):
         rjusted = str(cell).rjust(cell_length, fill_char)
 
     return rjusted
+
+
+def fljust(string, sides_widhts, __fillchar=' '):
+    splitted = string.split('.')
+    left_string = splitted[0]
+    right_string = splitted[1]
+    left_width = sides_widhts[0]
+    right_width = sides_widhts[-1]
+    left = left_string.rjust(left_width, __fillchar)
+    right = right_string.ljust(right_width, __fillchar)
+    return '.'.join([left, right])
+
+
+def __fljust_part(cell_part, cell_length, float_column_sizes, fill_char):
+    str_cell = str(cell_part)
+    is_float_number = FLT_FILTER(
+        str_cell
+    ) is not None
+    is_int_number = INT_FILTER(
+        str_cell
+    ) is not None
+    if is_float_number:
+        return fljust(
+            str_cell, 
+            float_column_sizes, 
+            fill_char
+        )
+    if is_int_number:
+        cell_ = str_cell
+        cell_len = len(cell_)
+        left_width = float_column_sizes[0]
+        fixed_left_width = left_width - cell_len
+        right_width = float_column_sizes[-1]
+        fixed_right_width = right_width + float_column_sizes[1]
+        return _add_cell_spacing(
+            str_cell,
+            fixed_left_width,
+            fixed_right_width,
+            0
+        )
+    else:
+        return str_cell.rjust(
+            cell_length, fill_char
+        )
+
+
+def _fljust_cell(cell: str, cell_length, fill_char, float_column_sizes):
+    if is_some_instance(cell, list, tuple):
+        fljusted = list(map(str, cell))
+        for part_i, cell_part in enumerate(fljusted):
+            fljusted[part_i] = __fljust_part(
+                cell_part,
+                cell_length,
+                float_column_sizes,
+                fill_char
+            )
+        fljusted = tuple(fljusted)
+    else:
+        fljusted = __fljust_part(
+            cell,
+            cell_length,
+            float_column_sizes,
+            fill_char
+        )
+            
+    return fljusted
 
 
 def _wrap_cells(headers, data, columns=False):
