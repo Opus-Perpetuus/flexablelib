@@ -1215,8 +1215,9 @@ class Table(object):
                 for _ in range(difference):
                     self.__columns_with_i[I_COL_TIT].append(self.__index_counter)
             self.__columns[column_header] += data
+            self.__columns_with_i[column_header] += data
 
-        return column_header, self.__columns[column_header]
+        return column_header, self.__columns[column_header],  self.__columns_with_i[column_header]
 
     def __adjust_columns_to_row_count(self, rows_added_before=False):
         for header, column_body in self.__columns.items():
