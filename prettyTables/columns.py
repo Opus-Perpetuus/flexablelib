@@ -435,14 +435,17 @@ def _align_columns(style_composition: TableComposition, columns, headers,
             continue
     
         
-def __align_one_header(column, col_width, to_where, margin):
+def __align_one_header(column, col_width, to_where, 
+                       margin, flaot_column_sizes):
     if is_some_instance(column, tuple, list):
         yield tuple(map(
             lambda cell: __align_single_cell(
                 str(cell), 
                 col_width, 
                 to_where, 
-                margin),
+                margin,
+                flaot_column_sizes
+            ),
             column
         ))
     else:
@@ -451,16 +454,36 @@ def __align_one_header(column, col_width, to_where, margin):
 
 def _align_headers(style_composition: TableComposition, headers,
                    col_alignments: List[str], col_widths: List[int],
-                   empty_columns_i: List[int], show_empty: bool):
+                   empty_columns_i: List[int], show_empty: bool,
+                   float_cols_sizes: dict):
     margin = style_composition.margin
-
     for column_i, column in enumerate(headers):
         to_where = col_alignments[column_i]
         col_width = col_widths[column_i]
+        if is_some_instance(column, tuple, list):
+            col_name = ''.join(column)
+        else:
+            col_name = column
+        try:
+            float_column_sizes = float_cols_sizes[col_name]
+        except KeyError:
+            float_column_sizes = None
         if not show_empty and column_i not in empty_columns_i:
-            yield from __align_one_header(column, col_width, to_where, margin)
+            yield from __align_one_header(
+                column, 
+                col_width, 
+                to_where, 
+                margin,
+                float_column_sizes
+            )
         elif show_empty:
-            yield from __align_one_header(column, col_width, to_where, margin)
+            yield from __align_one_header(
+                column, 
+                col_width, 
+                to_where, 
+                margin,
+                float_column_sizes
+            )
         else:
             continue
              

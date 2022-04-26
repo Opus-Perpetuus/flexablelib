@@ -1599,7 +1599,8 @@ class Table(object):
             column_alignments_list,
             column_widths_list,
             self.__empty_column_indexes,
-            self.__show_empty_columns
+            self.__show_empty_columns,
+            float_column_widths
         )
         aligned_header = _zip_columns(aligned_header, headers=True)
         aligned_columns = _align_columns(
