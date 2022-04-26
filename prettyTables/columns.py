@@ -123,8 +123,8 @@ def __is_none_type(column_types: list):
 def __get_column_type(column_types):
     if __is_none_type(column_types):
         return TYPE_NAMES.none_type_
-    if __is_byte_column(column_types):
-        return TYPE_NAMES.bytes_
+    # if __is_byte_column(column_types):
+    #     return TYPE_NAMES.bytes_
     if __is_int_column(column_types):
         return TYPE_NAMES.int_
     if __is_float_column(column_types):
@@ -209,12 +209,20 @@ def __get_float_column_width(column, show_headers):
         else:
             head_size += (len(str(header)))
         
-    def compare_one_side(side_i):
+    def compare_one_side(side_i, sides_len):
         if sides_len[side_i] > max_len_of_sides[side_i]:
                 max_len_of_sides[side_i] = sides_len[side_i]
                 
+    def compare_all_sides():
+        sum_of_len_of_sides = sum(max_len_of_sides)
+        if sum_of_len_of_sides < head_size > 0:
+            max_len_of_sides[0] += head_size - sum_of_len_of_sides
+            sum_of_len_of_sides = sum(max_len_of_sides)
+            
+        return sum_of_len_of_sides
+    
     max_len_of_sides = []
-    for row in column['data']:
+    def __get_sides_len(row):
         row_ = str(row)
         is_float = FLT_FILTER(row_) is not None
         is_int = INT_FILTER(row_) is not None
@@ -241,14 +249,17 @@ def __get_float_column_width(column, show_headers):
             )
         for side_i in range(len(sides_len)):
             try:
-                compare_one_side(side_i)
+                compare_one_side(side_i, sides_len)
             except IndexError:
                 max_len_of_sides.append(sides_len[side_i])
-                
-    sum_of_len_of_sides = sum(max_len_of_sides)
-    if sum_of_len_of_sides < head_size > 0:
-        max_len_of_sides[0] += head_size - sum_of_len_of_sides
-        sum_of_len_of_sides = sum(max_len_of_sides)
+            
+    for row in column['data']:
+        if is_some_instance(row, tuple, list):
+            for sub_row in row:
+                __get_sides_len(sub_row)
+        else:
+            __get_sides_len(row)
+    sum_of_len_of_sides = compare_all_sides()
     
     return head_size, sum_of_len_of_sides, max_len_of_sides
 
@@ -364,7 +375,7 @@ def __align_one_column(column, column_i, col_alignments,
         if not show_empty and row_i not in empty_row_i:
             aligned_column.append(
                 __align_one_column_row(
-                    str(cell), 
+                    cell, 
                     col_width, 
                     to_where, 
                     margin,
@@ -374,7 +385,7 @@ def __align_one_column(column, column_i, col_alignments,
         elif show_empty:
             aligned_column.append(
                 __align_one_column_row(
-                    str(cell), 
+                    cell, 
                     col_width, 
                     to_where, 
                     margin,

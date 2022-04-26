@@ -774,6 +774,7 @@ class Table(object):
         self.__parse_str_numbers = False
         self.__window_size = get_window_size()
         self.__adjust_to_window = True
+        self.__expand_to_window = False  # TODO implement expand_to_window
         self.__auto_wrap_text = False
         self.__expand_body_to = 'r'
         self.__expand_header_to = 'r'
@@ -974,7 +975,11 @@ class Table(object):
     @property
     def index_step(self):
         return self.__i_step
-
+    
+    @property
+    def adjust_to_window(self):
+        return self.__adjust_to_window
+    
     # +----------------------+ SHOW GETTERS +------------------------+
 
     @property
@@ -1067,6 +1072,10 @@ class Table(object):
     @index_step.setter
     def index_step(self, value: int):
         self.__i_step = int(value)
+        
+    @adjust_to_window.setter
+    def adjust_to_window(self, value: bool):
+        self.__adjust_to_window = bool(value)
 
     # +----------------------+ SHOW SETTERS +------------------------+
 
@@ -1605,7 +1614,6 @@ class Table(object):
             float_column_widths
         )
         aligned_columns = _zip_columns(aligned_columns)
-
         # String separators and data rows are joined
         separators: HorizontalComposition = _get_separators(
             self.__style_composition,
