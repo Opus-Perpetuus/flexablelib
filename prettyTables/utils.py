@@ -7,11 +7,20 @@ def float_format(number, decimal_spaces):
 
 
 def get_window_size():
+    """
+    Returns the size of the terminal window.
+    
+    ```
+    tuple(cols, lines)
+    ```
+    """
     try:
-        return os.get_terminal_size()
+        cols, lines =  os.get_terminal_size()
     except OSError:
         import shutil
-        return shutil.get_terminal_size()
+        cols, lines = shutil.get_terminal_size()
+        
+    return cols, lines
 
 
 def is_list(piece):

@@ -1,8 +1,10 @@
 """ CELL WRAPPING AND ADJUSTMENT """
 
-from numpy import left_shift
-from .utils import is_some_instance, is_list
+from calendar import c
+from .utils import is_some_instance
 from .options import FLT_FILTER, INT_FILTER
+
+from textwrap import wrap
 
 
 def _add_cell_spacing(cell, left: int, right: int, diff_if_empty: int):
@@ -182,6 +184,30 @@ def __wrap_cell(cell):
             return ['']
     else:
         return [cell]
+    
+    
+def _apply_wrapping_to_cell(cell, width):
+    if is_some_instance(cell, list, tuple):
+        wrapped = []
+        for element in cell:
+            print(element, width)
+            if width < len(element):
+                wrapped += wrap(
+                    element, 
+                    width, 
+                    drop_whitespace=True
+                )
+            else:
+                wrapped.append(element)
+        return tuple(wrapped), True
+    if width < len(str(cell)):
+        return tuple(wrap(
+            str(cell), 
+            width, 
+            drop_whitespace=True
+        )), True
+    else:
+        return cell, False
 
 
 if __name__ == '__main__':

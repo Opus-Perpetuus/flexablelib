@@ -10,15 +10,30 @@ Print formatted tabular data in different styles
 from .style_compositions import (
     __style_compositions as style_catalogue, 
     HorizontalComposition, 
+    SeparatorLine,
     TableComposition
 )
-from .columns import _column_sizes, _typify_column, _align_columns, _align_headers
-from .table_strings import _get_separators, _get_data_rows, DataRows
+from .columns import (
+    _column_sizes, 
+    _typify_column, 
+    _align_columns, 
+    _align_headers,
+    TYPE_NAMES
+)
+from .table_strings import (
+    _get_separators, 
+    _get_data_rows, 
+    DataRows
+)
+from .cells import (
+    _apply_wrapping_to_cell
+)
 from .utils import (
     get_window_size, 
     is_multi_row,
     ValuePlacer,
-    IndexCounter
+    IndexCounter,
+    is_some_instance
 )
 from .options import (
     NONE_VALUE_REPLACEMENT, 
@@ -26,32 +41,11 @@ from .options import (
     I_COL_TIT, 
     DEFAULT_TABLE_ALIGNMENT
 )
-from copy import deepcopy
 from .cells import _wrap_cells
 from .columns import ALIGNMENST_PER_TYPE as typealings
 
-
-def _zip_columns(columns, headers=False):
-    if headers:
-        row = tuple(map(lambda x: x, columns))
-        if is_multi_row(row):
-            return tuple(zip(*row))
-        else:
-            return row
-    else:
-        half_checked_rows = zip(*columns)
-        sub_zipped = tuple(map(lambda s_row: tuple(zip(*s_row)) if is_multi_row(s_row) else s_row,
-                               half_checked_rows))
-        return sub_zipped
-
-        
-def _ndict(key, value):
-    """
-    Simply a new dict out of key and value
-    """
-    new_dict = {}
-    new_dict[key] = value
-    return new_dict
+from copy import deepcopy
+from textwrap import wrap
 
 
 class Table(object):
@@ -772,7 +766,6 @@ class Table(object):
         self.__index_counter = IndexCounter()
         self.__parse_numbers = True
         self.__parse_str_numbers = False
-        self.__window_size = get_window_size()
         self.__adjust_to_window = True
         self.__expand_to_window = False  # TODO implement expand_to_window
         self.__auto_wrap_text = False
@@ -797,7 +790,9 @@ class Table(object):
         # +------------------+ TABLE CHARACTERISTICS +-------------------+
         self.__show_headers = True
         self.__table_height = 0
+        self.__table_height_with_i = 0
         self.__table_width = 0
+        self.__table_width_with_i = 0
         self.__real_row_count = 0
         self.__real_column_count = 0
         self.__line_spacing = 0
@@ -834,6 +829,8 @@ class Table(object):
         self.__rows_with_i = []
         self.__processed_columns = {}
         self.__processed_columns_with_i = {}
+        self.__semi_processed_columns = {}
+        self.__semi_processed_columns_with_i = {}
         self.__processed_headers = []
         self.__processed_headers_with_i = []
         self.__processed_rows = []
@@ -853,6 +850,49 @@ class Table(object):
         return self.compose()
 
     # end +-----------------------------+ METHODS +-----------------------------+ end
+    # +-----------------------------------------------------------------------------+
+
+
+    # +-----------------------------------------------------------------------------+
+    # start +-----------------------+ STATIC METHODS +------------------------+ start
+        
+    @staticmethod
+    def __check_if_none_and_get_len(value):
+        if value is None:
+            value_len = len(NONE_VALUE_REPLACEMENT)
+        else:
+            value_len = len(value)
+        return value_len
+    
+    @staticmethod
+    def __zip_columns(columns, headers=False):
+        if headers:
+            row = tuple(map(lambda x: x, columns))
+            if is_multi_row(row):
+                return tuple(zip(*row))
+            else:
+                return row
+        else:
+            half_checked_rows = zip(*columns)
+            sub_zipped = tuple(map(
+                lambda s_row: tuple(
+                    zip(*s_row)
+                ) if is_multi_row(
+                    s_row
+                ) else s_row,half_checked_rows
+            ))
+            return sub_zipped
+
+    @staticmethod
+    def __ndict(key, value):
+        """
+        Simply a new dict out of key and value
+        """
+        new_dict = {}
+        new_dict[key] = value
+        return new_dict
+    
+    # end +-------------------------+ STATIC METHODS +--------------------------+ end
     # +-----------------------------------------------------------------------------+
 
 
@@ -1100,10 +1140,10 @@ class Table(object):
 
 
     # +-----------------------------------------------------------------------------+
-    # start +-------------------------+ PRIVATE PROPERTIES +--------------------------+ start
+    # start +---------------------+ PRIVATE PROPERTIES +----------------------+ start
 
     @property
-    def __style_composition(self):
+    def __style_composition(self) -> TableComposition:
         return style_catalogue.__getattribute__(self.__checked_style_name)
 
     @property
@@ -1113,8 +1153,9 @@ class Table(object):
         else:
             return DEFAULT_STYLE
 
+    # FIX empty column and row hidding working weirdly
     @property
-    def __empty_row_indexes(self):  # FIX make empty row indexes work with missing val (only works with None)
+    def __empty_row_indexes(self):
         empty_rows = []
         for i, row in enumerate(self.__rows):
             if row.count(self.__value_placer) == len(row):
@@ -1122,7 +1163,7 @@ class Table(object):
         return empty_rows
 
     @property
-    def __empty_column_indexes(self):  # FIX make empty column indexes work with missing val (doesn't seem to work)
+    def __empty_column_indexes(self): 
         none_type_columns = []
         for i, type_name in enumerate(self.__column_types_as_list):
             if type_name == 'NoneType':
@@ -1168,9 +1209,9 @@ class Table(object):
         else:
             return self.__columns
         
-
     # end +-----------------------+ PRIVATE PROPERTIES +------------------------+ end
     # +-----------------------------------------------------------------------------+
+
 
     # +-----------------------------------------------------------------------------+
     # start +------------------------+ COLUMN ADDING +------------------------+ start
@@ -1306,8 +1347,8 @@ class Table(object):
 
     def add_row(self, data=None):
         """
-        Add a s_row to the table. Can be left empty to add
-        an empty s_row.
+        Add a row to the table. Can be left empty to add
+        an empty row.
 
         ``data``: Data provided as any iterable
         """
@@ -1414,11 +1455,137 @@ class Table(object):
             # self.__parse_data()  # TODO add parsing
             rows, rows_with_i = self.__call_table_objects()
             self.__typify_table()
-            self.__wrap_data(rows, rows_with_i)
-            self.__get_column_widths()
+            self.__wrap_data(
+                rows, 
+                rows_with_i, 
+                semi=True
+            )
+            self.__get_column_widths(semi=True)
+            table_width = self.__get_string_table_dimensions()
+            rows, rows_wtih_i = self.__check_columns_size(
+                table_width, 
+                rows, 
+                rows_with_i
+            )
+            self.__wrap_data(
+                rows, 
+                rows_with_i, 
+                semi=False
+            )
+            self.__get_column_widths(semi=False)
 
-        return self.__form_string(table_with_i=self.__show_index)
+        return self.__form_string(
+            table_with_i=self.__show_index
+        )
+
+    def __get_string_table_dimensions(self):
+        one_column_margin = self.__style_composition.margin * 2
+        all_columns_margin = one_column_margin * self.column_count
+        vertical_body_lines: SeparatorLine = (
+            self.__style_composition.vertical_table_body_lines
+        )
+        separator_count = self.__column_count - 1
+        left_len = self.__check_if_none_and_get_len(vertical_body_lines.left)
+        right_len = self.__check_if_none_and_get_len(vertical_body_lines.right)
+        middle_len = self.__check_if_none_and_get_len(vertical_body_lines.middle)   
+        if not self.__show_index:     
+            separators_of_table = sum([
+                left_len,
+                (middle_len * separator_count),
+                right_len
+            ])
+            table_width = sum([
+                *self.__column_widths_as_list,
+                all_columns_margin,
+                separators_of_table
+            ])
+            return table_width
+        else:
+            separators_of_table_with_i = sum([
+                left_len,
+                middle_len * separator_count,
+                right_len
+            ])
+            table_width_with_i = sum([
+                *self.__column_widths_as_list_with_i,
+                all_columns_margin + one_column_margin,
+                separators_of_table_with_i
+            ])
+            return table_width_with_i
+        
+    def __check_columns_size(self, table_width: int, rows, rows_with_i):
+        adjust = False
+        difference = 0
+        if self.__adjust_to_window:
+            cols, lines = get_window_size()
+            if cols < table_width:
+                difference = table_width - cols
+                adjust = True
+        if adjust:
+            if self.__show_index:
+                column_types_as_list = self.__column_types_as_list_with_i
+                column_widths = self.__column_widths_with_i
+                column_widths_as_list = self.__column_widths_as_list_with_i
+            else:
+                column_types_as_list = self.__column_types_as_list
+                column_widths = self.__column_widths
+                column_widths_as_list = self.__column_widths_as_list
+            rows, rows_with_i = self.__adjust_column_widths(
+                difference,
+                column_types_as_list,
+                column_widths_as_list,
+                column_widths,
+                rows,
+                rows_with_i
+            )
+        
+        return rows, rows_with_i
     
+    def __adjust_column_widths(self, difference: int, column_types_as_list, 
+                               column_widths_as_list, column_widths,
+                               rows, rows_with_i):
+        columns = list(map(list, zip(*rows)))
+        columns_with_i = list(map(list, zip(*rows_with_i)))
+        string_cols = []
+        for col_i, col_type in enumerate(column_types_as_list):
+            if col_type == TYPE_NAMES.str_:
+                string_cols.append(column_widths_as_list[col_i])
+        for col_i, col_width in enumerate(string_cols):
+            new_col_width = col_width - difference
+            columns, columns_with_i = self.__auto_wrap_column(
+                col_i, 
+                new_col_width,
+                columns,
+                columns_with_i
+            )
+        if len(string_cols) > 0:
+            return list(zip(*columns)), list(zip(*columns_with_i))
+        else:
+            rows, rows_with_i
+        
+    def __auto_wrap_column(self, column_i, new_width, columns, columns_with_i):
+        col_title = self.__headers[column_i]
+        self.__column_widths[col_title] = new_width
+        self.__column_widths_with_i[col_title] = new_width
+        self.__column_widths_as_list[column_i] = new_width
+        self.__column_widths_as_list_with_i[column_i + 1] = new_width
+        self.__headers[column_i] = '\n'.join(
+            wrap(
+                str(self.__headers[column_i]), 
+                new_width
+            )
+        )
+        for row_i, row in enumerate(columns[column_i]):
+            columns[column_i][row_i] = (
+                '\n'.join(wrap(str(row), new_width))
+            )
+        for row_i, row in enumerate(columns_with_i[column_i + 1]):
+            columns_with_i[column_i + 1][row_i] = (
+                '\n'.join(wrap(str(row), new_width))
+            )
+        
+        return columns, columns_with_i
+
     def __call_table_objects(self):
         """
         This is to call the ``__call__`` method of the 
@@ -1502,7 +1669,7 @@ class Table(object):
             self.__column_alignments_as_list_with_i.append(column_alignment)
             self.__column_types_as_list_with_i.append(column_type)
 
-    def __wrap_data(self, rows, rows_with_i):
+    def __wrap_data(self, rows, rows_with_i, semi):
         headers_with_i = self.__headers_with_i
         headers = self.__headers
         processed_headers, processed_rows = _wrap_cells(
@@ -1529,25 +1696,46 @@ class Table(object):
         self.__processed_rows_with_i = processed_rows_with_i
         for i, column in enumerate(self.__columns.items()):
             header, data = column
-            self.__processed_columns[header] = {
-                'header': transformed_headers[i],
-                'data': processed_columns[i]
-            }
+            if semi:
+                self.__semi_processed_columns[header] = {
+                    'header': transformed_headers[i],
+                    'data': processed_columns[i]
+                }
+            else:
+                self.__processed_columns[header] = {
+                    'header': transformed_headers[i],
+                    'data': processed_columns[i]
+                }
         for i, column in enumerate(self.__columns_with_i.items()):
             header, data = column
-            self.__processed_columns_with_i[header] = {
-                'header': transformed_headers_with_i[i],
-                'data': processed_columns_with_i[i]
-            }
+            if semi:
+                self.__semi_processed_columns_with_i[header] = {
+                    'header': transformed_headers_with_i[i],
+                    'data': processed_columns_with_i[i]
+                }
+            else:
+                self.__processed_columns_with_i[header] = {
+                    'header': transformed_headers_with_i[i],
+                    'data': processed_columns_with_i[i]
+                }
                 
-    def __get_column_widths(self):
+    def __get_column_widths(self, semi):
         sizes, float_sizes = _column_sizes(
-            self.__processed_columns,
+            processed_columns=(
+                self.__semi_processed_columns
+            ) if semi else (
+                self.__processed_columns
+            ),
             column_types=self.__column_types,
             show_headers=self.__show_headers
         )
+        
         sizes_with_i, float_sizes_with_i = _column_sizes(
-            self.__processed_columns_with_i,
+            processed_columns=(
+                self.__semi_processed_columns_with_i
+            ) if semi else (
+                self.__processed_columns_with_i
+            ),
             column_types=self.__column_types_with_i,
             show_headers=self.__show_headers
         )
@@ -1602,7 +1790,7 @@ class Table(object):
             self.__show_empty_columns,
             float_column_widths
         )
-        aligned_header = _zip_columns(aligned_header, headers=True)
+        aligned_header = self.__zip_columns(aligned_header, headers=True)
         aligned_columns = _align_columns(
             self.__style_composition,
             unaligned_columns,
@@ -1614,7 +1802,7 @@ class Table(object):
             self.__show_empty_columns,
             float_column_widths
         )
-        aligned_columns = _zip_columns(aligned_columns)
+        aligned_columns = self.__zip_columns(aligned_columns)
         # String separators and data rows are joined
         separators: HorizontalComposition = _get_separators(
             self.__style_composition,
