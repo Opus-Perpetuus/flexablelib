@@ -106,34 +106,45 @@ def __convert_single_row_to_string(left: str, middle: str, right: str, row):
 
 
 def _get_data_rows(style_composition: TableComposition, 
-                   header: tuple, body: tuple) -> DataRows:
-    header_lines: SeparatorLine = style_composition.vertical_header_lines
-    header_left = __check_if_not_none(header_lines.left)
-    header_middle = __check_if_not_none(header_lines.middle)
-    header_right = __check_if_not_none(header_lines.right)
+                   header: tuple, body: tuple, show_headers: bool,
+                   empty_rows_i: List[int], show_empty_rows: bool) -> DataRows:
+    if show_headers:
+        header_lines: SeparatorLine = style_composition.vertical_header_lines
+        header_left = __check_if_not_none(header_lines.left)
+        header_middle = __check_if_not_none(header_lines.middle)
+        header_right = __check_if_not_none(header_lines.right)
+        str_header = __convert_single_row_to_string(
+            header_left, 
+            header_middle, 
+            header_right, 
+            header
+        )
+    else:
+        str_header = None
 
     body_lines: SeparatorLine = style_composition.vertical_table_body_lines
     body_left = __check_if_not_none(body_lines.left)
     body_middle = __check_if_not_none(body_lines.middle)
     body_right = __check_if_not_none(body_lines.right)
-
-    str_header = __convert_single_row_to_string(
-        header_left, 
-        header_middle, 
-        header_right, 
-        header
-    )
-    strs_body = tuple(map(
-        lambda row: __convert_single_row_to_string(
+    strs_body = []
+    
+    def __get_body_row(row):
+        return __convert_single_row_to_string(
             body_left, 
             body_middle, 
             body_right, 
             row
-        ),
-        body
-    ))
+        )
     
-    return DataRows(str_header, strs_body)
+    for row_i, row in enumerate(body):
+        if not show_empty_rows and row_i not in empty_rows_i:
+            strs_body.append(__get_body_row(row))
+        elif show_empty_rows:
+            strs_body.append(__get_body_row(row))
+        else:
+            pass
+    
+    return DataRows(str_header, tuple(strs_body))
 
 
 if __name__ == '__main__':

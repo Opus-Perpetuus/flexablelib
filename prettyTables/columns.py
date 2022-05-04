@@ -366,71 +366,50 @@ def __align_one_column_row(cell, col_width, to_where,
 
 
 def __align_one_column(column, column_i, col_alignments, 
-                       col_widths, margin, show_empty, 
-                       empty_row_i, float_column_sizes: dict = None):
+                       col_widths, margin, float_column_sizes: dict = None):
     aligned_column = list()
     to_where = col_alignments[column_i]
     col_width = col_widths[column_i]
     for row_i, cell in enumerate(column):
-        if not show_empty and row_i not in empty_row_i:
-            aligned_column.append(
-                __align_one_column_row(
-                    cell, 
-                    col_width, 
-                    to_where, 
-                    margin,
-                    float_column_sizes
-                )
+        aligned_column.append(
+            __align_one_column_row(
+                cell, 
+                col_width, 
+                to_where, 
+                margin,
+                float_column_sizes
             )
-        elif show_empty:
-            aligned_column.append(
-                __align_one_column_row(
-                    cell, 
-                    col_width, 
-                    to_where, 
-                    margin,
-                    float_column_sizes
-                )
-            )
-        else:
-            continue
+        )
 
     yield tuple(aligned_column)
 
 
 def _align_columns(style_composition: TableComposition, columns, headers,
                    col_alignments: List[str], col_widths: List[int],
-                   empty_columns_i: List[int], empty_rows_i: List[int],
-                   show_empty: bool, float_cols_sizes: dict):
+                   empty_columns_i: List[int], show_empty: bool, 
+                   float_cols_sizes: dict):
+    
     margin = style_composition.margin
-    for column_i, column in enumerate(columns):
+    def __align_column(column, column_i):
         header = headers[column_i]
         try:
             float_column_sizes = float_cols_sizes[header]
         except KeyError:
             float_column_sizes = None
+        yield from __align_one_column(
+            column, 
+            column_i, 
+            col_alignments, 
+            col_widths, 
+            margin,
+            float_column_sizes
+        )
+    
+    for column_i, column in enumerate(columns):
         if not show_empty and column_i not in empty_columns_i:
-            yield from __align_one_column(
-                column, 
-                column_i, 
-                col_alignments, 
-                col_widths, 
-                margin,
-                show_empty,
-                empty_rows_i,
-                float_column_sizes
-            )
+            yield from __align_column(column, column_i)
         elif show_empty:
-            yield from __align_one_column(
-                column, 
-                column_i, 
-                col_alignments, 
-                col_widths, 
-                margin,
-                show_empty,
-                empty_rows_i,
-                float_column_sizes
-            )
+            yield from __align_column(column, column_i)
         else:
             continue
     

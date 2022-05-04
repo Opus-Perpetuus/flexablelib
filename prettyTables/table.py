@@ -1804,7 +1804,6 @@ class Table(object):
             column_alignments_list,
             column_widths_list,
             self.__empty_column_indexes,
-            self.__empty_row_indexes,
             self.__show_empty_columns,
             float_column_widths
         )
@@ -1819,7 +1818,10 @@ class Table(object):
         data_rows: DataRows = _get_data_rows(
             self.__style_composition, 
             aligned_header, 
-            aligned_columns
+            aligned_columns,
+            self.__show_headers,
+            self.__empty_row_indexes,
+            self.__show_empty_rows,
         )
 
         # Table string is formed
