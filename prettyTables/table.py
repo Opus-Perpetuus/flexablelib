@@ -1462,7 +1462,7 @@ class Table(object):
             )
             self.__get_column_widths(semi=True)
             table_width = self.__get_string_table_dimensions()
-            rows, rows_wtih_i = self.__check_columns_size(
+            rows, rows_with_i = self.__check_columns_size(
                 table_width, 
                 rows, 
                 rows_with_i
@@ -1572,6 +1572,12 @@ class Table(object):
         self.__headers[column_i] = '\n'.join(
             wrap(
                 str(self.__headers[column_i]), 
+                new_width
+            )
+        )
+        self.__headers_with_i[column_i + 1] = '\n'.join(
+            wrap(
+                str(self.__headers_with_i[column_i + 1]), 
                 new_width
             )
         )
