@@ -907,6 +907,13 @@ class Table(object):
     @property
     def headers(self):
         return self.__headers
+    
+    @property
+    def internal_headers(self):
+        if self.__show_index:
+            return self.__headers_with_i
+        else:
+            return self.__headers
         
     @property
     def rows(self):
@@ -1053,6 +1060,7 @@ class Table(object):
     # @headers.setter
     # def headers(self, value: list):
     #     self.__headers = [] if value is None else value
+    #     self.__headers_with_i = [] if value is None else [I_COL_TIT, *value]
 
     @style_name.setter
     def style_name(self, value):
@@ -1267,7 +1275,11 @@ class Table(object):
             self.__columns[column_header] += data
             self.__columns_with_i[column_header] += data
 
-        return column_header, self.__columns[column_header],  self.__columns_with_i[column_header]
+        return (
+            column_header, 
+            self.__columns[column_header],  
+            self.__columns_with_i[column_header]
+        )
 
     def __adjust_columns_to_row_count(self, rows_added_before=False):
         for header, column_body in self.__columns.items():
@@ -1276,30 +1288,31 @@ class Table(object):
                 if rows_added_before:
                     [self.__columns[header].insert(0, self.__value_placer) 
                      for _ in range(difference)]
+                    [self.__columns_with_i[header].insert(0, self.__value_placer) 
+                     for _ in range(difference)]
                 else:
                     self.__columns[header] += [
                         self.__value_placer 
                         for _ in range(difference)
                     ]
-        for header, column_body in self.__columns_with_i.items():
-            if len(column_body) < self.__real_row_count:
-                difference = self.__real_row_count - len(column_body)
-                if rows_added_before:
-                    [self.__columns_with_i[header].insert(0, self.__value_placer) 
-                     for _ in range(difference)]
-                else:
                     self.__columns_with_i[header] += [
                         self.__value_placer 
                         for _ in range(difference)
                     ]
-
+            
     def __transpose_column_to_rows(self, data):
         for column_i in range(self.__checked_real_column_count):
             for row_i in range(self.__real_row_count):
                 if data is None:
-                    self.__distribute_empty_column_to_rows(row_i, column_i)
+                    self.__distribute_empty_column_to_rows(
+                        row_i, 
+                        column_i
+                    )
                 else:
-                    self.__distribute_column_to_rows(row_i, column_i, data)
+                    self.__distribute_column_to_rows(
+                        row_i, 
+                        column_i, 
+                        data)
 
     def __distribute_empty_column_to_rows(self, row_i, column_i):
         # +1 because column count starts from 1
@@ -1319,13 +1332,11 @@ class Table(object):
         is_last_column = lef_side == self.__checked_real_column_count
         if is_last_column:
             try:
-                self.__rows[row_i].append(data[row_i])
-                self.__rows_with_i[row_i].append(data[row_i])
+                value_to_add = data[row_i]
             except IndexError:
-                self.__rows[row_i].append(self.__value_placer)
-                if len(self.__rows_with_i[row_i]) == 0:
-                    self.__rows_with_i[row_i].append(self.__index_counter)
-                self.__rows_with_i[row_i].append(self.__value_placer)
+                value_to_add = self.__value_placer
+            self.__rows[row_i].append(value_to_add)
+            self.__rows_with_i[row_i].append(value_to_add)
         else:
             self.__fill_row_missing_values_from_column(row_i, column_i)
 
@@ -1398,7 +1409,7 @@ class Table(object):
     def __check_data_and_fill_last_row(self, data):
         added_columns_to_count = None
         if len(data) > self.__checked_real_column_count:
-            added_columns_to_count = len(data) - self.__checked_real_column_count
+            added_columns_to_count = len(data) - self.column_count
             self.__real_column_count += added_columns_to_count
         for column_i in range(self.__checked_real_column_count):
             try:
