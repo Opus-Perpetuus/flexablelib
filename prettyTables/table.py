@@ -1301,57 +1301,24 @@ class Table(object):
                     ]
             
     def __transpose_column_to_rows(self, data):
-        for column_i in range(self.__checked_real_column_count):
-            for row_i in range(self.__real_row_count):
-                if data is None:
-                    self.__distribute_empty_column_to_rows(
-                        row_i, 
-                        column_i
-                    )
-                else:
-                    self.__distribute_column_to_rows(
-                        row_i, 
-                        column_i, 
-                        data)
+        for row_i in range(self.__real_row_count):
+            self.__distribute_column_to_rows(
+                row_i,
+                data
+            )
 
-    def __distribute_empty_column_to_rows(self, row_i, column_i):
-        # +1 because column count starts from 1
-        lef_side = column_i + 1 + (1 if self.__show_index else 0)
-        is_last_column = lef_side == self.__checked_real_column_count
-        if is_last_column:  
-            self.__rows[row_i].append(self.__value_placer)
-            if len(self.__rows_with_i[row_i]) == 0:
-                self.__rows_with_i[row_i].append(self.__index_counter)
-            self.__rows_with_i[row_i].append(self.__value_placer)
-        else:
-            self.__fill_row_missing_values_from_column(row_i, column_i)
-
-    def __distribute_column_to_rows(self, row_i, column_i, data):
-        # +1 because column count starts from 1
-        lef_side = column_i + 1 + (1 if self.__show_index else 0)
-        is_last_column = lef_side == self.__checked_real_column_count
-        if is_last_column:
-            try:
-                value_to_add = data[row_i]
-            except IndexError:
-                value_to_add = self.__value_placer
-            self.__rows[row_i].append(value_to_add)
-            self.__rows_with_i[row_i].append(value_to_add)
-        else:
-            self.__fill_row_missing_values_from_column(row_i, column_i)
-
-    def __fill_row_missing_values_from_column(self, row_i, column_i):
+    def __distribute_column_to_rows(self, row_i, data):
         try:
-            self.__rows[row_i][column_i]
-            self.__rows_with_i[row_i][column_i]
-        except IndexError:
-            self.__rows[row_i].append(self.__value_placer)
-            if len(self.__rows_with_i[row_i]) == 0:
-                self.__rows_with_i[row_i].append(self.__index_counter)
-            self.__rows_with_i[row_i].append(self.__value_placer)
-
+            value_to_add = data[row_i]
+            # print(data)
+        except (IndexError, TypeError):
+            value_to_add = self.__value_placer
+        self.__rows[row_i].append(value_to_add)
+        self.__rows_with_i[row_i].append(value_to_add)
+        
     # end +--------------------------+ COLUMN ADDING +--------------------------+ end
     # +-----------------------------------------------------------------------------+
+
 
     # +-----------------------------------------------------------------------------+
     # start +-------------------------+ ROW ADDING +--------------------------+ start
@@ -1386,7 +1353,7 @@ class Table(object):
             [self.__add_column_header(None) for _ in range(count_of_new_headers)]
         for row_i in range(self.__real_row_count):
             if len(self.__rows[row_i]) < self.__checked_real_column_count:
-                difference = self.__checked_real_column_count - len(self.__rows[row_i])
+                difference = self.__real_column_count - len(self.__rows[row_i])
                 for _ in range(difference):
                     self.__rows[row_i].append(self.__value_placer)
                     self.__rows_with_i[row_i].append(self.__value_placer)
