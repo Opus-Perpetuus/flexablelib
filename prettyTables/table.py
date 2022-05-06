@@ -799,9 +799,13 @@ class Table(object):
         self.__cell_types = {}
         self.__cell_types_with_i = {I_COL_TIT: []}
         self.__column_types = {}
-        self.__column_types_with_i = {I_COL_TIT: 'int'}
+        self.__column_types_with_i = {
+            I_COL_TIT: TYPE_NAMES.int_
+        }
         self.__column_types_as_list = []
         self.__column_types_as_list_with_i = []
+        self.__column_i_per_type = {}
+        self.__column_i_per_type_with_i = {}
         self.__float_columns_widths = {}
         self.__float_columns_widths_with_i = {}
         self.__column_widths = {}
@@ -810,7 +814,9 @@ class Table(object):
         self.__column_widths_as_list_with_i = []
         self.__table_alignment = 'l'
         self.__column_alignments = {}
-        self.__column_alignments_with_i = {I_COL_TIT: typealings['int']}
+        self.__column_alignments_with_i = {
+            I_COL_TIT: typealings[TYPE_NAMES.int_]
+        }
         self.__column_alignments_as_list = []
         self.__column_alignments_as_list_with_i = []
         self.__row_alignments = {}
@@ -1500,39 +1506,45 @@ class Table(object):
                 difference = table_width - cols
                 adjust = True
         if adjust:
-            if self.__show_index:
-                column_types_as_list = self.__column_types_as_list_with_i
-                column_widths = self.__column_widths_with_i
-                column_widths_as_list = self.__column_widths_as_list_with_i
-            else:
-                column_types_as_list = self.__column_types_as_list
-                column_widths = self.__column_widths
-                column_widths_as_list = self.__column_widths_as_list
             rows, rows_with_i = self.__adjust_column_widths(
                 difference,
-                column_types_as_list,
-                column_widths_as_list,
-                column_widths,
-                rows,
+                rows, 
                 rows_with_i
             )
         
         return rows, rows_with_i
     
-    def __adjust_column_widths(self, difference: int, column_types_as_list, 
-                               column_widths_as_list, column_widths,
-                               rows, rows_with_i):
+    def __get_amounts_to_reduce(self, difference: int, amount_of_cols: int):
+        amnt_to_reduce_per_column = []
+        while difference > 0:
+            for column_i in range(amount_of_cols):
+                if difference > 0:
+                    try:
+                        amnt_to_reduce_per_column[column_i] += 1
+                    except IndexError:
+                        amnt_to_reduce_per_column.append(1)
+                    difference -= 1
+                else:
+                    break
+        
+        return amnt_to_reduce_per_column
+    
+    def __adjust_column_widths(self, difference: int, rows, rows_with_i):
+        if self.__show_index:
+            string_cols = self.__column_i_per_type_with_i[TYPE_NAMES.str_]
+            pass
+        else:
+            string_cols = self.__column_i_per_type[TYPE_NAMES.str_]
         columns = list(map(list, zip(*rows)))
         columns_with_i = list(map(list, zip(*rows_with_i)))
-        string_cols = []
-        for col_i, col_type in enumerate(column_types_as_list):
-            if col_type == TYPE_NAMES.str_:
-                string_cols.append(column_widths_as_list[col_i])
-        for col_i, col_width in enumerate(string_cols):
-            new_col_width = col_width - difference
+        to_reduce_per_col = self.__get_amounts_to_reduce(
+            difference,
+            len(string_cols)
+        )
+        for i_amount_to_reduce, col_i in enumerate(string_cols):
             columns, columns_with_i = self.__auto_wrap_column(
                 col_i, 
-                new_col_width,
+                to_reduce_per_col[i_amount_to_reduce],
                 columns,
                 columns_with_i
             )
@@ -1541,32 +1553,38 @@ class Table(object):
         else:
             rows, rows_with_i
         
-    def __auto_wrap_column(self, column_i, new_width, columns, columns_with_i):
+    def __auto_wrap_column(self, column_i, to_reduce, columns, columns_with_i):
         col_title = self.__headers[column_i]
-        self.__column_widths[col_title] = new_width
-        self.__column_widths_with_i[col_title] = new_width
-        self.__column_widths_as_list[column_i] = new_width
-        self.__column_widths_as_list_with_i[column_i + 1] = new_width
-        self.__headers[column_i] = '\n'.join(
-            wrap(
-                str(self.__headers[column_i]), 
-                new_width
+        if self.__show_index:
+            new_width = sum([
+                self.__column_widths_with_i[col_title],
+                -to_reduce
+            ])
+            self.__headers_with_i[column_i + 1] = '\n'.join(
+                wrap(
+                    str(self.__headers_with_i[column_i + 1]), 
+                    new_width
+                )
             )
-        )
-        self.__headers_with_i[column_i + 1] = '\n'.join(
-            wrap(
-                str(self.__headers_with_i[column_i + 1]), 
-                new_width
+            for row_i, row in enumerate(columns_with_i[column_i + 1]):
+                columns_with_i[column_i + 1][row_i] = (
+                    '\n'.join(wrap(str(row), new_width))
+                )
+        else:
+            new_width = sum([
+                self.__column_widths[col_title],
+                -to_reduce
+            ])
+            self.__headers[column_i] = '\n'.join(
+                wrap(
+                    str(self.__headers[column_i]), 
+                    new_width
+                )
             )
-        )
-        for row_i, row in enumerate(columns[column_i]):
-            columns[column_i][row_i] = (
-                '\n'.join(wrap(str(row), new_width))
-            )
-        for row_i, row in enumerate(columns_with_i[column_i + 1]):
-            columns_with_i[column_i + 1][row_i] = (
-                '\n'.join(wrap(str(row), new_width))
-            )
+            for row_i, row in enumerate(columns[column_i]):
+                columns[column_i][row_i] = (
+                    '\n'.join(wrap(str(row), new_width))
+                )
         
         return columns, columns_with_i
 
@@ -1623,6 +1641,11 @@ class Table(object):
     def __tipify_single_column(self, column, column_i):
         header, column_content = column
         cell_types, column_type, column_alignment = _typify_column(column_content)
+        try:
+            self.__column_i_per_type[column_type].append(column_i)
+        except KeyError:
+            self.__column_i_per_type[column_type] = []
+            self.__column_i_per_type[column_type].append(column_i)
         self.__column_types[header] = column_type
         self.__cell_types[header] = cell_types
         self.__column_alignments[header] = column_alignment
@@ -1643,6 +1666,11 @@ class Table(object):
             column_content,
             index_column=is_index
         )
+        try:
+            self.__column_i_per_type_with_i[column_type].append(column_i)
+        except KeyError:
+            self.__column_i_per_type_with_i[column_type] = []
+            self.__column_i_per_type_with_i[column_type].append(column_i)
         self.__column_types_with_i[header] = column_type
         self.__cell_types_with_i[header] = cell_types
         self.__column_alignments_with_i[header] = column_alignment
