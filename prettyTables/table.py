@@ -1450,7 +1450,6 @@ class Table(object):
             )
             self.__get_column_widths(semi=True)
             table_width = self.__get_string_table_dimensions()
-            print('table_width (1456): ', table_width)
             rows, rows_with_i = self.__check_columns_size(
                 table_width, 
                 rows, 
@@ -1506,7 +1505,6 @@ class Table(object):
         adjust = False
         difference = 0
         console_cols, console_lines = get_window_size()
-        print('console_cols (1509): ', console_cols)
         if console_cols < table_width:
             difference = table_width - console_cols
             adjust = True
@@ -1550,9 +1548,7 @@ class Table(object):
             difference,
             self.__checked_real_column_count
         )
-        print('to_reduce_per_col (1547): ', to_reduce_per_col)
         for col_i , to_reduce in enumerate(to_reduce_per_col):
-            print('difference (1456): ', difference)
             auto_wrapped = self.__adjust_column_to_window(
                 col_i, 
                 to_reduce,
