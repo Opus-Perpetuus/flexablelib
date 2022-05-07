@@ -7,7 +7,6 @@ Print formatted tabular data in different styles
 # Main Class.
 # Here the whole table is formed
 
-from numpy import column_stack
 from .style_compositions import (
     __style_compositions as style_catalogue, 
     HorizontalComposition, 
