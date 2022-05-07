@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [1.1.3](https://github.com/Kyostenas/prettyTables/compare/v1.1.2...v1.1.3) (2022-05-07)
+
+
+### Bug Fixes
+
+* more accidental imports ([25e4c88](https://github.com/Kyostenas/prettyTables/commit/25e4c88e0feab8f154547ae159d0d7d8fff0750b))
+
 ### [1.1.2](https://github.com/Kyostenas/prettyTables/compare/v1.1.1...v1.1.2) (2022-05-07)
 
 
