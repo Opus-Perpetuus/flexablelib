@@ -30,7 +30,7 @@ TypeNames = namedtuple(
         'index_counter_',
         'value_placer_',
     ]
-) 
+)
 
 
 TYPE_NAMES = TypeNames(
@@ -43,6 +43,23 @@ TYPE_NAMES = TypeNames(
     index_counter_=IndexCounter.__name__,
     value_placer_=ValuePlacer.__name__,
 )
+
+
+ALIGNMENTS_PER_TYPE = {
+    TYPE_NAMES.bool_: 'r',
+    TYPE_NAMES.str_: 'l',
+    TYPE_NAMES.int_: 'r',
+    TYPE_NAMES.float_: 'f',
+    TYPE_NAMES.bytes_: 'b',
+    TYPE_NAMES.none_type_: 'l',
+}
+
+
+CAN_WRAP_TYPES = [
+    TYPE_NAMES.str_,
+    TYPE_NAMES.none_type_,
+    TYPE_NAMES.value_placer_
+]
 
 
 def __check_for_types_in_column(column_types: list, 
@@ -135,16 +152,6 @@ def __get_column_type(column_types):
         return TYPE_NAMES.str_
     else:
         return TYPE_NAMES.none_type_
-
-
-ALIGNMENST_PER_TYPE = {
-    'bool': 'r',
-    'str': 'l',
-    'int': 'r',
-    'float': 'f',
-    'bytes': 'b',
-    'NoneType': 'l',
-}
 
 
 def __get_single_column_size(column, show_headers):
@@ -313,7 +320,7 @@ def _typify_column(column, index_column=False):  # TODO make typify work with mi
             identified_types.append(type(None).__name__)
 
     column_type = __get_column_type(identified_types)
-    column_alignment = ALIGNMENST_PER_TYPE[column_type]
+    column_alignment = ALIGNMENTS_PER_TYPE[column_type]
 
     return identified_types, column_type, column_alignment
 

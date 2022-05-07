@@ -1,8 +1,8 @@
 """
 OPTIONS
 
-some parameters for the creation of styles
-and formatting.
+some parameters for the creation of styles,
+formatting, and other options
 """
 
 import re
@@ -19,3 +19,4 @@ I_COL_TIT = 'i'  # INDEX COLUMN TITLE
 DEFAULT_TABLE_ALIGNMENT = 'l'
 INT_FILTER = re.compile(r'^[-]?[0-9]*$').match
 FLT_FILTER = re.compile(r'^[-]?[0-9]*[.][0-9]*$').match
+DEFAULT_TRIMMING_SIGN = '...'

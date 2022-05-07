@@ -7,6 +7,7 @@ Print formatted tabular data in different styles
 # Main Class.
 # Here the whole table is formed
 
+from numpy import column_stack
 from .style_compositions import (
     __style_compositions as style_catalogue, 
     HorizontalComposition, 
@@ -18,7 +19,9 @@ from .columns import (
     _typify_column, 
     _align_columns, 
     _align_headers,
-    TYPE_NAMES
+    TYPE_NAMES,
+    CAN_WRAP_TYPES,
+    ALIGNMENTS_PER_TYPE,
 )
 from .table_strings import (
     _get_separators, 
@@ -39,10 +42,11 @@ from .options import (
     NONE_VALUE_REPLACEMENT, 
     DEFAULT_STYLE, 
     I_COL_TIT, 
-    DEFAULT_TABLE_ALIGNMENT
+    DEFAULT_TABLE_ALIGNMENT,
+    DEFAULT_TRIMMING_SIGN
 )
 from .cells import _wrap_cells
-from .columns import ALIGNMENST_PER_TYPE as typealings
+from .columns import ALIGNMENTS_PER_TYPE as typealings
 
 from copy import deepcopy
 from textwrap import wrap
@@ -1531,63 +1535,169 @@ class Table(object):
     
     def __adjust_column_widths(self, difference: int, rows, rows_with_i):
         if self.__show_index:
-            string_cols = self.__column_i_per_type_with_i[TYPE_NAMES.str_]
-            pass
+            columns_with_i = list(map(list, zip(*rows_with_i)))
+            columns = rows  # will remain untouched
         else:
-            string_cols = self.__column_i_per_type[TYPE_NAMES.str_]
-        columns = list(map(list, zip(*rows)))
-        columns_with_i = list(map(list, zip(*rows_with_i)))
+            columns_with_i = rows_with_i  # will remain untouched
+            columns = list(map(list, zip(*rows)))
         to_reduce_per_col = self.__get_amounts_to_reduce(
             difference,
-            len(string_cols)
+            self.__checked_real_column_count
         )
-        for i_amount_to_reduce, col_i in enumerate(string_cols):
-            columns, columns_with_i = self.__auto_wrap_column(
+        for col_i , to_reduce in enumerate(to_reduce_per_col):
+            auto_wrapped = self.__auto_wrap_column(
                 col_i, 
-                to_reduce_per_col[i_amount_to_reduce],
+                to_reduce,
                 columns,
-                columns_with_i
             )
-        if len(string_cols) > 0:
-            return list(zip(*columns)), list(zip(*columns_with_i))
+        if self.__show_index:
+            return rows, list(zip(*auto_wrapped))
         else:
-            rows, rows_with_i
+            return list(zip(*auto_wrapped)), rows_with_i
         
-    def __auto_wrap_column(self, column_i, to_reduce, columns, columns_with_i):
+    def __apply_auto_wrap_with_i(self, column_i, columns, new_width):
+        self.__headers_with_i[column_i + 1] = '\n'.join(
+            wrap(
+                str(self.__headers_with_i[column_i + 1]), 
+                new_width
+            )
+        )
+        for row_i, row in enumerate(columns[column_i + 1]):
+            columns[column_i + 1][row_i] = (
+                '\n'.join(wrap(str(row), new_width))
+            )
+        
+        return columns
+    
+    def __apply_auto_wrap(self, column_i, columns, new_width):
+        self.__headers[column_i] = '\n'.join(
+            wrap(
+                str(self.__headers[column_i]), 
+                new_width
+            )
+        )
+        for row_i, row in enumerate(columns[column_i]):
+            columns[column_i][row_i] = (
+                '\n'.join(wrap(str(row), new_width))
+            )
+            
+        return columns
+    
+    def __trim_column(self, column_i, columns, new_width):
+        to_trim = columns[column_i]
+        width_without_trim_sign = new_width - len(DEFAULT_TRIMMING_SIGN)
+        self.__headers[column_i] = '\n'.join(
+            wrap(
+                str(self.__headers[column_i]),
+                new_width
+            )
+        )
+        for row_i, row in enumerate(to_trim):
+            if len(str(row)) > new_width:
+                trimmed = ''.join([
+                    str(row)[:width_without_trim_sign],
+                    DEFAULT_TRIMMING_SIGN
+                ])
+                columns[column_i][row_i] = trimmed
+        
+        return columns
+    
+    def __trim_column_with_i(self, column_i, columns, new_width):
+        to_trim = columns[column_i]
+        width_without_trim_sign = new_width - len(DEFAULT_TRIMMING_SIGN)
+        self.__headers_with_i[column_i] = '\n'.join(
+            wrap(
+                str(self.__headers_with_i[column_i]),
+                new_width
+            )
+        )
+        for row_i, row in enumerate(to_trim):
+            if len(str(row)) > new_width:
+                trimmed = ''.join([
+                    str(row)[:width_without_trim_sign],
+                    DEFAULT_TRIMMING_SIGN
+                ])
+                columns[column_i][row_i] = trimmed
+        
+        return columns
+    
+    def __wrap_or_trim_data(self, column_i, new_width, columns, index: bool,
+                            col_type_name: str, column_title: str):
+        left_alignment = ALIGNMENTS_PER_TYPE[TYPE_NAMES.str_]
+        if index:
+            if col_type_name in CAN_WRAP_TYPES:
+               columns = self.__apply_auto_wrap_with_i(
+                    column_i,
+                    columns,
+                    new_width
+                )
+            else:
+                self.__column_alignments_with_i[
+                    column_title
+                ] = left_alignment
+                self.__column_alignments_as_list_with_i[
+                    column_i
+                ] = left_alignment
+                columns = self.__trim_column_with_i(
+                    column_i,
+                    columns,
+                    new_width
+                )
+        else:
+            if col_type_name in CAN_WRAP_TYPES:
+                columns = self.__apply_auto_wrap(
+                    column_i,
+                    columns,
+                    new_width
+                )
+            else:
+                self.__column_alignments[
+                    column_title
+                ] = left_alignment
+                self.__column_alignments_as_list[
+                    column_i
+                ] = left_alignment
+                columns = self.__trim_column(
+                    column_i,
+                    columns,
+                    new_width
+                )
+            
+        return columns
+        
+    def __auto_wrap_column(self, column_i, to_reduce, columns):
         col_title = self.__headers[column_i]
         if self.__show_index:
+            col_type = self.__column_types_as_list_with_i[column_i]
             new_width = sum([
                 self.__column_widths_with_i[col_title],
                 -to_reduce
             ])
-            self.__headers_with_i[column_i + 1] = '\n'.join(
-                wrap(
-                    str(self.__headers_with_i[column_i + 1]), 
-                    new_width
-                )
+            columns = self.__wrap_or_trim_data(
+                column_i,
+                new_width,
+                columns,
+                index=True,
+                col_type_name=col_type,
+                column_title=col_title
             )
-            for row_i, row in enumerate(columns_with_i[column_i + 1]):
-                columns_with_i[column_i + 1][row_i] = (
-                    '\n'.join(wrap(str(row), new_width))
-                )
         else:
+            col_type = self.__column_types_as_list[column_i]
             new_width = sum([
                 self.__column_widths[col_title],
                 -to_reduce
             ])
-            self.__headers[column_i] = '\n'.join(
-                wrap(
-                    str(self.__headers[column_i]), 
-                    new_width
-                )
+            columns = self.__wrap_or_trim_data(
+                column_i,
+                new_width,
+                columns,
+                index=False,
+                col_type_name=col_type,
+                column_title=col_title
             )
-            for row_i, row in enumerate(columns[column_i]):
-                columns[column_i][row_i] = (
-                    '\n'.join(wrap(str(row), new_width))
-                )
-        
-        return columns, columns_with_i
-
+            
+        return columns
+    
     def __call_table_objects(self):
         """
         This is to call the ``__call__`` method of the 
