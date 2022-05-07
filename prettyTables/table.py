@@ -1254,7 +1254,7 @@ class Table(object):
         self.__adjust_columns_to_row_count()
         self.__check_existent_rows_vs_row_count()
         self.__transpose_column_to_rows(data)
-        self.__adjust_rows_to_column_count(False, 1)
+        self.__adjust_rows_to_column_count(False, 1, True)
         
     def  __add_column_header(self, header):
         if header is None:
@@ -1358,15 +1358,20 @@ class Table(object):
         else:
             return self.__check_data_and_fill_last_row(data)
 
-    def __adjust_rows_to_column_count(self, there_is_headers_to_add, count_of_new_headers):
+    def __adjust_rows_to_column_count(self, there_is_headers_to_add, count_of_new_headers,
+                                      columns_added_before=False):
         if there_is_headers_to_add:
             [self.__add_column_header(None) for _ in range(count_of_new_headers)]
         for row_i in range(self.__real_row_count):
             if len(self.__rows[row_i]) < self.__checked_real_column_count:
                 difference = self.__real_column_count - len(self.__rows[row_i])
                 for _ in range(difference):
-                    self.__rows[row_i].append(self.__value_placer)
-                    self.__rows_with_i[row_i].append(self.__value_placer)
+                    if columns_added_before:
+                        self.__rows[row_i].insert(0, self.__value_placer)
+                        self.__rows_with_i[row_i].insert(1, self.__value_placer)
+                    else:
+                        self.__rows[row_i].append(self.__value_placer)
+                        self.__rows_with_i[row_i].append(self.__value_placer)
 
     def __transpose_row_to_columns(self, data):
         column_headers = tuple(self.__columns.keys())
