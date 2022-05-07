@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [1.1.1](https://github.com/Kyostenas/prettyTables/compare/v1.1.0...v1.1.1) (2022-05-07)
+
+
+### Bug Fixes
+
+* adding column of different size causing missplaced missing values. ([66abc50](https://github.com/Kyostenas/prettyTables/commit/66abc5082488c734ffd9329be09f9dc6ea86683b))
+* uninteded info printing on console. ([560af0a](https://github.com/Kyostenas/prettyTables/commit/560af0aa8016ab71ad11f9f7ce29375543c192a9))
+
 ## [1.1.0](https://github.com/Kyostenas/prettyTables/compare/v1.0.0...v1.1.0) (2022-05-07)
 
 
