@@ -1,4 +1,5 @@
 import os
+import json
 
 
 def float_format(number, decimal_spaces):
@@ -6,11 +7,20 @@ def float_format(number, decimal_spaces):
 
 
 def get_window_size():
+    """
+    Returns the size of the terminal window.
+    
+    ```
+    tuple(cols, lines)
+    ```
+    """
     try:
-        return os.get_terminal_size()
+        cols, lines =  os.get_terminal_size()
     except OSError:
         import shutil
-        return shutil.get_terminal_size()
+        cols, lines = shutil.get_terminal_size()
+        
+    return cols, lines
 
 
 def is_list(piece):
@@ -92,3 +102,43 @@ def flatten(list_to_flatten, i=0, c=0):
             return flatten(list_to_flatten, i + 1, c)
     else:
         return list_to_flatten
+
+
+def read_json(file):
+    with open(file) as json_file:
+        data = json.load(json_file)
+    json_file.close()
+    return data
+
+
+class IndexCounter(object):
+    """
+    A simple class to keep track of the index
+    """
+    def __init__(self):
+        self.index = 0
+        self.start_added = False
+    
+    def __call__(self, start=0, step=1, add_step=True):
+        if not self.start_added:
+            self.index = start - step
+            self.start_added = True
+        if add_step:
+            self.index += step
+        return self.index
+    
+    def reset_count(self):
+        self.index = 0
+        self.start_added = False
+
+
+class ValuePlacer(object):
+    """
+    A little class to place a value in a cell
+    """
+    def __init__(self):
+        pass
+    
+    def __call__(self, value):
+        return value
+    

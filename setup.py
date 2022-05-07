@@ -1,4 +1,6 @@
 from distutils.core import setup
+from prettyTables.utils import read_json
+import os
 
 def readfile(filename):
   with open(filename, 'r+') as f:
@@ -7,7 +9,7 @@ def readfile(filename):
 setup(
   name = 'prettyTables',         
   packages = ['prettyTables'],   
-  version = '1.0.0',      
+  version = read_json(f'.{os.sep}package.json')['version'],      
   description = 'Tables to print in console',   
   long_description=readfile('README.md'),
   long_description_content_type='text/markdown',
