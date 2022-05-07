@@ -770,7 +770,7 @@ class Table(object):
         self.__index_counter = IndexCounter()
         self.__parse_numbers = True
         self.__parse_str_numbers = False
-        self.__adjust_to_window = True
+        self.__auto_wrap_table = False
         self.__expand_to_window = False  # TODO implement expand_to_window
         self.__auto_wrap_text = False
         self.__expand_body_to = 'r'
@@ -1034,8 +1034,8 @@ class Table(object):
         return self.__i_step
     
     @property
-    def adjust_to_window(self):
-        return self.__adjust_to_window
+    def auto_wrap(self):
+        return self.__auto_wrap_table
     
     # +----------------------+ SHOW GETTERS +------------------------+
 
@@ -1131,9 +1131,9 @@ class Table(object):
     def index_step(self, value: int):
         self.__i_step = int(value)
         
-    @adjust_to_window.setter
-    def adjust_to_window(self, value: bool):
-        self.__adjust_to_window = bool(value)
+    @auto_wrap.setter
+    def auto_wrap(self, value: bool):
+        self.__auto_wrap_table = bool(value)
 
     # +----------------------+ SHOW SETTERS +------------------------+
 
@@ -1450,6 +1450,7 @@ class Table(object):
             )
             self.__get_column_widths(semi=True)
             table_width = self.__get_string_table_dimensions()
+            print('table_width (1456): ', table_width)
             rows, rows_with_i = self.__check_columns_size(
                 table_width, 
                 rows, 
@@ -1504,18 +1505,17 @@ class Table(object):
     def __check_columns_size(self, table_width: int, rows, rows_with_i):
         adjust = False
         difference = 0
-        if self.__adjust_to_window:
-            cols, lines = get_window_size()
-            if cols < table_width:
-                difference = table_width - cols
-                adjust = True
+        console_cols, console_lines = get_window_size()
+        print('console_cols (1509): ', console_cols)
+        if console_cols < table_width:
+            difference = table_width - console_cols
+            adjust = True
         if adjust:
             rows, rows_with_i = self.__adjust_column_widths(
                 difference,
                 rows, 
                 rows_with_i
             )
-        
         return rows, rows_with_i
     
     def __get_amounts_to_reduce(self, difference: int, amount_of_cols: int):
@@ -1531,6 +1531,12 @@ class Table(object):
                 else:
                     break
         
+        if not self.__auto_wrap_table:
+            for element_i in range(len(amnt_to_reduce_per_column)):
+                amnt_to_reduce_per_column[element_i] += len(
+                    DEFAULT_TRIMMING_SIGN
+                )
+        
         return amnt_to_reduce_per_column
     
     def __adjust_column_widths(self, difference: int, rows, rows_with_i):
@@ -1544,8 +1550,10 @@ class Table(object):
             difference,
             self.__checked_real_column_count
         )
+        print('to_reduce_per_col (1547): ', to_reduce_per_col)
         for col_i , to_reduce in enumerate(to_reduce_per_col):
-            auto_wrapped = self.__auto_wrap_column(
+            print('difference (1456): ', difference)
+            auto_wrapped = self.__adjust_column_to_window(
                 col_i, 
                 to_reduce,
                 columns,
@@ -1555,66 +1563,76 @@ class Table(object):
         else:
             return list(zip(*auto_wrapped)), rows_with_i
         
-    def __apply_auto_wrap_with_i(self, column_i, columns, new_width):
-        self.__headers_with_i[column_i + 1] = '\n'.join(
-            wrap(
-                str(self.__headers_with_i[column_i + 1]), 
-                new_width
-            )
-        )
-        for row_i, row in enumerate(columns[column_i + 1]):
-            columns[column_i + 1][row_i] = (
-                '\n'.join(wrap(str(row), new_width))
+    def __auto_wrap_or_trim_headers(self, column_i, new_width, trim: bool,
+                                    width_without_trim_sign: int=None):
+        if trim:
+            if len(str(self.__headers[column_i])) > new_width:
+                self.__headers[column_i] = ''.join([
+                    self.__headers[column_i][:new_width],
+                    DEFAULT_TRIMMING_SIGN
+                ])
+        else:
+            self.__headers[column_i] = '\n'.join(
+                wrap(
+                    str(self.__headers[column_i]), 
+                    new_width
+                )
             )
         
-        return columns
-    
-    def __apply_auto_wrap(self, column_i, columns, new_width):
-        self.__headers[column_i] = '\n'.join(
-            wrap(
-                str(self.__headers[column_i]), 
-                new_width
+    def __auto_wrap_or_trim_headers_with_i(self, column_i, new_width, trim: bool,
+                                           width_without_trim_sign: int=None):
+        if trim:
+            if len(str(self.__headers_with_i[column_i])) > new_width:
+                self.__headers_with_i[column_i] = ''.join([
+                    self.__headers_with_i[column_i][:new_width],
+                    DEFAULT_TRIMMING_SIGN
+                ])
+        else:
+            self.__headers_with_i[column_i + 1] = '\n'.join(
+                wrap(
+                    str(self.__headers_with_i[column_i + 1]), 
+                    new_width
+                )
             )
-        )
+    
+    def __apply_auto_wrap(self, column_i, columns, new_width, index):
+        if index:
+            self.__auto_wrap_or_trim_headers_with_i(
+                column_i, 
+                new_width, 
+                trim=False
+            )
+        else:
+            self.__auto_wrap_or_trim_headers(
+                column_i, 
+                new_width, 
+                trim=False
+            )
         for row_i, row in enumerate(columns[column_i]):
-            columns[column_i][row_i] = (
+            columns[column_i + (1 if index else 0)][row_i] = (
                 '\n'.join(wrap(str(row), new_width))
             )
             
         return columns
     
-    def __trim_column(self, column_i, columns, new_width):
+    def __trim_column(self, column_i, columns, new_width, index):
         to_trim = columns[column_i]
-        width_without_trim_sign = new_width - len(DEFAULT_TRIMMING_SIGN)
-        self.__headers[column_i] = '\n'.join(
-            wrap(
-                str(self.__headers[column_i]),
-                new_width
+        if index:
+            self.__auto_wrap_or_trim_headers_with_i(
+                column_i, 
+                new_width, 
+                trim=True,
             )
-        )
+        else:
+            self.__auto_wrap_or_trim_headers(
+                column_i, 
+                new_width, 
+                trim=True,
+            )
         for row_i, row in enumerate(to_trim):
             if len(str(row)) > new_width:
                 trimmed = ''.join([
-                    str(row)[:width_without_trim_sign],
-                    DEFAULT_TRIMMING_SIGN
-                ])
-                columns[column_i][row_i] = trimmed
-        
-        return columns
-    
-    def __trim_column_with_i(self, column_i, columns, new_width):
-        to_trim = columns[column_i]
-        width_without_trim_sign = new_width - len(DEFAULT_TRIMMING_SIGN)
-        self.__headers_with_i[column_i] = '\n'.join(
-            wrap(
-                str(self.__headers_with_i[column_i]),
-                new_width
-            )
-        )
-        for row_i, row in enumerate(to_trim):
-            if len(str(row)) > new_width:
-                trimmed = ''.join([
-                    str(row)[:width_without_trim_sign],
+                    str(row)[:new_width],
                     DEFAULT_TRIMMING_SIGN
                 ])
                 columns[column_i][row_i] = trimmed
@@ -1625,11 +1643,12 @@ class Table(object):
                             col_type_name: str, column_title: str):
         left_alignment = ALIGNMENTS_PER_TYPE[TYPE_NAMES.str_]
         if index:
-            if col_type_name in CAN_WRAP_TYPES:
-               columns = self.__apply_auto_wrap_with_i(
+            if col_type_name in CAN_WRAP_TYPES and self.__auto_wrap_table:
+               columns = self.__apply_auto_wrap(
                     column_i,
                     columns,
-                    new_width
+                    new_width,
+                    index=True
                 )
             else:
                 self.__column_alignments_with_i[
@@ -1638,17 +1657,19 @@ class Table(object):
                 self.__column_alignments_as_list_with_i[
                     column_i
                 ] = left_alignment
-                columns = self.__trim_column_with_i(
+                columns = self.__trim_column(
                     column_i,
                     columns,
-                    new_width
+                    new_width,
+                    index=True
                 )
         else:
-            if col_type_name in CAN_WRAP_TYPES:
+            if col_type_name in CAN_WRAP_TYPES and self.__auto_wrap_table:
                 columns = self.__apply_auto_wrap(
                     column_i,
                     columns,
-                    new_width
+                    new_width,
+                    index=False
                 )
             else:
                 self.__column_alignments[
@@ -1660,12 +1681,13 @@ class Table(object):
                 columns = self.__trim_column(
                     column_i,
                     columns,
-                    new_width
+                    new_width,
+                    index=False
                 )
             
         return columns
         
-    def __auto_wrap_column(self, column_i, to_reduce, columns):
+    def __adjust_column_to_window(self, column_i, to_reduce, columns):
         col_title = self.__headers[column_i]
         if self.__show_index:
             col_type = self.__column_types_as_list_with_i[column_i]
