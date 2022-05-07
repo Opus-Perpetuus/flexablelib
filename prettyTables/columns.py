@@ -1,4 +1,3 @@
-from pickle import FALSE
 from .cells import (
     _center_cell, 
     _ljust_cell, 

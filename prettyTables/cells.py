@@ -1,6 +1,5 @@
 """ CELL WRAPPING AND ADJUSTMENT """
 
-from calendar import c
 from .utils import is_some_instance
 from .options import FLT_FILTER, INT_FILTER
 
