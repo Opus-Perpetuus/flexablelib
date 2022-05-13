@@ -349,8 +349,8 @@ def __align_single_cell(cell, col_width, to_where,
         new_cell = _fljust_cell(
             cell, 
             col_width, 
+            float_column_sizes,
             DEFAULT_FILL_CHAR, 
-            float_column_sizes
         )
     new_cell = _add_cell_spacing(new_cell, margin, margin, 0)
     return new_cell

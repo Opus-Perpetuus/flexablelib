@@ -27,9 +27,6 @@ from .table_strings import (
     _get_data_rows, 
     DataRows
 )
-from .cells import (
-    _apply_wrapping_to_cell
-)
 from .utils import (
     get_window_size, 
     is_multi_row,
@@ -44,7 +41,10 @@ from .options import (
     DEFAULT_TABLE_ALIGNMENT,
     DEFAULT_TRIMMING_SIGN
 )
-from .cells import _wrap_cells
+from .cells import (
+    _wrap_rows,
+    _zip_wrapped_rows
+)
 from .columns import ALIGNMENTS_PER_TYPE as typealings
 
 from copy import deepcopy
@@ -1766,11 +1766,11 @@ class Table(object):
     
     def __typify_table(self):
         for column_i, column in enumerate(self.__columns.items()):
-            self.__tipify_single_column(column, column_i)
+            self.__typify_single_column(column, column_i)
         for column_i, column in enumerate(self.__columns_with_i.items()):
-            self.__tipify_single_column_with_i(column, column_i)
+            self.__typify_single_column_with_i(column, column_i)
                 
-    def __tipify_single_column(self, column, column_i):
+    def __typify_single_column(self, column, column_i):
         header, column_content = column
         cell_types, column_type, column_alignment = _typify_column(column_content)
         try:
@@ -1788,7 +1788,7 @@ class Table(object):
             self.__column_alignments_as_list.append(column_alignment)
             self.__column_types_as_list.append(column_type)
         
-    def __tipify_single_column_with_i(self, column, column_i):
+    def __typify_single_column_with_i(self, column, column_i):
         header, column_content = column
         if column_i == 0:
             is_index = True
@@ -1816,24 +1816,22 @@ class Table(object):
     def __wrap_data(self, rows, rows_with_i, semi):
         headers_with_i = self.__headers_with_i
         headers = self.__headers
-        processed_headers, processed_rows = _wrap_cells(
+        processed_headers, processed_rows = _wrap_rows(
             headers, 
             rows
         )
-        processed_columns, transformed_headers = _wrap_cells(
+        processed_columns, transformed_headers = _zip_wrapped_rows(
             processed_headers, 
             processed_rows, 
-            columns=True
-            )
-        processed_headers_with_i, processed_rows_with_i = _wrap_cells(
+        )
+        processed_headers_with_i, processed_rows_with_i = _wrap_rows(
             headers_with_i, 
             rows_with_i
-            )
-        processed_columns_with_i, transformed_headers_with_i = _wrap_cells(
+        )
+        processed_columns_with_i, transformed_headers_with_i = _zip_wrapped_rows(
             processed_headers_with_i, 
             processed_rows_with_i, 
-            columns=True
-            )
+        )
         self.__processed_headers = processed_headers
         self.__processed_rows = processed_rows
         self.__processed_headers_with_i = processed_headers_with_i
