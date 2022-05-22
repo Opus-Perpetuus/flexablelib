@@ -21,24 +21,12 @@ def _add_cell_spacing(cell: Union[str, Union[List[str], Tuple[str]]],
     """
     Add spacing to a cell (string).
     
-    Parameters:
-    ```
-    cell: str | list | tuple    # The cell to add spacing to.
-    left: int                   # The number of spaces to add to the left.
-    right: int                  # The number of spaces to add to the right.
-    placeholder_size: int       # The size of the placeholder in case of an
-                                #   empty cell. Default is 0.
-    fill_char: str              # The character to use for filling the
-                                #   left and right sides. Default is ' '.
-    ```
+    Examples::
     
-    Examples:
-    ```
-    _add_cell_spacing('a', 1, 3, 0) -> ' a   '
-    _add_cell_spacing('', 1, 3, 1)  -> '     '
-    _add_cell_spacing(['a', 'b'], 1, 3, 0) -> (' a   ', ' b   ')
-    _add_cell_spacing('', 1, 3, 0)  -> '    '
-    ```
+        _add_cell_spacing('a', 1, 3, 0) -> ' a   '
+        _add_cell_spacing('', 1, 3, 1)  -> '     '
+        _add_cell_spacing(['a', 'b'], 1, 3, 0) -> (' a   ', ' b   ')
+        _add_cell_spacing('', 1, 3, 0)  -> '    '
     """
     left = fill_char * left  # Space for the left
     right = fill_char * right  # Space for the right
@@ -77,21 +65,10 @@ def _center_cell(cell: Union[str, Union[List[str], Tuple[str]]],
     Center a cell. Uses ``str().center()`` but can also center
     wrapped cells (lists or tuples).
     
-    Parameters:
-    ```
-    cell: str | list | tuple    # The string of the cell to center,
-                                #   list or tuple.
-    cell_length: int            # The length the cell should have after 
-                                #   centering.
-    fill_char: str              # The character to use for filling the 
-                                #   space at the sides. Default is ' '.
-    ```
+    Examples::
     
-    Examples:
-    ```
-    _center_cell('a', 3, '-') -> '-a-'
-    _center_cell(['a', 'b'], 3, '-') -> ('-a- ', '-b-')
-    ```
+        _center_cell('a', 3, '-') -> '-a-'
+        _center_cell(['a', 'b'], 3, '-') -> ('-a- ', '-b-')
     """
     # Check if the cell is a wrapped cell (list or tuple):
     if is_some_instance(cell, tuple, list):
@@ -116,21 +93,10 @@ def _ljust_cell(cell: Union[str, Union[List[str], Tuple[str]]],
     Aligns to the left a cell. Uses ``str().ljust()`` but can also 
     align wrapped cells (lists or tuples).
     
-    Parameters:
-    ```
-    cell: str | list | tuple    # The string of the cell to align,
-                                #   list or tuple.
-    cell_length: int            # The length the cell should have after 
-                                #   aligning to the left.
-    fill_char: str              # The character to use for filling the 
-                                #   space at the right. Default is ' '.
-    ```
+    Examples::
     
-    Examples:
-    ```
-    _ljust_cell('a', 3, '-') -> 'a--'
-    _ljust_cell(['a', 'b'], 3, '-') -> ('a--', 'b--')
-    ```
+        _ljust_cell('a', 3, '-') -> 'a--'
+        _ljust_cell(['a', 'b'], 3, '-') -> ('a--', 'b--')
     """
     # Check if the cell is a wrapped cell (list or tuple):
     if is_some_instance(cell, list, tuple):
@@ -154,22 +120,11 @@ def _rjust_cell(cell: Union[str, Union[List[str], Tuple[str]]],
     """
     Aligns to the right a cell. Uses ``str().rjust()`` but can also 
     align wrapped cells (lists or tuples).
-    
-    Parameters:
-    ```
-    cell: str | list | tuple    # The string of the cell to align,
-                                #   list or tuple.
-    cell_length: int            # The length the cell should have after 
-                                #   aligning to the right.
-    fill_char: str              # The character to use for filling the 
-                                #   space at the left. Default is ' '.
-    ```
-    
-    Examples:
-    ```
-    _rjust_cell('a', 3, '-') -> '--a'
-    _rjust_cell(['a', 'b'], 3, '-') -> ('--a', '--b')
-    ```
+      
+    Examples::
+
+        _rjust_cell('a', 3, '-') -> '--a'
+        _rjust_cell(['a', 'b'], 3, '-') -> ('--a', '--b')
     """
     # Check if the cell is a wrapped cell (list or tuple):
     if is_some_instance(cell, list, tuple):
@@ -194,20 +149,11 @@ def fljust(string: str,
     to send various float numbers to align them by the points.
     The number must always have a decimal point.
     
-    Parameters:
-    ```	
-    string: str                  # The float as a string.
-    sides_widths: list | tuple   # The widths of the left and right sides.
-    fill_char: str               # Filling character. Default is ' '.
-    
-    ```
-    
-    Examples:
-    ```
-    fljust('1.23', [3, 5], '-')   -> '--1.23---'
-    fljust('1.2', [3, 5], '-')    -> '--1.2----'
-    fljust('.00321', [3, 5], '-') -> '---.00321'
-    ```
+    Examples::
+
+        fljust('1.23', [3, 5], '-')   -> '--1.23---'
+        fljust('1.2', [3, 5], '-')    -> '--1.2----'
+        fljust('.00321', [3, 5], '-') -> '---.00321'
     """
     # If the string is a float, it should have a point, 
     # si it gets splitted by that point. 
@@ -240,23 +186,21 @@ def __fljust_part(cell_part: Any,
     using ``_add_cell_spacing()``.
     Any other element (nor float nor int) is aligned with ``str().rjust()``
     
-    Parameters:
-    ```
-    cell_part: Any                      # The cell part to align.
-    cell_length: int                    # The length the cell should have after.
-    float_column_sizes: list | tuple    # The widths of the left, the dot and 
-                                        #   the right sides.
-    fill_char: str                      # Filling character. Default is ' '.
-    ```
+    Examples::
+
+        __fljust_part('1.23', 9, [3, 1, 5], '-')   
+        __fljust_part('1.2', 9, [3, 1, 5], '-')    
+        __fljust_part('.00321', 9, [3, 1, 5], '-') 
+        __fljust_part('5', 9, [3, 1, 5], '-')      
+        __fljust_part('?', 9, [3, 1, 5], '-')
+        
+    Results in::
     
-    Examples:
-    ```
-    __fljust_part('1.23', 9, [3, 1, 5], '-')   -> '--1.23---'
-    __fljust_part('1.2', 9, [3, 1, 5], '-')    -> '--1.2----'
-    __fljust_part('.00321', 9, [3, 1, 5], '-') -> '---.00321'
-    __fljust_part('5', 9, [3, 1, 5], '-')      -> '--5------'
-    __fljust_part('?', 9, [3, 1, 5], '-')      -> '--------?'
-    ```
+        '--1.23---'
+        '--1.2----'
+        '---.00321'
+        '--5------'
+        '--------?'      
     
     """
     # Convert to string because anything could come. 
@@ -283,7 +227,7 @@ def __fljust_part(cell_part: Any,
     if is_int_number:
         cell_len = len(str_cell)
         
-        # Get the left and right sides widths, substracting
+        # Get the left and right sides widths, subtracting
         # the length of the int part to the left and adding
         # the len of the point to the right.
         #
@@ -295,7 +239,7 @@ def __fljust_part(cell_part: Any,
         #     -             dot width of 1
         #      ------       right width of 5
         #               Will do the following:
-        #  --               1. Substract its width of the left.
+        #  --               1. Subtract its width of the left.
         #     -------       2. Adding the width of the dot to the right.
         #  --5-------       3. add those two spaces to the left and right.
         
@@ -303,7 +247,7 @@ def __fljust_part(cell_part: Any,
         left_width = float_column_sizes[LEFT_SIDE_WIDTH_I]
         right_width = float_column_sizes[RIGHT_SIDE_WIDTH_I]
         
-        # Substract the length of the int part to the left.
+        # Subtract the length of the int part to the left.
         fixed_left_width = left_width - cell_len
         
         # Add the len of the point to the right.
@@ -331,23 +275,23 @@ def _fljust_cell(cell: Union[str, Union[List[str], Tuple[str]]],
                  fill_char: str = ' ', 
                  ) -> Union[str, Union[List[str], Tuple[str]]]:
     """
-    Parameters:
-    ```
-    cell: str | list | tuple            # The cell to align.
-    cell_length: int                    # The length the cell should have after.
-    float_column_sizes: list | tuple    # The widths of the left, the dot and
-    fill_char: str                      # Filling character. Default is ' '.
-    ```
-    
-    Examples:
-    ```
-    _fljust_cell('1.23', 9, [3, 1, 5], '-')               ->  '--1.23---'
-    _fljust_cell('1.2', 9, [3, 1, 5], '-')                ->  '--1.2----'
-    _fljust_cell('.00321', 9, [3, 1, 5], '-')             ->  '---.00321'
-    _fljust_cell('5', 9, [3, 1, 5], '-')                  ->  '--5------'
-    _fljust_cell(['Nothing', 'here'], 9, [3, 1, 5], '-')  -> ('--Nothing',
-                                                              '-----here')
-    ```
+    Examples::
+        
+        _fljust_cell('1.23', 9, [3, 1, 5], '-')               
+        _fljust_cell('1.2', 9, [3, 1, 5], '-')                
+        _fljust_cell('.00321', 9, [3, 1, 5], '-')             
+        _fljust_cell('5', 9, [3, 1, 5], '-')                  
+        _fljust_cell(['Nothing', 'here'], 9, [3, 1, 5], '-')
+
+    will result in::
+        
+        '--1.23---'
+        '--1.2----'
+        '---.00321'
+        '--5------'
+        ('--Nothing', 
+         '-----here') 
+  
     """
     # If it is a wrapped cell (list or tuple), align each part.
     if is_some_instance(cell, list, tuple):
@@ -379,46 +323,42 @@ def _zip_wrapped_rows(wrapped_headers: Union[list, tuple],
     """
     Will zip a wrapped row and convert it to a wrapped column.
     
-    A wrapped row looks like this:
-    ```
+    A wrapped row looks like this::
+
     [['Wrapped', 'Looking']['row', 'good']]
-    ```
     
     In order to put in a column, it needs to be paired with
     it's respective part of the consequent sub-rows, so 0
     goes with 0, 1 goes with 1, 2 goes with 2, etc.
-    ```
-       0          1          0      1
-    [['Wrapped', 'Looking']['row', 'good']]
-    ```
+
+    >>>    0          1          0      1
+    >>> [['Wrapped', 'Looking']['row', 'good']]
     
-    The zip function does exactly that. 
-    ```
-    tuple(zip(*[['Wrapped', 'Looking']['row', 'good']]))
-    ```
-    results in:
-    ```
-    (('Wrapped', 'row'), ('Looking', 'good'))
-    ```
+    The zip function does exactly that::
+
+        tuple(zip(*[['Wrapped', 'Looking']['row', 'good']]))
+    
+    results in::
+
+        (('Wrapped', 'row'), ('Looking', 'good'))
     
     But it's also necessary to consider that the intention is to 
     convert a row in a column, so the process must be done twice:
-    one for the wrapped cells, and one for all the rows.
-    ```
-    _zip_wrapped_rows([
-        [['Data'   , 'In a row']],   # Not wrapped.
-        [['Wrapped', 'Looking']      # Wrapped.
-         ['row'    , 'good'   ]],
-        [['More'   , 'data'   ]],    # Not wrapped.
-    ])                              
-    ```
-    results in:
-    ```
-    (
-        ('Data', ('Wrapped', 'row'), 'More'),
-        ('In a row', ('Looking', 'good'), 'data'),
-    )
-    ```
+    one for the wrapped cells, and one for all the rows::
+    
+        _zip_wrapped_rows([
+            [['Data'   , 'In a row']],   # Not wrapped.
+            [['Wrapped', 'Looking']      # Wrapped.
+            ['row'    , 'good'   ]],
+            [['More'   , 'data'   ]],    # Not wrapped.
+        ])              
+                        
+    results in::
+
+        (
+            ('Data', ('Wrapped', 'row'), 'More'),
+            ('In a row', ('Looking', 'good'), 'data'),
+        )
     """
     zipped_wrapped_cells = []
     for column_i, column in enumerate(wrapped_rows):
@@ -435,12 +375,10 @@ def _zip_wrapped_rows(wrapped_headers: Union[list, tuple],
 
 def __zip_sub_rows(row: Union[list, tuple]) -> tuple:
     """
-    Zips a wrapped row.
-    
-    ```
-    __zip_sub_rows([['a', 'b'], ['c', 'd']]) -> (('a', 'c'), ('b', 'd'))
-    __zip_sub_rows([['a', 'b']]) -> ('a', 'b')
-    ```
+    Zips a wrapped row::
+
+        __zip_sub_rows([['a', 'b'], ['c', 'd']]) -> (('a', 'c'), ('b', 'd'))
+        __zip_sub_rows([['a', 'b']]) -> ('a', 'b')
     """
     if len(row) > 1:
         # If there's more than one sub-row, zip them.
@@ -451,25 +389,21 @@ def __zip_sub_rows(row: Union[list, tuple]) -> tuple:
         only_sub_row = row[0]
         return only_sub_row
 
-
 def _wrap_rows(headers: Union[list, tuple], 
                data: Union[List[Union[list, tuple]], Tuple[Union[list, tuple]]]
               ) -> Tuple[list, list]:
     """
     Wraps the rows and headers of the table if
-    any new line characters are present.
-    
-    ```
-    _wrap_rows(headers=['a', 'b\\nc'], data=[['a', 'b\\nc'], ['c', 'd']])
-    ```
+    any new line characters are present::
+
+        _wrap_rows(headers=['a', 'b\\nc'], data=[['a', 'b\\nc'], ['c', 'd']])
     
     Results in:
-    ```
-    ([['a', 'b'], ['', 'c']], [[['a', 'b'], ['', 'c']], [['c', 'd']]])
-     |    ^          ^     |  |    ^          ^     |  |          |
-    #  sub-row    sub-row       sub-row    sub-row      no sub-rows
-    #<-------wrapped------->  <-------wrapped------->  <not wrapped>
-    ```  
+
+    >>> ([['a', 'b'], ['', 'c']], [[['a', 'b'], ['', 'c']], [['c', 'd']]])
+    >>>  |    ^          ^     |  |    ^          ^     |  |          |
+    >>> #  sub-row    sub-row       sub-row    sub-row      no sub-rows
+    >>> #<-------wrapped------->  <-------wrapped------->  <not wrapped>
     """
     # If no headers are provided, return None.
     wrapped_headers = None
@@ -490,18 +424,15 @@ def __wrap_single_row(row: Union[list, tuple]) -> list:
     """
     Will split every cell that has an new line character.
     The splitted cell generates a new sub-row, and every other
-    cell that doesn't have a new line character will be adjusted.
-    
-    ```
-    __wrap_single_row(['a', 'b\\nc'])
-    ```
+    cell that doesn't have a new line character will be adjusted::
+
+        __wrap_single_row(['a', 'b\\nc'])
     
     Results in:
-    ```
-    [['a', 'b'], ['', 'c']]
-            ^
-    # Blank space to adjust the cell.
-    ```
+    
+    >>> [['a', 'b'], ['', 'c']]
+    >>>                ^
+    >>> # Blank space to adjust the cell.
     """
     # Split in lines if any new line characters are present.
     splitted_cells = list(map(__wrap_cell, row))
@@ -539,15 +470,13 @@ def __wrap_single_row(row: Union[list, tuple]) -> list:
 
 def __wrap_cell(cell: Any) -> Union[List[str], Any]: 
     """
-    Split in lines a cell if it has a new line character.
+    Split in lines a cell if it has a new line character::
     
-    ```
-    'a' -> ['a']
-    'a\\nb' -> ['a', 'b']
-    '' -> ['']
-    123 -> [123]
-    None -> [None]
-    ```
+        'a' -> ['a']
+        'a\\nb' -> ['a', 'b']
+        '' -> ['']
+        123 -> [123]
+        None -> [None]
     """
     # Only if the cell is a string.
     if isinstance(cell, str):
