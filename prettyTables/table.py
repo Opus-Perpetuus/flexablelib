@@ -14,7 +14,7 @@ from .style_compositions import (
     TableComposition
 )
 from .columns import (
-    _column_sizes, 
+    _column_widths, 
     _typify_column, 
     _align_columns, 
     _align_headers,
@@ -1862,23 +1862,23 @@ class Table(object):
                 }
                 
     def __get_column_widths(self, semi):
-        sizes, float_sizes = _column_sizes(
+        sizes, float_sizes = _column_widths(
             processed_columns=(
                 self.__semi_processed_columns
             ) if semi else (
                 self.__processed_columns
             ),
-            column_types=self.__column_types,
+            column_type_names=self.__column_types,
             show_headers=self.__show_headers
         )
         
-        sizes_with_i, float_sizes_with_i = _column_sizes(
+        sizes_with_i, float_sizes_with_i = _column_widths(
             processed_columns=(
                 self.__semi_processed_columns_with_i
             ) if semi else (
                 self.__processed_columns_with_i
             ),
-            column_types=self.__column_types_with_i,
+            column_type_names=self.__column_types_with_i,
             show_headers=self.__show_headers
         )
         self.__column_widths_as_list = sizes
