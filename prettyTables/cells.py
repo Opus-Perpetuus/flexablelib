@@ -151,9 +151,15 @@ def fljust(string: str,
     
     Examples::
 
-        fljust('1.23', [3, 5], '-')   -> '--1.23---'
-        fljust('1.2', [3, 5], '-')    -> '--1.2----'
-        fljust('.00321', [3, 5], '-') -> '---.00321'
+        fljust('1.23', [3, 5], '-')   
+        fljust('1.2', [3, 5], '-')    
+        fljust('.00321', [3, 5], '-')
+        
+    Results in::
+    
+        '--1.23---'
+        '--1.2----'
+        '---.00321'
     """
     # If the string is a float, it should have a point, 
     # si it gets splitted by that point. 
