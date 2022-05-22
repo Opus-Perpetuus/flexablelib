@@ -3,7 +3,6 @@
 from .utils import is_some_instance
 from .options import FLT_FILTER, INT_FILTER
 
-from textwrap import wrap
 from typing import Any, List, Tuple, Union
 
 LEFT_SIDE_WIDTH_I = 0
