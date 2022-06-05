@@ -1,17 +1,14 @@
 from distutils.core import setup
-from prettyTables.utils import read_json
+from prettyTables.utils import read_json, read_file
 import os
 
-def readfile(filename):
-  with open(filename, 'r+') as f:
-    return f.read()
-  
+
 setup(
   name = 'prettyTables',         
   packages = ['prettyTables'],   
   version = read_json(f'.{os.sep}package.json')['version'],      
   description = 'Tables to print in console',   
-  long_description=readfile('README.md'),
+  long_description=read_file('README.md'),
   long_description_content_type='text/markdown',
   author = 'Benjamin Ramirez',                   
   author_email = 'chilerito12@gmail.com',      

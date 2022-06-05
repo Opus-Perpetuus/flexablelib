@@ -111,6 +111,14 @@ def read_json(file):
     return data
 
 
+def read_file(filename):
+    with open(filename, 'r+') as file:
+        data = file.read()
+    file.close()
+    return data
+
+
+
 class IndexCounter(object):
     """
     A simple class to keep track of the index
