@@ -1,7 +1,5 @@
 """ TABLE SEPARATORS """
 
-
-from urllib3 import Retry
 from .style_compositions import (
     HorizontalComposition, 
     TableComposition, 
