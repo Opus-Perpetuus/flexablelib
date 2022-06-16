@@ -1,5 +1,6 @@
 import os
 import json
+from typing import Iterable, Union
 
 
 def float_format(number, decimal_spaces):
@@ -117,6 +118,15 @@ def read_file(filename):
     file.close()
     return data
 
+
+def delete_repetitions(iterable: Iterable, 
+                      ) -> Union[list, tuple]:
+    cleansed_list = []
+    for element in iterable:
+        if element not in cleansed_list:
+            cleansed_list.append(element)
+    
+    return cleansed_list
 
 
 class IndexCounter(object):

@@ -20,7 +20,7 @@ from .columns import (
     _align_headers,
     TYPE_NAMES,
     CAN_WRAP_TYPES,
-    ALIGNMENTS_PER_TYPE,
+    ALIGNMENTS_PER_TYPE as type_alignments
 )
 from .table_strings import (
     _get_separators, 
@@ -28,11 +28,11 @@ from .table_strings import (
     DataRows
 )
 from .utils import (
+    delete_repetitions,
     get_window_size, 
     is_multi_row,
     ValuePlacer,
     IndexCounter,
-    is_some_instance,
     read_file
 )
 from .options import (
@@ -46,7 +46,6 @@ from .cells import (
     _wrap_rows,
     _zip_wrapped_rows
 )
-from .columns import ALIGNMENTS_PER_TYPE as typealings
 
 from copy import deepcopy
 from textwrap import wrap
@@ -825,7 +824,7 @@ class Table(object):
         self.__table_alignment = 'l'
         self.__column_alignments = {}
         self.__column_alignments_with_i = {
-            I_COL_TIT: typealings[TYPE_NAMES.int_]
+            I_COL_TIT: type_alignments[TYPE_NAMES.int_]
         }
         self.__column_alignments_as_list = []
         self.__column_alignments_as_list_with_i = []
@@ -833,18 +832,10 @@ class Table(object):
         self.__row_alignments_as_list = []
         self.__cells_alignment = []
         # +------------------------+ TABLE BODY +------------------------+
-        self.__columns = columns if columns is not None else {}
-        self.__columns_with_i = {
-            I_COL_TIT: [], **columns
-        }  if columns is not None else {
-            I_COL_TIT: []
-        }
-        self.__headers = headers if headers is not None else []
-        self.__headers_with_i = [
-            I_COL_TIT, *headers
-        ] if headers is not None else [
-            I_COL_TIT
-        ]
+        self.__columns = {}
+        self.__columns_with_i = {I_COL_TIT: []}
+        self.__headers = []
+        self.__headers_with_i = [I_COL_TIT]
         self.__rows = []
         self.__rows_with_i = []
         self.__processed_columns = {}
@@ -856,8 +847,23 @@ class Table(object):
         self.__processed_rows = []
         self.__processed_rows_with_i = []
         # +-----------------------+ INIT ACTIONS +-----------------------+
-        if rows is not None:
-            [self.add_row(row) for row in rows]
+        try:
+            for header in headers:
+                self.__check_add_header_on_init(header)
+            for row in rows:
+                self.add_row(row)
+        except TypeError:
+            pass
+            
+        try:
+            try:
+                for header, column in columns.items():
+                    self.add_column(header=header, data=column)
+            except AttributeError:
+                for column in columns:
+                    self.add_column(data=column)
+        except TypeError:
+            pass
 
     # +-----------------------------------------------------------------------------+
     # start +---------------------------+ METHODS +---------------------------+ start
@@ -962,7 +968,7 @@ class Table(object):
         A generic name appears if no name was provided
         for the column.
         """
-        return self.__headers
+        return delete_repetitions(self.__headers)
     
     @property
     def internal_columns(self) -> dict:
@@ -1472,7 +1478,7 @@ class Table(object):
         ... +------+-----+--------+----------+
         
         """
-        checked_header = self.__check_add_header_(header)
+        checked_header = self.__check_add_header(header)
         self.__add_column_data(data, checked_header)
         self.__adjust_columns_to_row_count()
         self.__check_existent_rows_vs_row_count()
@@ -1496,8 +1502,21 @@ class Table(object):
                 checked = f'{header} {self.__headers.count(header) + 1}'
         
         return checked
+    
+    def __check_add_header_on_init(self, header: str) -> str:
+        checked_header = self.__check_header(header)
+        self.__headers.append(checked_header)
+        self.__headers_with_i.append(checked_header)
+        self.__column_widths[checked_header] = 0
+        self.__column_types[checked_header] = None
+        self.__column_alignments[checked_header] = ''
+        self.__cell_types[checked_header] = []
+        self.__columns[checked_header] = []
+        self.__columns_with_i[checked_header] = []
+        
+        return checked_header
 
-    def  __check_add_header_(self, header: str) -> str:
+    def  __check_add_header(self, header: str) -> str:
         """
         Adds the header as a key and checks if it is None.
         
@@ -1505,8 +1524,16 @@ class Table(object):
         """
         # The header gets checked here because the add_row
         # method uses the __add_column_header too.
-        checked_header = self.__check_header(header)
-        
+        try:
+            column_count_from_rows = len(self.__rows[0])
+        except IndexError:
+            column_count_from_rows = 0
+        header_count = len(self.__headers)
+        not_empty_columns = sum([1 for col in self.__columns.values() if len(col) > 0])
+        if not_empty_columns == header_count:
+            checked_header = self.__check_header(header)
+        else:
+            checked_header = self.__headers[column_count_from_rows]
         self.__headers.append(checked_header)
         self.__headers_with_i.append(checked_header)
         self.__column_widths[checked_header] = 0
@@ -1669,7 +1696,7 @@ class Table(object):
         """
         if there_is_headers_to_add:
             for _ in range(count_of_new_headers):
-                self.__check_add_header_(None) 
+                self.__check_add_header(None) 
         for row_i in range(self.__real_row_count):
             # Check if there is a difference between the column count
             # and the length of the new row (the length of the row is the
@@ -1716,8 +1743,12 @@ class Table(object):
         """
         added_columns_to_count = None
         if len(data) > self.__checked_real_column_count:
-            added_columns_to_count = len(data) - self.column_count
-            self.__real_column_count += added_columns_to_count
+            if self.column_count < len(self.__headers):
+                added_columns_to_count = 0
+                self.__real_column_count += len(data) - self.column_count
+            else:
+                added_columns_to_count = len(data) - self.column_count
+                self.__real_column_count += added_columns_to_count
         for column_i in range(self.__checked_real_column_count):
             try:
                 self.__rows[-1].append(data[column_i])
@@ -2041,7 +2072,7 @@ class Table(object):
         Wraps or trims the data of a column, depending on the type
         and the ``__auto_wrap_table`` setting.
         """
-        trim_alignment = ALIGNMENTS_PER_TYPE[TYPE_NAMES.str_]
+        trim_alignment = type_alignments[TYPE_NAMES.str_]
         can_wrap = col_type_name in CAN_WRAP_TYPES and self.__auto_wrap_table
         if can_wrap:
             yield from self.__wrap_columns(
