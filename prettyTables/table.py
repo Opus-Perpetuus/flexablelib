@@ -850,6 +850,9 @@ class Table(object):
         try:
             for header in headers:
                 self.__check_add_header_on_init(header)
+        except TypeError:
+            pass
+        try:
             for row in rows:
                 self.add_row(row)
         except TypeError:
@@ -968,7 +971,7 @@ class Table(object):
         A generic name appears if no name was provided
         for the column.
         """
-        return delete_repetitions(self.__headers)
+        return self.__headers
     
     @property
     def internal_columns(self) -> dict:
@@ -1478,14 +1481,36 @@ class Table(object):
         ... +------+-----+--------+----------+
         
         """
-        checked_header = self.__check_add_header(header)
-        self.__add_column_data(data, checked_header)
-        self.__adjust_columns_to_row_count()
+        checked_header = self.__check_header(header)
+        if checked_header not in self.__headers:
+            self.__add_header(checked_header)
+        self.__add_column_data(
+            data=data, 
+            column_header=checked_header
+        )
+        if checked_header not in self.__headers:  # This repeated if statement is needed.
+            self.__adjust_columns_to_row_count()
         self.__check_existent_rows_vs_row_count()
         self.__transpose_column_to_rows(data)
-        self.__adjust_rows_to_column_count(False, 1, True)
+        self.__adjust_rows_to_column_count(
+            there_are_headers_to_add=False, 
+            count_of_new_headers=1, 
+            columns_added_before=True
+        )
         
-    def __check_header(self, header: str) -> str:
+    def __get_auto_header(self) -> str:
+        """
+        Returns a generic name for a column.
+        """
+        return f'{self.__generic_column_name} {len(self.__headers) + 1}'
+    
+    def __name_duplicated_header(self, header: str) -> str:
+        """
+        Returns a name for a column if the name is already in use.
+        """
+        return f'{header} {self.__headers.count(header) + 1}'
+        
+    def __process_header(self, header: str) -> str:
         """
         Checks if header is None.
         
@@ -1495,16 +1520,15 @@ class Table(object):
         the column count (starting from 1) will be added.
         """
         if header is None:
-            checked = f'{self.__generic_column_name} {len(self.__headers) + 1}'
+            checked = self.__get_auto_header()
         else:
             checked = str(header)
             if checked in self.__headers:
-                checked = f'{header} {self.__headers.count(header) + 1}'
+                checked = self.__name_duplicated_header(checked)
         
         return checked
     
-    def __check_add_header_on_init(self, header: str) -> str:
-        checked_header = self.__check_header(header)
+    def __add_header(self, checked_header: str) -> None:
         self.__headers.append(checked_header)
         self.__headers_with_i.append(checked_header)
         self.__column_widths[checked_header] = 0
@@ -1513,37 +1537,28 @@ class Table(object):
         self.__cell_types[checked_header] = []
         self.__columns[checked_header] = []
         self.__columns_with_i[checked_header] = []
+    
+    def __check_add_header_on_init(self, header: str) -> str:
+        checked_header = self.__process_header(header)
+        self.__add_header(checked_header)
         
         return checked_header
 
-    def  __check_add_header(self, header: str) -> str:
-        """
-        Adds the header as a key and checks if it is None.
-        
-        Gets added to the headers list too.
-        """
-        # The header gets checked here because the add_row
-        # method uses the __add_column_header too.
+    def  __check_header(self, header: Union[str, None]) -> str:
         try:
             column_count_from_rows = len(self.__rows[0])
         except IndexError:
             column_count_from_rows = 0
         header_count = len(self.__headers)
-        not_empty_columns = sum([1 for col in self.__columns.values() if len(col) > 0])
-        if not_empty_columns == header_count:
-            checked_header = self.__check_header(header)
+        if column_count_from_rows == header_count:
+            # The header gets checked here because the add_row
+            # method uses the __add_column_header too.
+            checked_header = self.__process_header(header)
         else:
             checked_header = self.__headers[column_count_from_rows]
-        self.__headers.append(checked_header)
-        self.__headers_with_i.append(checked_header)
-        self.__column_widths[checked_header] = 0
-        self.__column_types[checked_header] = None
-        self.__column_alignments[checked_header] = ''
-        self.__cell_types[checked_header] = []
-        self.__columns[checked_header] = []
-        self.__columns_with_i[checked_header] = []
-        
+            
         return checked_header
+    
 
     def __add_column_data(self, data: Union[list, tuple], column_header: str) -> None:
         """
@@ -1559,14 +1574,14 @@ class Table(object):
                 self.__real_row_count += difference
                 
                 for _ in range(difference):
-                    
                     # Add index counter to the table with index.
                     # This table is used when the index is shown.
                     self.__columns_with_i[I_COL_TIT].append(self.__index_counter)
-                    
+
             # Add to the table with and without index
             self.__columns[column_header] += data
             self.__columns_with_i[column_header] += data
+            
 
     def __adjust_columns_to_row_count(self, rows_added_before: bool=False) -> None:
         """
@@ -1658,8 +1673,15 @@ class Table(object):
         added_to_column_count = self.__add_row_data(data)
         add_headers = True if added_to_column_count is not None else False
         self.__adjust_rows_to_column_count(add_headers, added_to_column_count)
+        self.__adjust_headers_to_data_length(data)
         self.__transpose_row_to_columns(data)
         self.__adjust_columns_to_row_count(rows_added_before=True)
+        
+    def __adjust_headers_to_data_length(self, data: Union[list, tuple]) -> None:
+        headers_to_add = len(data) - len(self.__headers)
+        for _ in range(headers_to_add):
+            auto_named_header = self.__get_auto_header()
+            self.__add_header(auto_named_header)
         
     def __add_row_data(self, data: Union[list, tuple]) -> Optional[int]:
         """
@@ -1683,7 +1705,7 @@ class Table(object):
             return self.__check_data_and_fill_last_row(data)
 
     def __adjust_rows_to_column_count(self, 
-                                      there_is_headers_to_add: bool, 
+                                      there_are_headers_to_add: bool, 
                                       count_of_new_headers: int,
                                       columns_added_before: bool=False
                                      ) -> None:
@@ -1694,9 +1716,10 @@ class Table(object):
         the width of a row is determined by how many columns
         has.
         """
-        if there_is_headers_to_add:
+        if there_are_headers_to_add:
             for _ in range(count_of_new_headers):
-                self.__check_add_header(None) 
+                auto_named_header = self.__get_auto_header()
+                self.__add_header(auto_named_header)
         for row_i in range(self.__real_row_count):
             # Check if there is a difference between the column count
             # and the length of the new row (the length of the row is the
