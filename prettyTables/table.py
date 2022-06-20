@@ -848,23 +848,43 @@ class Table(object):
         self.__processed_rows_with_i = []
         # +-----------------------+ INIT ACTIONS +-----------------------+
         try:
+            for header, column in columns.items():
+                try:
+                    column.__iter__
+                    self.add_column(header=header, data=list(column))
+                except AttributeError:
+                    pass
+            return None
+        except (AttributeError, TypeError):
+            pass
+        try:
             for header in headers:
                 self.__check_add_header_on_init(header)
         except TypeError:
             pass
         try:
             for row in rows:
-                self.add_row(row)
-        except TypeError:
+                try:
+                    row.__iter__
+                    self.add_row(data=list(row))
+                except AttributeError:
+                    pass
+            empty_to_add = len(headers) - len(rows[0])
+            for _ in range(empty_to_add):
+                self.add_column()
+            return None
+        except (TypeError, IndexError):
             pass
-            
         try:
-            try:
-                for header, column in columns.items():
-                    self.add_column(header=header, data=column)
-            except AttributeError:
-                for column in columns:
-                    self.add_column(data=column)
+            for column in columns:
+                try:
+                    column.__iter__
+                    self.add_column(data=list(column))
+                except AttributeError:
+                    pass
+            empty_to_add = len(headers) - len(columns)
+            for _ in range(empty_to_add):
+                self.add_column()
         except TypeError:
             pass
 
