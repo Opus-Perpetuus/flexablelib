@@ -40,7 +40,8 @@ from .options import (
     DEFAULT_STYLE, 
     I_COL_TIT, 
     DEFAULT_TABLE_ALIGNMENT,
-    DEFAULT_TRIMMING_SIGN
+    DEFAULT_TRIMMING_SIGN,
+    MIN_COLUMN_SIZE
 )
 from .cells import (
     _wrap_rows,
@@ -904,6 +905,13 @@ class Table(object):
 
     # +-----------------------------------------------------------------------------+
     # start +-----------------------+ STATIC METHODS +------------------------+ start
+        
+    @staticmethod
+    def __trim_with_sign(row: str, new_widht):
+        return ''.join([
+            row[:new_widht],
+            DEFAULT_TRIMMING_SIGN
+        ])
         
     @staticmethod
     def __check_if_none_and_get_len(value: Union[str, None]) -> int:
@@ -1863,7 +1871,7 @@ class Table(object):
             )
             self.__get_column_widths(semi=True)
             table_width = self.__get_string_table_width()
-            rows, rows_with_i = self.__check_columns_size(
+            headers, rows, rows_with_i = self.__check_columns_size(
                 table_width, 
                 rows, 
                 rows_with_i
@@ -1871,7 +1879,8 @@ class Table(object):
             self.__wrap_data(
                 rows, 
                 rows_with_i, 
-                semi=False
+                semi=False,
+                headers_after_semi=headers
             )
             self.__get_column_widths(semi=False)
 
@@ -1944,37 +1953,41 @@ class Table(object):
         difference = 0
         console_cols, console_lines = get_window_size()
         if console_cols < table_width:
-            difference = table_width - console_cols
+            difference = (table_width - console_cols) + 1
             adjust = True
         if adjust:
-            rows, rows_with_i = self.__adjust_column_widths(
+            headers, rows, rows_with_i = self.__adjust_column_widths(
                 difference,
                 rows, 
                 rows_with_i
             )
-        return rows, rows_with_i
+        else:
+            if self.show_index:
+                headers = self.__headers_with_i
+            else:
+                headers = self.__headers
+        return headers, rows, rows_with_i
     
-    def __get_amounts_to_reduce(self, difference: int, amount_of_cols: int) -> list:
+    def __get_amounts_to_reduce(self, difference: int) -> list:
         """
         Determines the amount of space to reduce to each column.
-        """
-        amnt_to_reduce_per_column = []
-        while difference > 0:
-            for column_i in range(amount_of_cols):
-                if difference > 0:
-                    try:
-                        amnt_to_reduce_per_column[column_i] += 1
-                    except IndexError:
-                        amnt_to_reduce_per_column.append(1)
-                    difference -= 1
-                else:
-                    break
         
-        if not self.__auto_wrap_table:
-            for element_i in range(len(amnt_to_reduce_per_column)):
-                amnt_to_reduce_per_column[element_i] += len(
-                    DEFAULT_TRIMMING_SIGN
-                )
+        Index column will never get its space reduced.
+        """
+        sums_of_widths = sum(self.__column_widths_as_list)
+        proportions = [
+            col_width / sums_of_widths 
+            for col_width in self.__column_widths_as_list
+        ]
+        trimm_sign_len = len(DEFAULT_TRIMMING_SIGN)
+        amnt_to_reduce_per_column = [
+            round(prop * difference) + trimm_sign_len if (
+                not self.__auto_wrap_table
+            ) else 0
+            for prop in proportions
+        ]
+        if self.show_index:
+            amnt_to_reduce_per_column.insert(0, 0)
         
         return amnt_to_reduce_per_column
     
@@ -1982,7 +1995,7 @@ class Table(object):
                                difference: int, 
                                rows: List[list], 
                                rows_with_i: List[list]
-                              ) -> Tuple[List[list], List[list]]:
+                              ) -> Tuple[list, List[list], List[list]]:
         """
         Reduces the difference provided to each column.
         """
@@ -1992,20 +2005,28 @@ class Table(object):
         else:
             columns_with_i = rows_with_i  # will remain untouched
             columns = list(map(list, zip(*rows)))
-        to_reduce_per_col = self.__get_amounts_to_reduce(
-            difference,
-            self.__checked_real_column_count
-        )
+        to_reduce_per_col = self.__get_amounts_to_reduce(difference)
+        adjusted_headers = []
+        adjusted_columns = []
         for col_i , to_reduce in enumerate(to_reduce_per_col):
-            auto_wrapped = self.__adjust_column_to_new_width(
-                col_i, 
-                to_reduce,
-                columns,
-            )
+            if self.__show_index:
+                wpped_header, wpped_body = self.__adjust_column_to_new_width(
+                    col_i, 
+                    to_reduce,
+                    columns_with_i,
+                )
+            else:
+                wpped_header, wpped_body = self.__adjust_column_to_new_width(
+                    col_i, 
+                    to_reduce,
+                    columns,
+                )
+            adjusted_headers.append(wpped_header)
+            adjusted_columns.append(wpped_body)
         if self.__show_index:
-            return rows, list(zip(*auto_wrapped))
+            return adjusted_headers, rows, zip(*adjusted_columns)
         else:
-            return list(zip(*auto_wrapped)), rows_with_i
+            return adjusted_headers, zip(*adjusted_columns), rows_with_i
         
     def __adjust_column_headers(self, 
                                 column_i, 
@@ -2075,33 +2096,35 @@ class Table(object):
             
         yield columns
     
+
+    
     def __trim_column(self, 
                       column_i: int, 
                       columns: List[list], 
                       new_width: int, 
                       index: int
-                     ) -> Generator[list, None, None]:
+                     ) -> Tuple[str, List[list]]:
         """
         Trims the column with the provided width::
         
             'Trimmed d...'
         """
-        to_trim = columns[column_i]
-        self.__adjust_column_headers(
-            column_i, 
-            new_width, 
-            trim=True,
-            index=index
-        )
-        for row_i, row in enumerate(to_trim):
+        col_to_trim = columns[column_i]
+        header_to_trim = self.__headers[column_i]
+        if len(str(header_to_trim)) > new_width:
+            header_to_trim = self.__trim_with_sign(
+                header_to_trim, 
+                new_width
+            )
+        for row_i, row in enumerate(col_to_trim):
             if len(str(row)) > new_width:
-                trimmed = ''.join([
-                    str(row)[:new_width],
-                    DEFAULT_TRIMMING_SIGN
-                ])
-                columns[column_i][row_i] = trimmed
+                trimmed = self.__trim_with_sign(
+                    row,
+                    new_width
+                )
+                col_to_trim[row_i] = trimmed
         
-        yield columns
+        return header_to_trim, col_to_trim
     
     def __wrap_or_trim_data(self, 
                             column_i: int, 
@@ -2110,7 +2133,7 @@ class Table(object):
                             index: bool,
                             col_type_name: str, 
                             column_title: str
-                           ) -> Generator[list, None, None]:
+                           ) -> Tuple[str, List[list]]:
         """
         Wraps or trims the data of a column, depending on the type
         and the ``__auto_wrap_table`` setting.
@@ -2118,19 +2141,13 @@ class Table(object):
         trim_alignment = type_alignments[TYPE_NAMES.str_]
         can_wrap = col_type_name in CAN_WRAP_TYPES and self.__auto_wrap_table
         if can_wrap:
-            yield from self.__wrap_columns(
+            return self.__wrap_columns(
                 column_i=column_i,
-                column=columns,
+                columns=columns,
                 new_width=new_width,
                 index=True
             )
         else:
-            yield from self.__trim_column(
-                column_i=column_i,
-                column=columns,
-                new_width=new_width,
-                index=True
-            )
             if index:
                 self.__column_alignments_with_i[
                     column_title
@@ -2145,12 +2162,18 @@ class Table(object):
                 self.__column_alignments_as_list[
                     column_i
                 ] = trim_alignment
+            return self.__trim_column(
+                column_i=column_i,
+                columns=columns,
+                new_width=new_width,
+                index=True
+            )
         
     def __adjust_column_to_new_width(self, 
                                      column_i: int, 
                                      to_reduce: int, 
                                      columns: List[list]
-                                    ) -> Generator[list, None, None]:
+                                    ) -> Tuple[str, List[list]]:
         """
         Will adjust a column to the provided width.
         """
@@ -2167,7 +2190,7 @@ class Table(object):
                 self.__column_widths[col_title],
                 -to_reduce
             ])
-        yield from self.__wrap_or_trim_data(
+        return self.__wrap_or_trim_data(
             column_i,
             new_width,
             columns,
@@ -2270,99 +2293,100 @@ class Table(object):
             self.__column_alignments_as_list_with_i.append(column_alignment)
             self.__column_types_as_list_with_i.append(column_type)
 
-    def __wrap_data(self, rows, rows_with_i, semi):
-        headers_with_i = self.__headers_with_i
-        headers = self.__headers
-        processed_headers, processed_rows = _wrap_rows(
+    def __wrap_data(self, 
+                    rows, 
+                    rows_with_i, 
+                    semi,
+                    headers_after_semi = []
+                   ) -> None:
+        if semi:
+            headers_with_i = self.__headers_with_i
+            headers = self.__headers
+        else:
+            headers_with_i = headers_after_semi
+            headers = headers_after_semi
+            
+        if self.show_index:
+            headers = headers_with_i
+            rows = rows_with_i
+            semi_processed_columns = self.__semi_processed_columns_with_i
+            processed_columns = self.__processed_columns_with_i
+        else:
+            semi_processed_columns = self.__semi_processed_columns
+            processed_columns = self.__processed_columns
+            
+        wrapped_headers, wrapped_rows = _wrap_rows(
             headers, 
             rows
         )
-        processed_columns, transformed_headers = _zip_wrapped_rows(
-            processed_headers, 
-            processed_rows, 
-        )
-        processed_headers_with_i, processed_rows_with_i = _wrap_rows(
-            headers_with_i, 
-            rows_with_i
-        )
-        processed_columns_with_i, transformed_headers_with_i = _zip_wrapped_rows(
-            processed_headers_with_i, 
-            processed_rows_with_i, 
-        )
-        self.__processed_headers = processed_headers
-        self.__processed_rows = processed_rows
-        self.__processed_headers_with_i = processed_headers_with_i
-        self.__processed_rows_with_i = processed_rows_with_i
-        for i, column in enumerate(self.__columns.items()):
-            header, data = column
-            if semi:
-                self.__semi_processed_columns[header] = {
-                    'header': transformed_headers[i],
-                    'data': processed_columns[i]
-                }
-            else:
-                self.__processed_columns[header] = {
-                    'header': transformed_headers[i],
-                    'data': processed_columns[i]
-                }
-        for i, column in enumerate(self.__columns_with_i.items()):
-            header, data = column
-            if semi:
-                self.__semi_processed_columns_with_i[header] = {
-                    'header': transformed_headers_with_i[i],
-                    'data': processed_columns_with_i[i]
-                }
-            else:
-                self.__processed_columns_with_i[header] = {
-                    'header': transformed_headers_with_i[i],
-                    'data': processed_columns_with_i[i]
-                }
-                
-    def __get_column_widths(self, semi):
-        sizes, float_sizes = _column_widths(
-            processed_columns=(
-                self.__semi_processed_columns
-            ) if semi else (
-                self.__processed_columns
-            ),
-            column_type_names=self.__column_types,
-            show_headers=self.__show_headers
+        transformed_columns, transformed_headers = _zip_wrapped_rows(
+            wrapped_headers, 
+            wrapped_rows, 
         )
         
-        sizes_with_i, float_sizes_with_i = _column_widths(
-            processed_columns=(
-                self.__semi_processed_columns_with_i
-            ) if semi else (
-                self.__processed_columns_with_i
-            ),
-            column_type_names=self.__column_types_with_i,
-            show_headers=self.__show_headers
-        )
-        self.__column_widths_as_list = sizes
-        self.__column_widths_as_list_with_i = sizes_with_i
-        if float_sizes is not None:
-            self.__float_columns_widths = {
-                **self.__float_columns_widths,
-                **float_sizes
-            }
-        if float_sizes_with_i is not None:
-            self.__float_columns_widths_with_i = {
-                **self.__float_columns_widths_with_i,
-                **float_sizes_with_i
-            }
-        for column_i, column in enumerate(self.__columns.items()):
+        for i, column in enumerate(self.__columns.items()):
             header, _ = column
-            self.__column_widths[header] = sizes[column_i]
-        for column_i, column in enumerate(self.__columns_with_i.items()):
-            header, _ = column
-            self.__column_widths_with_i[header] = sizes_with_i[column_i]
+            if semi:
+                semi_processed_columns[header] = {
+                    'header': transformed_headers[i],
+                    'data': transformed_columns[i]
+                }
+            else:
+                processed_columns[header] = {
+                    'header': transformed_headers[i],
+                    'data': transformed_columns[i]
+                }
+
+                
+    def __get_column_widths(self, semi):
+        if self.show_index:
+            sizes_with_i, float_sizes_with_i = _column_widths(
+                processed_columns=(
+                    self.__semi_processed_columns_with_i
+                ) if semi else (
+                    self.__processed_columns_with_i
+                ),
+                column_type_names=self.__column_types_with_i,
+                show_headers=self.__show_headers
+            )
+            self.__column_widths_as_list_with_i = sizes_with_i
+            if float_sizes_with_i is not None:
+                self.__float_columns_widths_with_i = {
+                    **self.__float_columns_widths_with_i,
+                    **float_sizes_with_i
+                }
+            for column_i, column in enumerate(self.__columns_with_i.items()):
+                header, _ = column
+                self.__column_widths_with_i[header] = sizes_with_i[column_i]
+        else:
+            sizes, float_sizes = _column_widths(
+                processed_columns=(
+                    self.__semi_processed_columns
+                ) if semi else (
+                    self.__processed_columns
+                ),
+                column_type_names=self.__column_types,
+                show_headers=self.__show_headers
+            )
+            self.__column_widths_as_list = sizes
+            if float_sizes is not None:
+                self.__float_columns_widths = {
+                    **self.__float_columns_widths,
+                    **float_sizes
+                }
+            for column_i, column in enumerate(self.__columns.items()):
+                header, _ = column
+                self.__column_widths[header] = sizes[column_i]
+        
 
     def __parse_data(self):
         pass
 
     def __form_string(self, table_with_i=False):
         # Data from column dict is put in tuples
-        unaligned_columns = self.__get_processed_columns_data(columns_with_i=table_with_i)
+        unaligned_columns = self.__get_processed_columns_data(
+            columns_with_i=table_with_i
+        )
         unaligned_header = self.__get_processed_columns_data(
             header=True,
             columns_with_i=table_with_i
