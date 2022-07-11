@@ -1719,7 +1719,10 @@ class Table(object):
         self.__adjust_columns_to_row_count(rows_added_before=True)
         
     def __adjust_headers_to_data_length(self, data: Union[list, tuple]) -> None:
-        headers_to_add = len(data) - len(self.__headers)
+        if data is None:
+            headers_to_add = 0
+        else:
+            headers_to_add = len(data) - len(self.__headers)
         for _ in range(headers_to_add):
             auto_named_header = self.__get_auto_header()
             self.__add_header(auto_named_header)
