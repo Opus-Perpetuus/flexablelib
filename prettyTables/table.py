@@ -840,9 +840,9 @@ class Table(object):
         self.__rows = []
         self.__rows_with_i = []
         self.__processed_columns = {}
-        self.__processed_columns_with_i = {}
+        self.__processed_columns_with_i = {I_COL_TIT: []}
         self.__semi_processed_columns = {}
-        self.__semi_processed_columns_with_i = {}
+        self.__semi_processed_columns_with_i = {I_COL_TIT: []}
         self.__processed_headers = []
         self.__processed_headers_with_i = []
         self.__processed_rows = []
@@ -908,14 +908,23 @@ class Table(object):
     
     @staticmethod
     def __apply_wrap(piece: str, new_width: int) -> str:
-        return '\n'.join(wrap(str(piece), new_width))
+        try:
+            return '\n'.join(wrap(piece, new_width))
+        except TypeError:
+            return '\n'.join(wrap(str(piece), new_width))
     
     @staticmethod
     def __trim_with_sign(piece: str, new_widht: int) -> str:
-        return ''.join([
-            piece[:new_widht],
-            DEFAULT_TRIMMING_SIGN
-        ])
+        try:
+            return ''.join([
+                piece[:new_widht],
+                DEFAULT_TRIMMING_SIGN
+            ])
+        except TypeError:
+            return ''.join([
+                str(piece)[:new_widht],
+                DEFAULT_TRIMMING_SIGN
+            ])
         
     @staticmethod
     def __check_if_none_and_get_len(value: Union[str, None]) -> int:
@@ -1978,10 +1987,16 @@ class Table(object):
         
         Index column will never get its space reduced.
         """
-        sums_of_widths = sum(self.__column_widths_as_list)
+        if self.__show_index:
+            sums_of_widths = sum(self.__column_widths_as_list_with_i)
+            widths = self.__column_widths_as_list_with_i
+            widths.pop(0)
+        else:
+            sums_of_widths = sum(self.__column_widths_as_list)
+            widths = self.__column_alignments_as_list
         proportions = [
             col_width / sums_of_widths 
-            for col_width in self.__column_widths_as_list
+            for col_width in widths
         ]
         trimm_sign_len = len(DEFAULT_TRIMMING_SIGN)
         amnt_to_reduce_per_column = [
@@ -2044,7 +2059,10 @@ class Table(object):
             'Wrapped\\ndata'
         """
         col_to_wrap = columns[column_i]
-        header_to_wrap = self.__headers[column_i]
+        if self.show_index:
+            header_to_wrap = self.__headers_with_i[column_i]
+        else:            
+            header_to_wrap = self.__headers[column_i]
         header_to_wrap = self.__apply_wrap(
             header_to_wrap, 
             new_width
@@ -2067,7 +2085,10 @@ class Table(object):
             'Trimmed d...'
         """
         col_to_trim = columns[column_i]
-        header_to_trim = self.__headers[column_i]
+        if self.show_index:
+            header_to_trim = self.__headers_with_i[column_i]
+        else:
+            header_to_trim = self.__headers[column_i]
         if len(str(header_to_trim)) > new_width:
             header_to_trim = self.__trim_with_sign(
                 header_to_trim, 
@@ -2106,17 +2127,17 @@ class Table(object):
             )
         else:
             if index:
-                self.__column_alignments_with_i[
-                    column_title
-                ] = trim_alignment
-                self.__column_alignments_as_list_with_i[
-                    column_i
-                ] = trim_alignment
-            else:
                 self.__column_alignments[
                     column_title
                 ] = trim_alignment
                 self.__column_alignments_as_list[
+                    column_i
+                ] = trim_alignment
+            else:
+                self.__column_alignments_with_i[
+                    column_title
+                ] = trim_alignment
+                self.__column_alignments_as_list_with_i[
                     column_i
                 ] = trim_alignment
             return self.__trim_column(
@@ -2134,14 +2155,15 @@ class Table(object):
         """
         Will adjust a column to the provided width.
         """
-        col_title = self.__headers[column_i]
         if self.__show_index:
+            col_title = self.__headers_with_i[column_i]
             col_type = self.__column_types_as_list_with_i[column_i]
             new_width = sum([
                 self.__column_widths_with_i[col_title],
                 -to_reduce
             ])
         else:
+            col_title = self.__headers[column_i]
             col_type = self.__column_types_as_list[column_i]
             new_width = sum([
                 self.__column_widths[col_title],
@@ -2281,7 +2303,11 @@ class Table(object):
             wrapped_rows, 
         )
         
-        for i, column in enumerate(self.__columns.items()):
+        if self.show_index:
+            columns_to_iterate = {I_COL_TIT: [], **self.__columns}.items()
+        else:
+            columns_to_iterate = self.__columns.items()
+        for i, column in enumerate(columns_to_iterate):
             header, _ = column
             if semi:
                 semi_processed_columns[header] = {

@@ -641,11 +641,11 @@ def _column_widths(processed_columns: Dict[str, tuple],
     if show_headers:
         # Get the max width between the header and body sizes if the header
         # is set to show.
-        widths = tuple(map(lambda x, y: max(x, y), head_sizes, body_sizes))
+        widths = list(map(lambda x, y: max(x, y), head_sizes, body_sizes))
         
     else:
         # Only the body sizes if the header is not set to show.    
-        widths = tuple(body_sizes)
+        widths = body_sizes
 
     return widths, float_column_widths
 
