@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [1.1.5](https://github.com/Kyostenas/prettyTables/compare/v1.1.4...v1.1.5) (2022-07-11)
+
+
+### Bug Fixes
+
+* Wasn't possible to add empty rows. ([7a94a3f](https://github.com/Kyostenas/prettyTables/commit/7a94a3f94438ebdab16d21dd80d4c1bc66be872e))
+
 ### [1.1.4](https://github.com/Kyostenas/prettyTables/compare/v1.1.3...v1.1.4) (2022-07-11)
 
 
