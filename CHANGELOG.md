@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [1.1.4](https://github.com/Kyostenas/prettyTables/compare/v1.1.3...v1.1.4) (2022-07-11)
+
+
+### Bug Fixes
+
+* Accidental import. ([47e798a](https://github.com/Kyostenas/prettyTables/commit/47e798a9019b918b47ace50d5fe5683864e5e886))
+* Auto trimming fixed. ([92e3a66](https://github.com/Kyostenas/prettyTables/commit/92e3a668fb931da0225b375d03c72f2ce9e357d0))
+* Auto-wrapping fixed. ([4b8d631](https://github.com/Kyostenas/prettyTables/commit/4b8d631dc9f7dbe65053e25b854dc61c7d6fbb64))
+* Autwrapping with index shown fixed. ([cbcb70c](https://github.com/Kyostenas/prettyTables/commit/cbcb70c8a08c5572553a3b46cad822cc316d5025))
+* Columns not showing wen passing less headers in class args. ([1559fe4](https://github.com/Kyostenas/prettyTables/commit/1559fe41f347130e44f07c67cdd464ca23f0cf68))
+* Passing extra headers causes an IndexError. ([e5a3e42](https://github.com/Kyostenas/prettyTables/commit/e5a3e427cf226d6eb4e58fb658d5068be1700edd))
+* Using rows and headers arguments gives error. ([0479cd5](https://github.com/Kyostenas/prettyTables/commit/0479cd569396db5a08c9b51be7816b53e0e0f8f9))
+
 ### [1.1.3](https://github.com/Kyostenas/prettyTables/compare/v1.1.2...v1.1.3) (2022-05-07)
 
 
