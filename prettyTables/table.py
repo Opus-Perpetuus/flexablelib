@@ -905,11 +905,15 @@ class Table(object):
 
     # +-----------------------------------------------------------------------------+
     # start +-----------------------+ STATIC METHODS +------------------------+ start
-        
+    
     @staticmethod
-    def __trim_with_sign(row: str, new_widht):
+    def __apply_wrap(piece: str, new_width: int) -> str:
+        return '\n'.join(wrap(str(piece), new_width))
+    
+    @staticmethod
+    def __trim_with_sign(piece: str, new_widht: int) -> str:
         return ''.join([
-            row[:new_widht],
+            piece[:new_widht],
             DEFAULT_TRIMMING_SIGN
         ])
         
@@ -1981,9 +1985,9 @@ class Table(object):
         ]
         trimm_sign_len = len(DEFAULT_TRIMMING_SIGN)
         amnt_to_reduce_per_column = [
-            round(prop * difference) + trimm_sign_len if (
+            round(prop * difference) + (trimm_sign_len if (
                 not self.__auto_wrap_table
-            ) else 0
+            ) else 0)
             for prop in proportions
         ]
         if self.show_index:
@@ -2027,76 +2031,29 @@ class Table(object):
             return adjusted_headers, rows, zip(*adjusted_columns)
         else:
             return adjusted_headers, zip(*adjusted_columns), rows_with_i
-        
-    def __adjust_column_headers(self, 
-                                column_i, 
-                                new_width, 
-                                trim: bool,
-                                index: bool,
-                               ) -> None:
-        """
-        Wraps or trims the header of a column.
-        
-        Example of wrapping::
-        
-            'Wrapped\\nheader'
-        
-        Example of trimming::
-        
-            'Trimmed he...'
-        """
-        if trim:
-            if index:
-                if len(str(self.__headers_with_i[column_i])) > new_width:
-                    self.__headers_with_i[column_i] = ''.join([
-                        self.__headers_with_i[column_i][:new_width],
-                        DEFAULT_TRIMMING_SIGN
-                    ])
-            else:
-                if len(str(self.__headers[column_i])) > new_width:
-                    self.__headers[column_i] = ''.join([
-                        self.__headers[column_i][:new_width],
-                        DEFAULT_TRIMMING_SIGN
-                    ])
-                
-        else:
-            if index:
-                self.__headers_with_i[column_i + 1] = '\n'.join(wrap(
-                        str(self.__headers_with_i[column_i + 1]), 
-                        new_width
-                    ))           
-            else:
-                self.__headers[column_i] = '\n'.join(wrap(
-                        str(self.__headers[column_i]), 
-                        new_width
-                    ))
     
     def __wrap_columns(self, 
                        column_i: int, 
                        columns: List[list], 
                        new_width: int, 
                        index: int
-                      ) -> Generator[list, None, None]:
+                      ) -> Tuple[str, List[list]]:
         """
         Wraps the column with the provided width::
         
             'Wrapped\\ndata'
         """
-        self.__adjust_column_headers(
-            column_i=column_i, 
-            new_width=new_width, 
-            trim=False,
-            index=index
+        col_to_wrap = columns[column_i]
+        header_to_wrap = self.__headers[column_i]
+        header_to_wrap = self.__apply_wrap(
+            header_to_wrap, 
+            new_width
         )
-        to_wrap = columns[column_i]
-        for row_i, row in enumerate(to_wrap):
-            columns[column_i + (1 if index else 0)][row_i] = (
-                '\n'.join(wrap(str(row), new_width))
-            )
+        for row_i, row in enumerate(col_to_wrap):
+            wrapped = self.__apply_wrap(row, new_width)
+            col_to_wrap[row_i] = wrapped
             
-        yield columns
-    
-
+        return header_to_wrap, col_to_wrap
     
     def __trim_column(self, 
                       column_i: int, 
