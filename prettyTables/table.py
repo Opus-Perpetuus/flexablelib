@@ -1996,7 +1996,7 @@ class Table(object):
             widths.pop(0)
         else:
             sums_of_widths = sum(self.__column_widths_as_list)
-            widths = self.__column_alignments_as_list
+            widths = self.__column_widths_as_list
         proportions = [
             col_width / sums_of_widths 
             for col_width in widths
@@ -2130,17 +2130,17 @@ class Table(object):
             )
         else:
             if index:
-                self.__column_alignments[
-                    column_title
-                ] = trim_alignment
-                self.__column_alignments_as_list[
-                    column_i
-                ] = trim_alignment
-            else:
                 self.__column_alignments_with_i[
                     column_title
                 ] = trim_alignment
                 self.__column_alignments_as_list_with_i[
+                    column_i
+                ] = trim_alignment
+            else:
+                self.__column_alignments[
+                    column_title
+                ] = trim_alignment
+                self.__column_alignments_as_list[
                     column_i
                 ] = trim_alignment
             return self.__trim_column(
