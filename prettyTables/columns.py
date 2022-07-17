@@ -14,7 +14,8 @@ from .utils import (
 from .options import (
     DEFAULT_FILL_CHAR, 
     FLT_FILTER, 
-    INT_FILTER
+    INT_FILTER,
+    COLUMN_ALIGNS
 )
 
 from typing import (
@@ -58,12 +59,12 @@ FLOAT_SEPARATOR = '.'
 
 
 ALIGNMENTS_PER_TYPE = {
-    TYPE_NAMES.bool_: 'r',
-    TYPE_NAMES.str_: 'l',
-    TYPE_NAMES.int_: 'r',
-    TYPE_NAMES.float_: 'f',
-    TYPE_NAMES.bytes_: 'b',
-    TYPE_NAMES.none_type_: 'l',
+    TYPE_NAMES.bool_: COLUMN_ALIGNS.right,
+    TYPE_NAMES.str_: COLUMN_ALIGNS.left,
+    TYPE_NAMES.int_: COLUMN_ALIGNS.right,
+    TYPE_NAMES.float_: COLUMN_ALIGNS.float,
+    TYPE_NAMES.bytes_: COLUMN_ALIGNS.bytes,
+    TYPE_NAMES.none_type_: COLUMN_ALIGNS.left,
 }
 
 
@@ -739,28 +740,28 @@ def __align_single_cell(cell: Union[Any, List[Any], Tuple[Any]],
         '        111.22   '
     """
     new_cell = cell
-    if to_where == 'l':
+    if to_where == COLUMN_ALIGNS.left:
         # Adjust the cell to the left.
         new_cell = _ljust_cell(
             cell, 
             col_width, 
             DEFAULT_FILL_CHAR
         )
-    elif to_where == 'c':
+    elif to_where == COLUMN_ALIGNS.center:
         # Adjust the cell to the center.
         new_cell = _center_cell(
             cell, 
             col_width, 
             DEFAULT_FILL_CHAR
         )
-    elif to_where == 'r':
+    elif to_where == COLUMN_ALIGNS.right:
         # Adjust the cell to the right.
         new_cell = _rjust_cell(
             cell, 
             col_width, 
             DEFAULT_FILL_CHAR
         )
-    elif to_where == 'f':
+    elif to_where == COLUMN_ALIGNS.float:
         # Adjust the cell as a float.
         new_cell = _fljust_cell(
             cell, 

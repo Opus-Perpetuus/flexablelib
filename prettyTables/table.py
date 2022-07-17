@@ -28,7 +28,6 @@ from .table_strings import (
     DataRows
 )
 from .utils import (
-    delete_repetitions,
     get_window_size, 
     is_multi_row,
     ValuePlacer,
@@ -39,9 +38,8 @@ from .options import (
     NONE_VALUE_REPLACEMENT, 
     DEFAULT_STYLE, 
     I_COL_TIT, 
-    DEFAULT_TABLE_ALIGNMENT,
     DEFAULT_TRIMMING_SIGN,
-    MIN_COLUMN_SIZE
+    TABLE_ALIGNS
 )
 from .cells import (
     _wrap_rows,
@@ -52,7 +50,6 @@ from copy import deepcopy
 from textwrap import wrap
 from typing import (
     Any,
-    Generator,
     List,
     Optional,
     Tuple,
@@ -778,9 +775,6 @@ class Table(object):
         self.__parse_str_numbers = False
         self.__auto_wrap_table = False
         self.__expand_to_window = False  # TODO implement expand_to_window
-        self.__auto_wrap_text = False
-        self.__expand_body_to = 'r'
-        self.__expand_header_to = 'r'
         self.__leading_zeros = None
         self.__float_spaces = 2
         self.__format_exponential = True
@@ -822,7 +816,7 @@ class Table(object):
         self.__column_widths_with_i = {}
         self.__column_widths_as_list = []
         self.__column_widths_as_list_with_i = []
-        self.__table_alignment = 'l'
+        self.__table_alignment = TABLE_ALIGNS.left
         self.__column_alignments = {}
         self.__column_alignments_with_i = {
             I_COL_TIT: type_alignments[TYPE_NAMES.int_]
@@ -2381,13 +2375,11 @@ class Table(object):
             column_titles = self.__headers_with_i
             column_alignments_list = self.__column_alignments_as_list_with_i
             column_widths_list = self.__column_widths_as_list_with_i
-            column_widths = self.__column_widths_with_i
             float_column_widths = self.__float_columns_widths_with_i
         else:
             column_titles = self.__headers
             column_alignments_list = self.__column_alignments_as_list
             column_widths_list = self.__column_widths_as_list
-            column_widths = self.__column_widths
             float_column_widths = self.__float_columns_widths
         # Header and body rows get aligned
         aligned_header = _align_headers(
@@ -2414,9 +2406,10 @@ class Table(object):
         # String separators and data rows are joined
         separators: HorizontalComposition = _get_separators(
             self.__style_composition,
-            tuple(column_widths.values()),
+            column_widths_list,
             self.__empty_column_indexes,
-            self.__show_empty_columns
+            self.__show_empty_columns,
+            column_alignments_list,
         )
         data_rows: DataRows = _get_data_rows(
             self.__style_composition, 

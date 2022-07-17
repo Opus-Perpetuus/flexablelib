@@ -24,7 +24,11 @@ TableComposition = namedtuple(
         'margin',
         'align_sensitive',
         'align_indicator',
-        'centered_indicator_on_sides'
+        'centered_indicator_on_sides',
+        'left_and_right_when_centered',
+        'lines_with_indicator',
+        'align_indicator_margin',
+        'always_center_indicator',
     ]
 )
 
@@ -52,9 +56,23 @@ SeparatorLine = namedtuple(
 AlignIndicator = namedtuple(
     'AlignIndicator',
     [
-        'sides',
-        'center'
-    ]
+        'left',
+        'center',
+        'right'
+    ]   
+)
+
+AlignIndicatorIndexes = namedtuple(
+    'AlignIndicatorIndexes',
+    [
+        'left',
+        'center',
+        'right'
+    ]   
+)
+
+ALIGN_INDICATOR_INDEXES = AlignIndicatorIndexes(
+    *[i for i in range(len(AlignIndicatorIndexes._fields))]
 )
 
 Compositions = namedtuple(
@@ -97,6 +115,7 @@ Compositions = namedtuple(
         'tilg_columns',
         'tilg_empty',
         'orgtbl',
+        'sticks',
 
         # Simple (horizontal lines)
         'clean',
@@ -110,7 +129,7 @@ Compositions = namedtuple(
         'sim_head_bd_bl',
 
         # Other
-        'dashes'
+        'dashes',
     ]
 )
 
@@ -126,7 +145,11 @@ __style_compositions = Compositions(
         margin=0,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
 
     ###################################
@@ -143,7 +166,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     pretty_columns=TableComposition(
         superior_header_line=SeparatorLine('╒', '═', '╤', '╕'),
@@ -156,7 +183,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     bold_header=TableComposition(
         superior_header_line=SeparatorLine('╔', '═', '╦', '╗'),
@@ -169,7 +200,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     bheader_columns=TableComposition(
         superior_header_line=SeparatorLine('╔', '═', '╦', '╗'),
@@ -182,7 +217,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     bold_eheader=TableComposition(
         superior_header_line=SeparatorLine('╔', '═', '═', '╗'),
@@ -195,7 +234,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     beheader_columns=TableComposition(
         superior_header_line=SeparatorLine('╔', '═', '═', '╗'),
@@ -208,7 +251,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     bheader_ebody=TableComposition(
         superior_header_line=SeparatorLine('╔', '═', '═', '╗'),
@@ -221,7 +268,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     round_edges=TableComposition(
         superior_header_line=SeparatorLine('╭', '─', '┬', '╮'),
@@ -234,7 +285,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     re_eheader=TableComposition(
         superior_header_line=SeparatorLine('╭', '─', '─', '╮'),
@@ -247,7 +302,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     re_ebody=TableComposition(
         superior_header_line=SeparatorLine('╭', '─', '─', '╮'),
@@ -260,7 +319,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     ###########################
     ####  Thin borderline  ####
@@ -276,7 +339,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     th_bd_eheader=TableComposition(
         superior_header_line=SeparatorLine('┌', '─', '─', '┐'),
@@ -289,7 +356,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     th_bd_ebody=TableComposition(
         superior_header_line=SeparatorLine('┌', '─', '┬', '┐'),
@@ -302,7 +373,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     th_bd_empty=TableComposition(
         superior_header_line=SeparatorLine('┌', '─', '─', '┐'),
@@ -315,7 +390,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     ###########################
     ####  Bold borderline  ####
@@ -331,7 +410,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     bd_bl_eheader=TableComposition(
         superior_header_line=SeparatorLine('╔', '═', '═', '╗'),
@@ -344,7 +427,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     bd_bl_ebody=TableComposition(
         superior_header_line=SeparatorLine('╔', '═', '╤', '╗'),
@@ -357,7 +444,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     bd_bl_empty=TableComposition(
         superior_header_line=SeparatorLine('╔', '═', '═', '╗'),
@@ -370,7 +461,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
 
     ###########################
@@ -387,7 +482,11 @@ __style_compositions = Compositions(
         margin=0,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     presto=TableComposition(
         superior_header_line=None,
@@ -400,7 +499,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     grid=TableComposition(
         superior_header_line=SeparatorLine('+', '-', '+', '+'),
@@ -413,7 +516,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     grid_eheader=TableComposition(
         superior_header_line=SeparatorLine('+', '-', '-', '+'),
@@ -426,7 +533,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     grid_ebody=TableComposition(
         superior_header_line=SeparatorLine('+', '-', '+', '+'),
@@ -439,7 +550,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     grid_empty=TableComposition(
         superior_header_line=SeparatorLine('+', '-', '-', '+'),
@@ -452,7 +567,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     pipes=TableComposition(
         superior_header_line=None,
@@ -464,8 +583,12 @@ __style_compositions = Compositions(
         vertical_table_body_lines=SeparatorLine('|', '|', None, '|'),
         margin=CELL_MARGIN,
         align_sensitive=True,
-        align_indicator=AlignIndicator(':', ':'),
-        centered_indicator_on_sides=True
+        align_indicator=AlignIndicator(':', ':', ':'),
+        centered_indicator_on_sides=True,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[1, 2],
+        align_indicator_margin=CELL_MARGIN,
+        always_center_indicator=False
     ),
     tilde_grid=TableComposition(
         superior_header_line=SeparatorLine('+', '-', '+', '+'),
@@ -478,7 +601,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     tilg_eheader=TableComposition(
         superior_header_line=SeparatorLine('+', '-', '-', '+'),
@@ -491,7 +618,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     tilg_columns=TableComposition(
         superior_header_line=SeparatorLine('+', '-', '+', '+'),
@@ -504,7 +635,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     tilg_empty=TableComposition(
         superior_header_line=SeparatorLine('+', '-', '-', '+'),
@@ -517,7 +652,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     orgtbl=TableComposition(
         superior_header_line=None,
@@ -530,7 +669,28 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
+    ),
+    sticks=TableComposition(
+        superior_header_line=SeparatorLine('+', ' ', '+', '+'),
+        inferior_header_line=SeparatorLine('+', ' ', '+', '+'),
+        superior_header_line_no_header=SeparatorLine('+', ' ', '+', '+'),
+        table_body_line=None,
+        table_end_line=SeparatorLine('+', ' ', '+', '+'),
+        vertical_header_lines=SeparatorLine('|', '|', None, '|'),
+        vertical_table_body_lines=SeparatorLine('|', '|', None, '|'),
+        margin=CELL_MARGIN,
+        align_sensitive=True,
+        align_indicator=AlignIndicator('~<~', '~^~', '~>~'),
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[0, 1, 2, 4],
+        align_indicator_margin=CELL_MARGIN,
+        always_center_indicator=False
     ),
 
     ###################################
@@ -547,7 +707,11 @@ __style_compositions = Compositions(
         margin=0,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     simple=TableComposition(
         superior_header_line=SeparatorLine(None, '-', '-' * len(INVISIBLE_SEPARATOR), None),
@@ -560,7 +724,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     simple_bold=TableComposition(
         superior_header_line=SeparatorLine(None, '=', '=' * len(INVISIBLE_SEPARATOR), None),
@@ -573,7 +741,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     simple_head=TableComposition(
         superior_header_line=None,
@@ -586,7 +758,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     simple_head_bold=TableComposition(
         superior_header_line=None,
@@ -599,7 +775,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     sim_th_bl=TableComposition(
         superior_header_line=SeparatorLine(None, '─', '─' * len(INVISIBLE_SEPARATOR), None),
@@ -612,7 +792,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     sim_bd_bl=TableComposition(
         superior_header_line=SeparatorLine(None, '═', '═' * len(INVISIBLE_SEPARATOR), None),
@@ -625,7 +809,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     sim_head_th_bl=TableComposition(
         superior_header_line=None,
@@ -638,7 +826,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     sim_head_bd_bl=TableComposition(
         superior_header_line=None,
@@ -651,7 +843,11 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     ),
     ##################
     ####   Other  ####
@@ -667,6 +863,10 @@ __style_compositions = Compositions(
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
-        centered_indicator_on_sides=False
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
     )
 )

@@ -6,6 +6,27 @@ formatting, and other things.
 """
 
 import re
+from collections import namedtuple
+
+ColumnAlignmentNames = namedtuple(
+    'ColumnAlignmentNames',
+    [
+        'left',
+        'center',
+        'right',
+        'float',
+        'bytes'
+    ]
+)
+
+TableAlignmentNames = namedtuple(
+    'ColumnAlignmentNames',
+    [
+        'left',
+        'center',
+        'right',
+    ]
+)
 
 
 # +-------------------------+ CONSTANTS +------------------------+
@@ -28,7 +49,20 @@ DEFAULT_TABLE_ALIGNMENT = 'l'
 DEFAULT_TRIMMING_SIGN = '...'
 # How small can a column be.
 MIN_COLUMN_SIZE = 3
-
+# Names of the column alignments
+COLUMN_ALIGNS = ColumnAlignmentNames(
+    left='l',
+    center='c',
+    right='r',
+    float='f',
+    bytes='b'
+)
+# Names of the table alignments
+TABLE_ALIGNS = TableAlignmentNames(
+    left='tl',
+    center='tc',
+    right='tr',
+)
 
 # +--------------------------+ REGEX +---------------------------+
 
