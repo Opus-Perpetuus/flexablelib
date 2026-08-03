@@ -152,6 +152,60 @@ def test_trimmed_table_should_also_fit_the_terminal(terminal):
 
 
 # +-------------------------------------------------------------------------+
+# max_width: fitting to something other than the terminal
+# +-------------------------------------------------------------------------+
+
+def test_max_width_replaces_the_terminal_width(terminal):
+    # A wide terminal, but the table is told to fit into 20 anyway. The result
+    # must match what a 20-column terminal produces.
+    terminal(200)
+    table = build_table(auto_wrap=True)
+    table.max_width = 20
+
+    rendered = str(table)
+
+    assert widths_from_border(rendered.splitlines()[0], INTERSECTION) == [2, 7]
+    assert table_width(rendered) == 16
+
+
+def test_max_width_wins_over_a_narrow_terminal_too(terminal):
+    terminal(20)
+    table = build_table(auto_wrap=True)
+    table.max_width = 200
+
+    rendered = str(table)
+
+    assert LONG_COMMENT in rendered
+    assert table_width(rendered) == 35
+
+
+def test_max_width_makes_rendering_independent_of_the_console(terminal_calls):
+    calls = terminal_calls(20)
+    table = build_table(auto_wrap=True)
+    table.max_width = 200
+
+    str(table)
+
+    # Nothing consulted the console: the width came from max_width.
+    assert calls == []
+
+
+def test_max_width_rejects_a_non_positive_width():
+    table = build_table()
+
+    with pytest.raises(ValueError):
+        table.max_width = 0
+
+
+def test_max_width_can_be_cleared():
+    table = build_table()
+    table.max_width = 20
+    table.max_width = None
+
+    assert table.max_width is None
+
+
+# +-------------------------------------------------------------------------+
 # Terminal reading and re-rendering
 # +-------------------------------------------------------------------------+
 

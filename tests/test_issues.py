@@ -260,25 +260,85 @@ def test_issue_16_a_narrow_column_should_survive_a_shrink(terminal):
 
 # +-------------------------------------------------------------------------+
 # Issue #14 -- Show a special message when the table is too big for the space.
+#              IMPLEMENTED as too_narrow_message.
 # +-------------------------------------------------------------------------+
 
-@pytest.mark.skip(
-    reason=(
-        'Issue #14 is an unimplemented enhancement and the issue does not '
-        'specify the message or the API that would expose it, so there is no '
-        'behaviour to assert yet. The scenario is kept here as the shape the '
-        'test should take once the feature is designed: at 8 columns the '
-        'table below degenerates into one character per line instead of '
-        'reporting that it does not fit.'
-    )
-)
-def test_issue_14_a_table_that_cannot_fit_shows_a_notice(terminal):
-    terminal(8)
+def build_issue_14_table():
     table = Table(style_name='thin_borderline')
     table.add_column('Name', ['Jade', 'John'])
     table.add_column('Comment', ['a very long comment here', 'short'])
     table.auto_wrap = True
+    return table
+
+
+def test_issue_14_a_table_that_cannot_fit_shows_the_message(terminal):
+    """
+    The floor comes from the style: two columns at MIN_COLUMN_SIZE (3) plus
+    two margin characters each, plus the three vertical rules thin_borderline
+    draws, is 13. Below that the table cannot be drawn legibly at all.
+    """
+    terminal(8)
+    table = build_issue_14_table()
+    table.too_narrow_message = 'Needs {needed} columns, only {available} here.'
+
+    assert str(table) == 'Needs 13 columns, only 8 here.'
+
+
+def test_issue_14_the_message_is_not_used_when_the_table_can_be_squeezed(terminal):
+    terminal(13)
+    table = build_issue_14_table()
+    table.too_narrow_message = 'Needs {needed} columns, only {available} here.'
 
     rendered = str(table)
 
-    assert 'Jade' in rendered   # placeholder for the real expectation
+    assert 'Needs' not in rendered
+    assert rendered.startswith('┌')
+
+
+def test_issue_14_the_floor_is_lower_for_a_borderless_style(terminal):
+    """
+    ``plain`` draws no vertical rules and has a margin of 0, so the same two
+    columns need only 2 * MIN_COLUMN_SIZE and fit where thin_borderline
+    does not.
+    """
+    terminal(8)
+    table = build_issue_14_table()
+    table.style_name = 'plain'
+    table.too_narrow_message = 'needs {needed}, has {available}'
+
+    rendered = str(table)
+
+    assert 'needs' not in rendered
+    assert 'comment' in rendered or 'comm' in rendered
+
+
+def test_issue_14_without_a_message_a_hopeless_width_raises(terminal):
+    """
+    Characterises what ``too_narrow_message`` is there to avoid.
+
+    At 8 columns the proportional reduction hands 'Name' a budget of exactly
+    0, and ``textwrap.wrap(piece, 0)`` rejects a width of zero. The default
+    path does not render an ugly table -- it raises.
+    """
+    terminal(8)
+    table = build_issue_14_table()
+
+    assert table.too_narrow_message is None
+    with pytest.raises(ValueError):
+        str(table)
+
+
+@pytest.mark.xfail(
+    reason=(
+        'A column budget of 0 reaches textwrap.wrap(), which rejects it. '
+        'Setting too_narrow_message avoids the path but does not fix it: '
+        'shrinking should floor a column at MIN_COLUMN_SIZE rather than let '
+        'it reach zero.'
+    ),
+    strict=False,
+)
+def test_issue_14_shrinking_should_never_hand_a_column_a_budget_of_zero(terminal):
+    terminal(8)
+    table = build_issue_14_table()
+
+    str(table)
