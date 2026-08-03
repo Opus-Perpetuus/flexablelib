@@ -253,6 +253,43 @@ package and worth knowing before you cut a release:
 So `setup.py` must be run from the repository root — it resolves `./package.json` relative to
 the working directory, not to the file.
 
+## Performance
+
+`fast.py` selects a C implementation of the measurement primitives when the
+extension built, and falls back to `text_width.py` when it did not. On the
+primitives themselves the extension is worth 17-34x:
+
+| Operation | Speedup |
+| --- | ---: |
+| `visible_width`, plain text | 17.3x |
+| `visible_width`, with ANSI | 34.4x |
+| `strip_ansi` | 5.1x |
+| `pad_to_width` | 5.3x |
+| `widths_of`, whole column | 20.6x |
+
+**That does not translate into a 17x faster render, and it is worth being
+precise about why.** Rendering 2000 rows by 4 columns takes about 110 ms, and
+profiling puts the time here:
+
+```
+__form_string            41 ms
+__zip_columns            32 ms   transposing columns to rows, twice
+__get_column_widths      26 ms
+_align_columns           25 ms   __align_single_cell runs 8004 times
+```
+
+Text measurement is a small share of that. The cost is the orchestration in
+`table.py`: the four parallel data representations are transposed on every
+render, the two-pass design walks the data twice, and alignment dispatches a
+Python call per cell per pass. Against `tabulate`, `prettytable` and pandas'
+`to_string` on the same data, this package lands within about 20% -- slightly
+behind, not ahead.
+
+Making it decisively faster means attacking the pipeline, not the primitives:
+lowering `_align_columns` and `__zip_columns` into the extension, or keeping
+one canonical data orientation instead of four and deriving the others on
+demand. Both are larger changes than swapping in a faster `len()`.
+
 ## Known gaps
 
 Things that are deliberately unfinished, so you do not mistake them for bugs:
