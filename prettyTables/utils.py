@@ -50,19 +50,29 @@ def is_bytes(piece):
 
 def is_some_instance(piece, *instances):
     """
-    Returns True if the data piece is any instance of the requested
+    Returns True if the data piece is any instance of the requested.
+
+    isinstance already accepts a tuple of types and does the whole test in one
+    C call. The previous loop ran one call per type and, on no match, fell off
+    the end returning None rather than False -- harmless where the result is
+    only used in a condition, but wrong.
+
+    This runs tens of thousands of times per render, so it is worth the
+    directness.
     """
-    is_instance = False
-    for another in instances:
-        is_instance = is_instance or isinstance(piece, another)
-        if is_instance:
-            return True
+    return isinstance(piece, instances)
 
 
 def is_multi_row(row):
-    row_to_check = [*row]
-    are_list_or_tuples = tuple(map(lambda col: is_list(col) or is_tuple(col), row_to_check))
-    return True if sum(are_list_or_tuples) == len(tuple(row_to_check)) else False
+    """
+    True when every cell in the row is itself a sequence of sub-rows.
+
+    Built two intermediate sequences and a lambda per cell before; `all` short
+    circuits on the first plain cell instead, and the common case -- an
+    ordinary row -- exits on the first element. An empty row is still True,
+    as it was when the old sum() and len() were compared at zero.
+    """
+    return all(isinstance(cell, (list, tuple)) for cell in row)
 
 
 def length_of_elements(element_list, index=0, lengths=None):

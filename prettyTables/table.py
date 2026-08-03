@@ -800,6 +800,8 @@ class Table(object):
         self.__color_rule = None
         # None means "decide from the output stream"; True and False force it.
         self.__use_colors = None
+        # +----------------------+ MERGED CELLS +-----------------------+
+        self.__merged_regions = []
         # +---------------------+ FITTING +-----------------------------+
         # None means "use the terminal width".
         self.__max_width = None
@@ -1648,6 +1650,55 @@ class Table(object):
             separator_count += column_count - 1
         return column_count * (MIN_COLUMN_SIZE + margins) + separator_count
 
+    # +----------------------+ MERGED CELLS +-----------------------+
+
+    @property
+    def merged_regions(self) -> list:
+        """The merges in place, as a list of ``MergedRegion``."""
+        return list(self.__merged_regions)
+
+    def merge_cells(self, first_row, first_column, last_row=None,
+                    last_column=None, value=None, align='c'):
+        """
+        Render a rectangular block of cells as a single cell.
+
+        Coordinates are inclusive and zero-based, and ignore the index column
+        even when it is displayed. Omitting ``last_row`` or ``last_column``
+        leaves that axis unmerged, so a merge can run across columns, down
+        rows, or both::
+
+            table.merge_cells(0, 0, last_column=2)        # across three columns
+            table.merge_cells(1, 0, last_row=3)           # down four rows
+            table.merge_cells(0, 0, 2, 2, value='Total')  # a 3x3 block
+
+        ``value`` replaces the text; left as None, the top-left cell's own
+        content is kept. ``align`` is 'l', 'r' or 'c' within the merged span.
+
+        Raises ValueError for a merge covering a single cell, coordinates
+        outside the table, or an overlap with a merge already in place.
+
+        A merge never widens the table: the columns are still sized by their
+        unmerged content, so text longer than the span it is given is
+        truncated. Widen the columns, or shorten the text.
+        """
+        from .merges import normalise
+
+        if last_row is None:
+            last_row = first_row
+        if last_column is None:
+            last_column = first_column
+
+        region = normalise(
+            first_row, first_column, last_row, last_column, value, align,
+            self.row_count, self.column_count, self.__merged_regions,
+        )
+        self.__merged_regions.append(region)
+        return region
+
+    def unmerge_all(self):
+        """Remove every merge."""
+        self.__merged_regions = []
+
     # +------------------------+ COLOUR +---------------------------+
 
     @property
@@ -2239,18 +2290,33 @@ class Table(object):
             )
             self.__get_column_widths(semi=True)
             table_width = self.__get_string_table_width()
-            headers, rows, rows_with_i = self.__check_columns_size(
-                table_width, 
-                rows, 
+            adjusted, headers, rows, rows_with_i = self.__check_columns_size(
+                table_width,
+                rows,
                 rows_with_i
             )
-            self.__wrap_data(
-                rows, 
-                rows_with_i, 
-                semi=False,
-                headers_after_semi=headers
-            )
-            self.__get_column_widths(semi=False)
+            if adjusted:
+                # Widths changed, so the data has to be re-wrapped against the
+                # new budgets and measured again.
+                self.__wrap_data(
+                    rows,
+                    rows_with_i,
+                    semi=False,
+                    headers_after_semi=headers
+                )
+                self.__get_column_widths(semi=False)
+            else:
+                # The table already fits. The second pass would wrap the same
+                # data against the same widths, with the same headers, and
+                # write the same numbers into the same attributes -- so it is
+                # pure duplicated work. Point the final structures at what the
+                # first pass produced instead.
+                #
+                # This is the common case: most tables fit their terminal.
+                self.__processed_columns = self.__semi_processed_columns
+                self.__processed_columns_with_i = (
+                    self.__semi_processed_columns_with_i
+                )
 
         return self.__form_string(
             table_with_i=self.__show_index
@@ -2326,7 +2392,7 @@ class Table(object):
         if adjust:
             headers, rows, rows_with_i = self.__adjust_column_widths(
                 difference,
-                rows, 
+                rows,
                 rows_with_i
             )
         else:
@@ -2334,7 +2400,7 @@ class Table(object):
                 headers = self.__headers_with_i
             else:
                 headers = self.__headers
-        return headers, rows, rows_with_i
+        return adjust, headers, rows, rows_with_i
     
     def __get_amounts_to_reduce(self, difference: int) -> list:
         """
@@ -2581,7 +2647,18 @@ class Table(object):
         """
         # For adding the index. The index is in the first column
         # or the index 0.
-        rows_with_i = deepcopy(self.__rows_with_i)
+        # The index column holds one shared IndexCounter, which counts up as
+        # the render consumes it. It has to start from its configured origin
+        # on every render or the second one continues where the first stopped.
+        #
+        # deepcopy used to give a fresh counter as a side effect of copying
+        # the whole table. Resetting it says what is meant, and skips
+        # recursing through every value to achieve it.
+        self.__index_counter.reset_count()
+
+        # One level of copying is enough: the pipeline replaces whole cells,
+        # it never mutates one in place.
+        rows_with_i = [list(row) for row in self.__rows_with_i]
         for row_i, row in enumerate(rows_with_i):
             if self.__show_empty_rows:
                 rows_with_i[row_i][0] = row[0](
@@ -2604,7 +2681,7 @@ class Table(object):
                 
         # For adding the missing value where the ValuePlacer
         # is used.
-        rows = deepcopy(self.__rows)
+        rows = [list(row) for row in self.__rows]
         for row_i, row in enumerate(rows):
             for column_i, column in enumerate(row):
                 if isinstance(column, ValuePlacer):
@@ -2882,7 +2959,53 @@ class Table(object):
         else:
             table_string = '\n'.join([superior_row, f'{body_line}\n'.join(body_rows), end_line])
 
+        if self.__merged_regions:
+            table_string = self.__apply_merges(
+                table_string, superior_row, body_rows, body_line,
+                column_widths_list, table_with_i
+            )
+
         return table_string
+
+    def __apply_merges(self, table_string, superior_row, body_rows, body_line,
+                       column_widths_list, table_with_i):
+        """
+        Rewrite the assembled table so each merged region reads as one cell.
+
+        Merges are applied to the finished string rather than threaded through
+        the measuring pipeline. That pipeline sizes each column from its own
+        content, which is what makes decimal alignment and terminal fitting
+        work; letting a cell that belongs to several columns influence their
+        widths would put a cycle in it.
+
+        The line map is rebuilt here by walking the same pieces the join above
+        consumed, so it stays in step with however those pieces were assembled.
+        """
+        from .merges import apply as apply_merges
+
+        lines = table_string.split('\n')
+        separator_line_count = body_line.count('\n') if body_line else 0
+
+        # Physical line where the body starts: everything the header occupies.
+        cursor = len(superior_row.split('\n')) if superior_row is not None else 0
+
+        row_line_map = {}
+        for position, row in enumerate(body_rows):
+            if position and separator_line_count:
+                cursor += separator_line_count
+            height = row.count('\n') + 1
+            row_line_map[position] = list(range(cursor, cursor + height))
+            cursor += height
+
+        merged = apply_merges(
+            lines,
+            row_line_map,
+            self.__merged_regions,
+            column_widths_list,
+            self.__style_composition,
+            1 if table_with_i else 0,
+        )
+        return '\n'.join(merged)
 
     def __get_processed_columns_data(self, header=False, columns_with_i=False):
         if columns_with_i:

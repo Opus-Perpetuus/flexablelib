@@ -267,28 +267,67 @@ primitives themselves the extension is worth 17-34x:
 | `pad_to_width` | 5.3x |
 | `widths_of`, whole column | 20.6x |
 
-**That does not translate into a 17x faster render, and it is worth being
-precise about why.** Rendering 2000 rows by 4 columns takes about 110 ms, and
-profiling puts the time here:
+**The extension alone did not make the render faster, and the reason is worth
+recording.** Profiling showed measurement was a small share of the total; the
+cost was in the orchestration. Three changes to that orchestration did the
+work:
 
-```
-__form_string            41 ms
-__zip_columns            32 ms   transposing columns to rows, twice
-__get_column_widths      26 ms
-_align_columns           25 ms   __align_single_cell runs 8004 times
-```
+- `compose()` ran the second wrap-and-measure pass unconditionally. When the
+  table already fits -- most tables -- that pass reproduces the first one
+  exactly. It is now skipped, and the final structures point at the first
+  pass's output.
+- `is_some_instance` ran one `isinstance` call per type where `isinstance`
+  accepts a tuple, and `is_multi_row` built two intermediate sequences and a
+  lambda per cell.
+- `__call_table_objects` deep-copied every row on every render. The pipeline
+  replaces whole cells and never mutates one, so one level of copying is
+  enough.
 
-Text measurement is a small share of that. The cost is the orchestration in
-`table.py`: the four parallel data representations are transposed on every
-render, the two-pass design walks the data twice, and alignment dispatches a
-Python call per cell per pass. Against `tabulate`, `prettytable` and pandas'
-`to_string` on the same data, this package lands within about 20% -- slightly
-behind, not ahead.
+Rendering 2000x4 went from 30.6 ms to 16.9 ms. Against the alternatives on
+identical data:
 
-Making it decisively faster means attacking the pipeline, not the primitives:
-lowering `_align_columns` and `__zip_columns` into the extension, or keeping
-one canonical data orientation instead of four and deriving the others on
-demand. Both are larger changes than swapping in a faster `len()`.
+| Library | 100x4 | 2000x4 | 10000x6 |
+| --- | ---: | ---: | ---: |
+| **prettyTables** | **1.0 ms** | **16.9 ms** | **147 ms** |
+| prettytable | 1.4 ms | 23.2 ms | 174 ms |
+| tabulate | 1.7 ms | 27.5 ms | 193 ms |
+| pandas `.to_string()` | 1.7 ms | 22.9 ms | 228 ms |
+
+Reproduce with `python3 tools/benchmark.py`.
+
+Note what this does and does not claim. It is a rendering benchmark: turning
+tabular data already in memory into formatted text. pandas is an analysis
+engine over NumPy arrays, and `to_string` is a debugging convenience within
+it, not its purpose. Being faster at this one job says nothing about groupby,
+joins, or anything else pandas exists for.
+
+Removing the deepcopy exposed something it had been hiding. The index column
+holds one shared `IndexCounter` that counts as the render consumes it, and the
+deep copy had been handing it a fresh instance each time as a side effect.
+Rendering twice returned 0,1 then 2,3. It is now reset explicitly, which is
+what the code meant to do.
+
+## Merged cells
+
+`merge_cells()` renders a rectangular block as one cell. Merges are applied to
+the assembled string, in `merges.py`, rather than threaded through the
+measuring pipeline.
+
+That is a deliberate boundary. The pipeline sizes each column from its own
+content, which is what makes decimal-point alignment and terminal fitting
+tractable. A cell belonging to several columns at once would make one column's
+width depend on another's, putting a cycle in the measurement. Rewriting the
+finished lines keeps the columns sized by their unmerged content and makes
+merging a presentation step that cannot affect layout correctness.
+
+The visible consequence: **a merge never widens the table.** Content longer
+than its span is truncated.
+
+`compute_layout()` derives each column's offsets within a line from the widths
+and the style's own separator characters, so the rewrite lands in the right
+place for all 42 styles. Where a horizontal rule meets the right edge of a
+merged block, the four-way junction is replaced by the body rule's `left`
+character, since no line arrives from the left there any more.
 
 ## Known gaps
 
