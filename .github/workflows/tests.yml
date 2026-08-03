@@ -1,0 +1,45 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    name: pytest (python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 3.8 and 3.9 are the versions setup.py declares support for.
+          # ubuntu-24.04 (ubuntu-latest) no longer offers them.
+          - { python-version: '3.8', os: ubuntu-22.04 }
+          - { python-version: '3.9', os: ubuntu-22.04 }
+          - { python-version: '3.10', os: ubuntu-latest }
+          - { python-version: '3.11', os: ubuntu-latest }
+          - { python-version: '3.12', os: ubuntu-latest }
+          - { python-version: '3.13', os: ubuntu-latest }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      # Run from the repository root: the package is imported straight from
+      # the source tree, and the style_name setter reads style_examples.md
+      # relative to the working directory.
+      - name: Run the test suite
+        run: python -m pytest
