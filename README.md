@@ -226,10 +226,39 @@ table.parse_str_numbers = True
 
 Values with leading zeros are left alone, so `'007'` stays a string.
 
+# Merging cells
+
+Render a rectangular block as a single cell, across columns, down rows, or
+both. Coordinates are inclusive, zero-based, and ignore the index column.
+
+```python
+table.merge_cells(0, 0, last_column=2, value='Quarter summary')
+table.merge_cells(1, 0, last_row=3)                # keeps the top-left content
+table.merge_cells(0, 0, 2, 2, value='Total', align='r')
+```
+
+A merge never widens the table -- columns are still sized by their unmerged
+content -- so text longer than its span is truncated.
+
 # Performance
 
-An optional C extension accelerates text measurement, the hot path in
-rendering. It is built automatically where a compiler is available and falls
+An optional C extension accelerates text measurement, and the render pipeline
+avoids the second measuring pass when the table already fits. On identical
+data:
+
+| Library | 100x4 | 2000x4 | 10000x6 |
+| --- | ---: | ---: | ---: |
+| **prettyTables** | **1.0 ms** | **16.9 ms** | **147 ms** |
+| prettytable | 1.4 ms | 23.2 ms | 174 ms |
+| tabulate | 1.7 ms | 27.5 ms | 193 ms |
+| pandas `.to_string()` | 1.7 ms | 22.9 ms | 228 ms |
+
+Reproduce with `python3 tools/benchmark.py`. This measures one job: turning
+data already in memory into formatted text. pandas is an analysis engine and
+`to_string` is a convenience within it, so this says nothing about groupby or
+joins.
+
+The extension is built automatically where a compiler is available and falls
 back to pure Python where it is not, so installation never fails for want of a
 toolchain.
 
