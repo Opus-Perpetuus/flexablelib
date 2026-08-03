@@ -2511,6 +2511,18 @@ class Table(object):
                 }
 
                 
+    def __hidden_row_indexes(self) -> frozenset:
+        """
+        Indexes of rows that will not be rendered.
+
+        Width measurement must skip these. An empty row still holds the
+        missing value in every column, and counting it widened columns to fit
+        text that is never displayed -- issue #22.
+        """
+        if self.__show_empty_rows:
+            return frozenset()
+        return frozenset(self.__empty_row_indexes)
+
     def __get_column_widths(self, semi):
         if self.show_index:
             sizes_with_i, float_sizes_with_i = _column_widths(
@@ -2520,7 +2532,8 @@ class Table(object):
                     self.__processed_columns_with_i
                 ),
                 column_type_names=self.__column_types_with_i,
-                show_headers=self.__show_headers
+                show_headers=self.__show_headers,
+                skip_rows=self.__hidden_row_indexes()
             )
             self.__column_widths_as_list_with_i = sizes_with_i
             if float_sizes_with_i is not None:
@@ -2539,7 +2552,8 @@ class Table(object):
                     self.__processed_columns
                 ),
                 column_type_names=self.__column_types,
-                show_headers=self.__show_headers
+                show_headers=self.__show_headers,
+                skip_rows=self.__hidden_row_indexes()
             )
             self.__column_widths_as_list = sizes
             if float_sizes is not None:

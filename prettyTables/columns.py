@@ -250,8 +250,9 @@ def __header_width(header: Union[Any, list, tuple]) -> int:
         return visible_width(str(header))
 
 
-def __get_single_column_width(column: dict, 
-                             show_headers: bool
+def __get_single_column_width(column: dict,
+                             show_headers: bool,
+                             skip_rows: frozenset = frozenset()
                             ) -> Tuple[int, int]:
     """
     Will return the max size of the data in the column
@@ -281,7 +282,12 @@ def __get_single_column_width(column: dict,
         # If headers will show, get them.
         header = column['header']
         head_size += __header_width(header)
-    for row in column['data']:
+    for row_i, row in enumerate(column['data']):
+        # Rows that will not be rendered must not be measured. A hidden empty
+        # row still carries the missing value, and letting it through widened
+        # the column to fit text nobody would ever see -- issue #22.
+        if row_i in skip_rows:
+            continue
         # The same principle as the header is applied here but for each cell.
         # Every length will be added to the body_sizes list.
         if is_some_instance(row, tuple, list):
@@ -292,7 +298,9 @@ def __get_single_column_width(column: dict,
             body_sizes.append(visible_width(str(row)))
     
     # And once more will get the max to get the length of the column.
-    body_max_size = max(body_sizes)
+    # Every row may have been skipped, in which case the body contributes
+    # nothing and the header alone decides the width.
+    body_max_size = max(body_sizes) if body_sizes else 0
             
     return head_size, body_max_size
 
@@ -508,8 +516,9 @@ def __get_sides_widths(cell: Any,
     return reduce
 
 
-def __get_float_column_width(column: dict, 
-                             show_headers: bool
+def __get_float_column_width(column: dict,
+                             show_headers: bool,
+                             skip_rows: frozenset = frozenset()
                             ) -> Tuple[int, int, Tuple[int, int, int]]:
     """
     Will get the header size, body size and the max size of the sides
@@ -543,8 +552,13 @@ def __get_float_column_width(column: dict,
     
     max_len_of_sides = []
     float_sides_will_reduce = False
-    for row in column['data']:
-        
+    reduce = False
+    for row_i, row in enumerate(column['data']):
+
+        # Hidden rows must not contribute to the decimal-side widths either.
+        if row_i in skip_rows:
+            continue
+
         # Get the sides of row (cell) or sub-row.
         if is_some_instance(row, tuple, list):
             for sub_row in row:
@@ -576,9 +590,10 @@ def __get_float_column_width(column: dict,
     return head_size, sum_of_len_of_sides, max_len_of_sides
 
 
-def _column_widths(processed_columns: Dict[str, tuple], 
-                  column_type_names: dict, 
-                  show_headers: bool
+def _column_widths(processed_columns: Dict[str, tuple],
+                  column_type_names: dict,
+                  show_headers: bool,
+                  skip_rows: frozenset = frozenset()
                  ) -> Tuple[tuple, Union[None, dict]]:
     """
     Will return the widths of the columns. Float columns widths
@@ -614,7 +629,8 @@ def _column_widths(processed_columns: Dict[str, tuple],
             # header size and float sizes.
             head_size, body_size, decimal_sides = __get_float_column_width(
                 column,
-                show_headers
+                show_headers,
+                skip_rows
             )
             
             # Save header and body size separately to prevent 
@@ -634,8 +650,9 @@ def _column_widths(processed_columns: Dict[str, tuple],
             # If it's not a float column, get the body and header size,
             # and save them separately.
             head_size, body_size = __get_single_column_width(
-                column, 
-                show_headers
+                column,
+                show_headers,
+                skip_rows
             )
             head_sizes.append(head_size)
             body_sizes.append(body_size)
