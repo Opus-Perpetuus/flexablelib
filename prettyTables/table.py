@@ -1312,7 +1312,16 @@ class Table(object):
 
     @style_name.setter
     def style_name(self, value):
-        __doc__ = read_file('style_examples.md')
+        """
+        Set the border style by name. See ``possible_styles`` for the list.
+
+        This used to read style_examples.md into a local named __doc__, which
+        set no docstring anywhere -- assigning to a local cannot -- but did
+        open a file on every assignment, resolved against the working
+        directory. Installed as a package that file is not there, so setting
+        style_name raised FileNotFoundError from anywhere but the repository
+        root.
+        """
         self.__style_name = value
 
     @missing_value.setter

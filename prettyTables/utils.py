@@ -113,10 +113,15 @@ def read_json(file):
 
 
 def read_file(filename):
-    with open(filename, 'r+') as file:
-        data = file.read()
-    file.close()
-    return data
+    """
+    Read a text file whole.
+
+    Opened read-only. It was 'r+' before, which asks for write access on a
+    file that is only ever read and fails outright on anything read-only --
+    setup.py reads README.md through here while building.
+    """
+    with open(filename, 'r', encoding='utf-8') as file:
+        return file.read()
 
 
 def delete_repetitions(iterable: Iterable, 
