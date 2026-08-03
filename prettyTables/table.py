@@ -1501,6 +1501,55 @@ class Table(object):
     # start +------------------------+ COLUMN ADDING +------------------------+ start
 
     @property
+    def parse_str_numbers(self):
+        """
+        Whether text that looks numeric is treated as a number.
+
+        Off by default, which keeps '007' and '1.50' exactly as written.
+        Turned on, a column of '12', '3.5', 'True' is recognised as numeric or
+        boolean and aligned accordingly, instead of being left-aligned as
+        text. This is what makes data arriving from CSV, HTML or any other
+        text format line up.
+
+        Setting it re-examines data already added, so the order of the two
+        statements does not matter.
+
+        The conversion is deliberately strict -- no leading '+', no
+        whitespace, no thousands separators -- so identifiers like '007' or
+        version strings like '1.2.3' survive. Note that it does normalise the
+        representation: '1.50' becomes 1.5. Where the exact text matters more
+        than the alignment, leave this off.
+        """
+        return self.__parse_str_numbers
+
+    @parse_str_numbers.setter
+    def parse_str_numbers(self, value):
+        self.__parse_str_numbers = bool(value)
+        if self.__parse_str_numbers:
+            self.__reparse_stored_strings()
+
+    def __reparse_stored_strings(self):
+        """
+        Convert numeric-looking strings already stored into numbers.
+
+        Both orientations hold the same data and both are read during
+        rendering, so both have to be updated or the table would disagree with
+        itself about the type of a column.
+        """
+        from .readers import parse_value
+
+        for store in (self.__columns, self.__columns_with_i):
+            for column in store.values():
+                for index, cell in enumerate(column):
+                    if isinstance(cell, str):
+                        column[index] = parse_value(cell, True)
+        for rows in (self.__rows, self.__rows_with_i):
+            for row in rows:
+                for index, cell in enumerate(row):
+                    if isinstance(cell, str):
+                        row[index] = parse_value(cell, True)
+
+    @property
     def missing(self):
         """
         The sentinel value that marks a cell as absent.

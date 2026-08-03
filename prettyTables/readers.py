@@ -31,11 +31,19 @@ from html.parser import HTMLParser
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 # Numeric text that should become a number. Deliberately strict: no leading
-# '+', no whitespace, no thousands separators, so identifiers like '007' or
-# '1.2.3' are left as strings.
-_INT_TEXT = re.compile(r'^-?\d+$')
-_FLOAT_TEXT = re.compile(r'^-?(?:\d+\.\d*|\.\d+)$')
-_EXPONENT_TEXT = re.compile(r'^-?(?:\d+\.?\d*|\.\d+)[eE][-+]?\d+$')
+# '+', no whitespace, no thousands separators, and no leading zeros, so
+# identifiers survive as text.
+#
+# Leading zeros are the giveaway that a value is an identifier rather than a
+# quantity -- postal codes, product references, zero-padded ids. Converting
+# '007' to 7 silently destroys data that cannot be recovered from the table,
+# so anything with a redundant leading zero stays a string. '0' and '0.5' are
+# of course still numbers.
+_INT_TEXT = re.compile(r'^-?(?:0|[1-9]\d*)$')
+_FLOAT_TEXT = re.compile(r'^-?(?:(?:0|[1-9]\d*)\.\d*|\.\d+)$')
+_EXPONENT_TEXT = re.compile(
+    r'^-?(?:(?:0|[1-9]\d*)(?:\.\d*)?|\.\d+)[eE][-+]?\d+$'
+)
 
 
 def parse_value(text: Any, parse_numbers: bool = True) -> Any:
