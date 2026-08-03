@@ -267,10 +267,6 @@ Nothing verifies the two-pass measurement logic.
 
 **No CI.** There is no `.github/` directory — no workflows, no issue templates.
 
-**Duplicate licence files.** `LICENSE` and `LICENSE.txt` are byte-identical. GitHub's licence
-detector reports no licence for the repository as a result, even though the content is a
-standard MIT licence.
-
 **Version drift.** `setup.py` declares support for Python 3.8 and 3.9 only, and does not set
 `python_requires`. It also still uses `distutils.core.setup`, which was removed from the
 standard library in Python 3.12 — building on a modern interpreter requires `setuptools` to
