@@ -165,20 +165,23 @@ def test_the_style_name_setter_accepts_a_catalogue_name():
     assert '┌' in str(table)
 
 
-def test_the_style_name_setter_reads_style_examples_from_the_cwd(monkeypatch, tmp_path):
+def test_the_style_name_setter_works_from_any_directory(monkeypatch, tmp_path):
     """
-    ``style_name``'s setter calls ``read_file('style_examples.md')``, a path
-    resolved against the current working directory rather than the package.
-    Setting a style from anywhere but the repository root raises.
+    The setter must not touch the filesystem.
 
-    Pinned as-is: the suite works around it with the ``repo_root_cwd`` fixture,
-    but the coupling is real and this is what would change if it were fixed.
+    It used to call ``read_file('style_examples.md')``, resolved against the
+    working directory, so setting a style from anywhere but the repository
+    root raised FileNotFoundError -- which is every installed user. The read
+    assigned to a local named ``__doc__`` and set no docstring anywhere, so
+    removing it costs nothing.
     """
     table = Table()
     monkeypatch.chdir(tmp_path)
 
-    with pytest.raises(FileNotFoundError):
-        table.style_name = 'thin_borderline'
+    table.style_name = 'thin_borderline'
+
+    assert table.style_name == 'thin_borderline'
+    assert '┌' in str(table)
 
 
 def test_style_examples_is_present_at_the_repository_root():
