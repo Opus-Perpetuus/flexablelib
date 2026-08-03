@@ -6,6 +6,7 @@ from .cells import (
     _add_cell_spacing
 )
 from .style_compositions import TableComposition
+from .fast import visible_width
 from .utils import (
     is_some_instance,
     IndexCounter,
@@ -238,15 +239,15 @@ def __header_width(header: Union[Any, list, tuple]) -> int:
     """
     if is_some_instance(header, tuple, list):
         # If it's wrapped, will be a tuple or list. To get
-        # the size, will get first the lengths of all the sub-rows
+        # the size, will get first the widths of all the sub-rows
         # and the the max of them.
         return (
-            max([len(str(sub_row)) for sub_row in header])
+            max([visible_width(str(sub_row)) for sub_row in header])
         )
     else:
         # If it's not wrapped, will be a string, so will only
-        # get it's length.
-        return len(str(header))
+        # get it's width.
+        return visible_width(str(header))
 
 
 def __get_single_column_width(column: dict, 
@@ -285,10 +286,10 @@ def __get_single_column_width(column: dict,
         # Every length will be added to the body_sizes list.
         if is_some_instance(row, tuple, list):
             body_sizes.append(
-                max([len(str(sub_row)) for sub_row in row])
+                max([visible_width(str(sub_row)) for sub_row in row])
             )
         else:
-            body_sizes.append(len(str(row)))
+            body_sizes.append(visible_width(str(row)))
     
     # And once more will get the max to get the length of the column.
     body_max_size = max(body_sizes)
@@ -340,7 +341,7 @@ def __get_float_widths(cell: str,
         ) -> ((3, 1, 2), False)
     """
     sides_widths = []
-    row_len = len(cell)
+    row_len = visible_width(cell)
     reduce = False
     
     # If there's was a previous float, max len of sides should
@@ -360,9 +361,9 @@ def __get_float_widths(cell: str,
         # If it is a float number, split it by the point, get the
         # widths of each side and the point
         all_sides = cell.split(FLOAT_SEPARATOR)
-        sides_widths.append(len(all_sides[0]))
+        sides_widths.append(visible_width(all_sides[0]))
         sides_widths.append(len(FLOAT_SEPARATOR))  # Size of the dot
-        sides_widths.append(len(all_sides[1]))
+        sides_widths.append(visible_width(all_sides[1]))
     elif not is_float and is_float is not None:
         # If it is an int just put the width of it at the left
         # side.
