@@ -173,11 +173,75 @@ internal_row_count: 5
 internal_column_count: 4
 ```
 
+# Colour
+
+Colour the header, the borders, whole columns, whole rows, or individual cells.
+Specs accept names, attributes, 256-colour indexes and hex triples.
+
+```python
+table.header_color = 'bold cyan'
+table.border_color = 'grey'
+table.column_colors = {'Service': 'bright_white'}
+table.color_rule = lambda value, row, column: (
+    'red' if column == 'Delta' and value < 0 else None
+)
+```
+
+`color_rule` receives the original value, so numeric comparisons work directly.
+
+Colour is emitted only to a terminal by default, and never when `NO_COLOR` is
+set. `FORCE_COLOR` or `table.use_colors = True` overrides that. Because
+`compose()` returns a string you may send anywhere, the default errs toward not
+embedding escape sequences in something bound for a file.
+
+Widths are measured in terminal columns, not characters, so coloured cells and
+CJK or emoji data stay aligned.
+
+# Reading and writing
+
+```python
+Table.from_csv('sales.csv')          # numeric columns parsed and aligned
+Table.from_html(markup)              # standard library parser, no dependency
+Table.from_dicts(records)
+Table.from_pandas(dataframe)         # pip install prettyTables[pandas]
+Table.from_excel('report.xlsx')      # pip install prettyTables[excel]
+
+table.to_csv('out.csv')
+table.to_markdown()
+table.to_html('report.html', paginate=25)
+table.to_excel('report.xlsx')
+```
+
+`to_html` writes one self-contained file — the stylesheet and the sorting,
+filtering and pagination script are inline — so it works offline and from a
+`file://` URL.
+
+Text formats deliver everything as strings, and a column of strings is
+left-aligned. `parse_str_numbers` converts numeric-looking text so it aligns as
+numbers; the readers turn it on for you:
+
+```python
+table.parse_str_numbers = True
+```
+
+Values with leading zeros are left alone, so `'007'` stays a string.
+
+# Performance
+
+An optional C extension accelerates text measurement, the hot path in
+rendering. It is built automatically where a compiler is available and falls
+back to pure Python where it is not, so installation never fails for want of a
+toolchain.
+
+```python
+from prettyTables.fast import implementation
+print(implementation())   # 'C extension' or 'pure Python'
+```
+
 # Known Issues
-- Alignment only works when sending data as its type. Type parsing is still missing.
-- When auto-wrapping is ``False`` the adjusting of the table to the console will potentially fail.
 - Naming a column ``"i"`` will mess up what columns show if the index column is displaying.
 - Exponential numbers only align incorrectly.
+- Shrinking a float column to fit the terminal loses its decimal alignment ([#23](https://github.com/Opus-Perpetuus/prettyTables/issues/23)).
 
 # Project Layout
 
@@ -192,11 +256,19 @@ prettyTables/
 │   ├── cells.py             cell padding, justification, wrapping
 │   ├── options.py           constants and defaults
 │   └── utils.py             type predicates and small helpers
+├── tests/                   pytest suite — see ARCHITECTURE.md#testing
 ├── logos/                   brand assets — see logos/README.md
 ├── ARCHITECTURE.md          how it all fits together
 ├── style_examples.md        all 42 styles rendered
 ├── package.json             canonical version number; drives the release
 └── setup.py                 reads the version from package.json
+```
+
+Run the tests from the repository root:
+
+```
+pip install -r requirements-dev.txt
+python -m pytest
 ```
 
 See [**ARCHITECTURE.md**](ARCHITECTURE.md) for the rendering pipeline, how styles are defined,

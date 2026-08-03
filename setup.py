@@ -1,9 +1,20 @@
-from setuptools import setup
+from setuptools import setup, Extension
 from prettyTables.utils import read_json, read_file
 import os
 
 
+# Accelerated text measurement. Marked optional so a machine with no compiler,
+# or a platform with no published wheel, still gets a working install -- the
+# package falls back to the pure-Python implementation in text_width.py.
+speedups = Extension(
+  'prettyTables._speedups',
+  sources=['prettyTables/_speedups.c'],
+  optional=True,
+)
+
+
 setup(
+  ext_modules=[speedups],
   name = 'prettyTables',         
   packages = ['prettyTables'],   
   version = read_json(f'.{os.sep}package.json')['version'],      
@@ -17,6 +28,14 @@ setup(
   download_url = '',    
   keywords = ['console', 'graphics'],   
   install_requires=[],
+  # The base install stays dependency-free. Readers and writers that need a
+  # third-party library are opt-in: pip install prettyTables[pandas,excel]
+  extras_require={
+    'pandas': ['pandas>=1.0'],
+    'excel': ['openpyxl>=3.0'],
+    'html': ['lxml>=4.0'],
+    'all': ['pandas>=1.0', 'openpyxl>=3.0', 'lxml>=4.0'],
+  },
   python_requires='>=3.8',
   classifiers=[
     'Development Status :: 4 - Beta',

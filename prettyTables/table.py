@@ -28,23 +28,27 @@ from .table_strings import (
     DataRows
 )
 from .utils import (
-    get_window_size, 
+    get_window_size,
     is_multi_row,
+    is_some_instance,
     ValuePlacer,
     IndexCounter,
     read_file
 )
 from .options import (
-    NONE_VALUE_REPLACEMENT, 
-    DEFAULT_STYLE, 
-    I_COL_TIT, 
+    NONE_VALUE_REPLACEMENT,
+    DEFAULT_STYLE,
+    I_COL_TIT,
     DEFAULT_TRIMMING_SIGN,
-    TABLE_ALIGNS
+    TABLE_ALIGNS,
+    MIN_COLUMN_SIZE,
+    CELL_MARGIN
 )
 from .cells import (
     _wrap_rows,
     _zip_wrapped_rows
 )
+from .colors import colorize, supports_color
 
 from copy import deepcopy
 from textwrap import wrap
@@ -786,6 +790,22 @@ class Table(object):
         #   t: title
         #   c: capitalized
         self.__header_style = header_style
+        # +------------------------+ COLOUR +---------------------------+
+        # Specs are resolved to escape sequences once per render, not per
+        # cell. None everywhere means no colour and no cost.
+        self.__header_color = None
+        self.__border_color = None
+        self.__column_colors = {}
+        self.__row_colors = {}
+        self.__color_rule = None
+        # None means "decide from the output stream"; True and False force it.
+        self.__use_colors = None
+        # +---------------------+ FITTING +-----------------------------+
+        # None means "use the terminal width".
+        self.__max_width = None
+        # Shown instead of the table when it cannot fit legibly. None keeps
+        # the old behaviour of rendering it anyway, however cramped.
+        self.__too_narrow_message = None
         self.__show_margin = True
         self.__show_empty_columns = True
         self.__show_empty_rows = True
@@ -1292,7 +1312,16 @@ class Table(object):
 
     @style_name.setter
     def style_name(self, value):
-        __doc__ = read_file('style_examples.md')
+        """
+        Set the border style by name. See ``possible_styles`` for the list.
+
+        This used to read style_examples.md into a local named __doc__, which
+        set no docstring anywhere -- assigning to a local cannot -- but did
+        open a file on every assignment, resolved against the working
+        directory. Installed as a package that file is not there, so setting
+        style_name raised FileNotFoundError from anywhere but the repository
+        root.
+        """
         self.__style_name = value
 
     @missing_value.setter
@@ -1480,7 +1509,327 @@ class Table(object):
     # +-----------------------------------------------------------------------------+
     # start +------------------------+ COLUMN ADDING +------------------------+ start
 
-    def add_column(self, 
+    @property
+    def parse_str_numbers(self):
+        """
+        Whether text that looks numeric is treated as a number.
+
+        Off by default, which keeps '007' and '1.50' exactly as written.
+        Turned on, a column of '12', '3.5', 'True' is recognised as numeric or
+        boolean and aligned accordingly, instead of being left-aligned as
+        text. This is what makes data arriving from CSV, HTML or any other
+        text format line up.
+
+        Setting it re-examines data already added, so the order of the two
+        statements does not matter.
+
+        The conversion is deliberately strict -- no leading '+', no
+        whitespace, no thousands separators -- so identifiers like '007' or
+        version strings like '1.2.3' survive. Note that it does normalise the
+        representation: '1.50' becomes 1.5. Where the exact text matters more
+        than the alignment, leave this off.
+        """
+        return self.__parse_str_numbers
+
+    @parse_str_numbers.setter
+    def parse_str_numbers(self, value):
+        self.__parse_str_numbers = bool(value)
+        if self.__parse_str_numbers:
+            self.__reparse_stored_strings()
+
+    def __reparse_stored_strings(self):
+        """
+        Convert numeric-looking strings already stored into numbers.
+
+        Both orientations hold the same data and both are read during
+        rendering, so both have to be updated or the table would disagree with
+        itself about the type of a column.
+        """
+        from .readers import parse_value
+
+        for store in (self.__columns, self.__columns_with_i):
+            for column in store.values():
+                for index, cell in enumerate(column):
+                    if isinstance(cell, str):
+                        column[index] = parse_value(cell, True)
+        for rows in (self.__rows, self.__rows_with_i):
+            for row in rows:
+                for index, cell in enumerate(row):
+                    if isinstance(cell, str):
+                        row[index] = parse_value(cell, True)
+
+    @property
+    def missing(self):
+        """
+        The sentinel value that marks a cell as absent.
+
+        A cell holding this renders as ``missing_value`` and does not affect
+        the column's inferred type, so a numeric column with gaps stays
+        numeric and stays right-aligned. Assigning None or '' instead would
+        make the column textual.
+
+        Used by the readers to represent NaN and NULL, and available for
+        building tables with gaps by hand::
+
+            table.add_column('temp', [3.5, table.missing, 22.0])
+
+        The sentinel is compared by identity and is per-table, so use the one
+        belonging to the table you are filling.
+        """
+        return self.__value_placer
+
+    # +------------------------+ FITTING +--------------------------+
+
+    @property
+    def max_width(self):
+        """
+        Width the table must fit into, or None to use the terminal width.
+
+        Setting this makes rendering independent of the terminal, which is
+        what you want when composing to a file or a fixed-width report.
+        """
+        return self.__max_width
+
+    @max_width.setter
+    def max_width(self, value):
+        if value is not None and value < 1:
+            raise ValueError('max_width must be positive or None')
+        self.__max_width = value
+
+    @property
+    def too_narrow_message(self):
+        """
+        Text shown instead of the table when it cannot fit legibly.
+
+        A table squeezed far below the width of its own data wraps every cell
+        to a couple of characters and becomes unreadable. Setting a message
+        says so plainly instead. None, the default, renders the table anyway.
+
+        The message may use ``{needed}`` and ``{available}`` placeholders::
+
+            table.too_narrow_message = (
+                'Table needs {needed} columns, terminal has {available}.'
+            )
+        """
+        return self.__too_narrow_message
+
+    @too_narrow_message.setter
+    def too_narrow_message(self, value):
+        self.__too_narrow_message = value
+
+    def __available_width(self) -> int:
+        """Width the table has to fit into."""
+        if self.__max_width is not None:
+            return self.__max_width
+        console_columns, _ = get_window_size()
+        return console_columns
+
+    def __minimum_table_width(self) -> int:
+        """
+        Narrowest the table could possibly be rendered.
+
+        Every column shrunk to MIN_COLUMN_SIZE, plus the margins and the
+        vertical separators the current style draws between them. Below this
+        the table cannot be produced legibly at all.
+        """
+        column_count = (
+            self.internal_column_count if self.__show_index
+            else self.column_count
+        )
+        if column_count == 0:
+            return 0
+        composition = self.__style_composition
+        margins = (CELL_MARGIN * 2) if composition.margin else 0
+        body_lines = composition.vertical_table_body_lines
+        separator_count = sum(
+            1 for part in (body_lines.left, body_lines.right) if part is not None
+        )
+        if body_lines.middle is not None:
+            separator_count += column_count - 1
+        return column_count * (MIN_COLUMN_SIZE + margins) + separator_count
+
+    # +------------------------+ COLOUR +---------------------------+
+
+    @property
+    def header_color(self):
+        """
+        Colour applied to the header row.
+
+        Accepts a name, a 256-colour index, a hex triple, or a combination:
+        'cyan', 'bold yellow', '#ff8800', 'color:93', 'black on white'.
+        """
+        return self.__header_color
+
+    @header_color.setter
+    def header_color(self, value):
+        self.__header_color = value
+
+    @property
+    def border_color(self):
+        """Colour applied to every border character."""
+        return self.__border_color
+
+    @border_color.setter
+    def border_color(self, value):
+        self.__border_color = value
+
+    @property
+    def column_colors(self) -> dict:
+        """
+        Colour per column, keyed by header name::
+
+            table.column_colors = {'Status': 'green', 'Errors': 'bold red'}
+        """
+        return self.__column_colors
+
+    @column_colors.setter
+    def column_colors(self, value: dict):
+        self.__column_colors = dict(value) if value else {}
+
+    @property
+    def row_colors(self) -> dict:
+        """
+        Colour per row, keyed by row index::
+
+            table.row_colors = {0: 'dim', 3: 'bold'}
+        """
+        return self.__row_colors
+
+    @row_colors.setter
+    def row_colors(self, value):
+        if value is None:
+            self.__row_colors = {}
+        elif isinstance(value, dict):
+            self.__row_colors = dict(value)
+        else:
+            # A bare sequence is taken as colours for consecutive rows.
+            self.__row_colors = {i: c for i, c in enumerate(value)}
+
+    @property
+    def color_rule(self):
+        """
+        A callable deciding the colour of individual cells.
+
+        Called as ``rule(value, row_index, column_name)`` and returning a
+        colour spec, or None to leave the cell alone. It takes precedence over
+        ``row_colors`` and ``column_colors``::
+
+            table.color_rule = lambda v, r, c: 'red' if c == 'Delta' and v < 0 else None
+
+        The callable receives the original value, before it is turned into a
+        string, so numeric comparisons work directly.
+        """
+        return self.__color_rule
+
+    @color_rule.setter
+    def color_rule(self, value):
+        if value is not None and not callable(value):
+            raise TypeError('color_rule must be callable or None')
+        self.__color_rule = value
+
+    @property
+    def use_colors(self):
+        """
+        Whether to emit colour: True, False, or None to decide automatically.
+
+        Automatic means colour is emitted only when standard output is a
+        terminal, and never when NO_COLOR is set. Because ``compose()`` returns
+        a string that the caller may send anywhere, this errs toward not
+        embedding escape sequences in something destined for a file.
+        """
+        return self.__use_colors
+
+    @use_colors.setter
+    def use_colors(self, value):
+        self.__use_colors = value
+
+    @property
+    def __colors_active(self) -> bool:
+        """Resolve the colour decision for this render."""
+        if self.__use_colors is None:
+            return supports_color()
+        return bool(self.__use_colors)
+
+    def __color_for_cell(self, value, row_index: int, column_name: str):
+        """
+        Colour of a single cell, or None.
+
+        Precedence: an explicit rule, then the row, then the column.
+        """
+        if self.__color_rule is not None:
+            decided = self.__color_rule(value, row_index, column_name)
+            if decided:
+                return decided
+        if row_index in self.__row_colors:
+            return self.__row_colors[row_index]
+        return self.__column_colors.get(column_name)
+
+    def __has_any_color(self) -> bool:
+        """True if anything at all was configured to be coloured."""
+        return bool(
+            self.__header_color
+            or self.__border_color
+            or self.__column_colors
+            or self.__row_colors
+            or self.__color_rule
+        )
+
+    @staticmethod
+    def __paint_one(cell, spec):
+        """
+        Colour a single aligned cell, which may be wrapped into several lines.
+
+        A wrapped cell arrives as a tuple of sub-rows; each is coloured
+        separately so the sequence opens and closes within one physical line
+        and cannot bleed across the row.
+        """
+        if is_some_instance(cell, list, tuple):
+            return tuple(colorize(str(part), spec) for part in cell)
+        return colorize(str(cell), spec)
+
+    def __paint_header(self, header_cells, spec):
+        """Colour every header cell. One cell per column."""
+        return [self.__paint_one(cell, spec) for cell in header_cells]
+
+    def __paint_cells(self, columns, color_of):
+        """
+        Colour body cells, consulting ``color_of(column_index, row_index)``.
+
+        Cells whose colour resolves to None are left untouched, so a table with
+        one coloured column pays nothing on the others.
+        """
+        painted = []
+        for column_i, column in enumerate(columns):
+            cells = []
+            for row_i, cell in enumerate(column):
+                spec = color_of(column_i, row_i)
+                cells.append(self.__paint_one(cell, spec) if spec else cell)
+            painted.append(tuple(cells))
+        return painted
+
+    def __raw_value_at(self, column_titles, column_i, row_i):
+        """
+        The original, unformatted value of a cell, for ``color_rule``.
+
+        Handing the rule the padded string would make numeric comparisons
+        impossible, so the value is looked up from the stored data instead.
+        Returns None when no rule is set, to skip the lookup entirely.
+        """
+        if self.__color_rule is None:
+            return None
+        try:
+            title = column_titles[column_i]
+        except IndexError:
+            return None
+        source = self.__columns_with_i if self.__show_index else self.__columns
+        try:
+            return source[title][row_i]
+        except (KeyError, IndexError):
+            return None
+
+    # +------------------------+ COLUMNS +---------------------------+
+
+    def add_column(self,
                    header=None, 
                    data: Union[list, tuple]=None
                   ) -> None:
@@ -1871,6 +2220,15 @@ class Table(object):
         Crafts the table and returns it as a string.
         """
         if len(self.__columns) != 0:
+            # Refuse to render into a space where the result would be
+            # illegible, if the caller asked to be told -- issue #14.
+            if self.__too_narrow_message is not None:
+                available = self.__available_width()
+                needed = self.__minimum_table_width()
+                if needed > available:
+                    return self.__too_narrow_message.format(
+                        needed=needed, available=available
+                    )
             # self.__parse_data()  # TODO add parsing
             rows, rows_with_i = self.__call_table_objects()
             self.__typify_table()
@@ -1961,9 +2319,9 @@ class Table(object):
         """
         adjust = False
         difference = 0
-        console_cols, console_lines = get_window_size()
-        if console_cols < table_width:
-            difference = (table_width - console_cols) + 1
+        available = self.__available_width()
+        if available < table_width:
+            difference = (table_width - available) + 1
             adjust = True
         if adjust:
             headers, rows, rows_with_i = self.__adjust_column_widths(
@@ -1985,27 +2343,63 @@ class Table(object):
         Index column will never get its space reduced.
         """
         if self.__show_index:
-            sums_of_widths = sum(self.__column_widths_as_list_with_i)
-            widths = self.__column_widths_as_list_with_i
-            widths.pop(0)
+            # Copy: the stored list is read again later, and the original
+            # popped the index entry straight out of it.
+            widths = list(self.__column_widths_as_list_with_i)[1:]
         else:
-            sums_of_widths = sum(self.__column_widths_as_list)
-            widths = self.__column_widths_as_list
-        proportions = [
-            col_width / sums_of_widths 
-            for col_width in widths
-        ]
-        trimm_sign_len = len(DEFAULT_TRIMMING_SIGN)
-        amnt_to_reduce_per_column = [
-            round(prop * difference) + (trimm_sign_len if (
-                not self.__auto_wrap_table
-            ) else 0)
-            for prop in proportions
-        ]
-        if self.show_index:
-            amnt_to_reduce_per_column.insert(0, 0)
-        
-        return amnt_to_reduce_per_column
+            widths = list(self.__column_widths_as_list)
+
+        if not widths:
+            return [0] if self.__show_index else []
+
+        # Take the space off the widest columns first, levelling them down
+        # towards the next widest, and only reach the narrow ones once the
+        # wide ones have nothing left to give.
+        #
+        # Reducing every column in proportion to its width, as this did
+        # before, shrinks a 4-wide column whenever a 24-wide one is beside it,
+        # wrapping data that had room to spare while the wide column keeps
+        # more than it needs. That is issue #16.
+        reductions = [0] * len(widths)
+        remaining = difference
+
+        while remaining > 0:
+            current = [width - taken for width, taken in zip(widths, reductions)]
+            widest = max(current)
+            if widest <= MIN_COLUMN_SIZE:
+                # Nothing may shrink further without becoming unreadable.
+                break
+
+            at_widest = [i for i, width in enumerate(current) if width == widest]
+            below = [width for width in current if width < widest]
+            # Level down to the next distinct width, but never below the floor.
+            target = max(max(below) if below else MIN_COLUMN_SIZE,
+                         MIN_COLUMN_SIZE)
+            drop_each = widest - target or 1
+
+            if drop_each * len(at_widest) > remaining:
+                # The last of the difference, shared among the widest columns.
+                share, leftover = divmod(remaining, len(at_widest))
+                for position, index in enumerate(at_widest):
+                    reductions[index] += share + (1 if position < leftover else 0)
+                remaining = 0
+            else:
+                for index in at_widest:
+                    reductions[index] += drop_each
+                remaining -= drop_each * len(at_widest)
+
+        # Trimming appends a marker, which costs width of its own.
+        if not self.__auto_wrap_table:
+            trimming_sign_length = len(DEFAULT_TRIMMING_SIGN)
+            reductions = [
+                taken + trimming_sign_length if taken else taken
+                for taken in reductions
+            ]
+
+        if self.__show_index:
+            reductions.insert(0, 0)
+
+        return reductions
     
     def __adjust_column_widths(self, 
                                difference: int, 
@@ -2318,6 +2712,18 @@ class Table(object):
                 }
 
                 
+    def __hidden_row_indexes(self) -> frozenset:
+        """
+        Indexes of rows that will not be rendered.
+
+        Width measurement must skip these. An empty row still holds the
+        missing value in every column, and counting it widened columns to fit
+        text that is never displayed -- issue #22.
+        """
+        if self.__show_empty_rows:
+            return frozenset()
+        return frozenset(self.__empty_row_indexes)
+
     def __get_column_widths(self, semi):
         if self.show_index:
             sizes_with_i, float_sizes_with_i = _column_widths(
@@ -2327,7 +2733,8 @@ class Table(object):
                     self.__processed_columns_with_i
                 ),
                 column_type_names=self.__column_types_with_i,
-                show_headers=self.__show_headers
+                show_headers=self.__show_headers,
+                skip_rows=self.__hidden_row_indexes()
             )
             self.__column_widths_as_list_with_i = sizes_with_i
             if float_sizes_with_i is not None:
@@ -2346,7 +2753,8 @@ class Table(object):
                     self.__processed_columns
                 ),
                 column_type_names=self.__column_types,
-                show_headers=self.__show_headers
+                show_headers=self.__show_headers,
+                skip_rows=self.__hidden_row_indexes()
             )
             self.__column_widths_as_list = sizes
             if float_sizes is not None:
@@ -2391,6 +2799,15 @@ class Table(object):
             self.__show_empty_columns,
             float_column_widths
         )
+        # Colour is applied after alignment, never before. By this point every
+        # cell has been padded to its exact visible width, so wrapping it in
+        # escape sequences cannot disturb any measurement, and the float
+        # aligner has already done its split on the decimal point.
+        colors_on = self.__colors_active and self.__has_any_color()
+        if colors_on and self.__header_color:
+            aligned_header = self.__paint_header(
+                aligned_header, self.__header_color
+            )
         aligned_header = self.__zip_columns(aligned_header, headers=True)
         aligned_columns = _align_columns(
             self.__style_composition,
@@ -2402,6 +2819,15 @@ class Table(object):
             self.__show_empty_columns,
             float_column_widths
         )
+        if colors_on:
+            aligned_columns = self.__paint_cells(
+                aligned_columns,
+                lambda cell_i, row_i: self.__color_for_cell(
+                    self.__raw_value_at(column_titles, cell_i, row_i),
+                    row_i,
+                    column_titles[cell_i] if cell_i < len(column_titles) else '',
+                ),
+            )
         aligned_columns = self.__zip_columns(aligned_columns)
         # String separators and data rows are joined
         separators: HorizontalComposition = _get_separators(
@@ -2411,13 +2837,19 @@ class Table(object):
             self.__show_empty_columns,
             column_alignments_list,
         )
+        if colors_on and self.__border_color:
+            separators = HorizontalComposition(*[
+                colorize(line, self.__border_color) if line is not None else None
+                for line in separators
+            ])
         data_rows: DataRows = _get_data_rows(
-            self.__style_composition, 
-            aligned_header, 
+            self.__style_composition,
+            aligned_header,
             aligned_columns,
             self.__show_headers,
             self.__empty_row_indexes,
             self.__show_empty_rows,
+            self.__border_color if colors_on else None,
         )
 
         # Table string is formed
@@ -2469,17 +2901,141 @@ class Table(object):
     # +-----------------------------------------------------------------------------+
     # start +------------------------+ DATA READING +-------------------------+ start
 
-    def __read_pandas_dataframe(self):
-        pass
+    # Readers and writers are imported inside each method rather than at
+    # module scope: readers.py needs the Table class, so importing it here
+    # would be circular, and the optional dependencies must not be touched
+    # until the corresponding format is actually used.
 
-    def __read_csv_file(self):
-        pass
+    @classmethod
+    def from_records(cls, rows, headers=None, parse_numbers=True, **options):
+        """
+        Build a table from a sequence of rows.
 
-    def __read_html_table(self):
-        pass
+        With no headers, the first row supplies them::
 
-    def __read_text_file(self):
-        pass
+            Table.from_records([['Ann', 30], ['Bob', 41]], headers=['Name', 'Age'])
+        """
+        from .readers import from_records
+        return from_records(cls, rows, headers, parse_numbers, **options)
+
+    @classmethod
+    def from_dicts(cls, records, parse_numbers=False, **options):
+        """
+        Build a table from a sequence of mappings, one per row.
+
+        Columns are the union of every key in first-seen order, so records
+        with differing keys still line up::
+
+            Table.from_dicts([{'name': 'Ann'}, {'name': 'Bob', 'age': 41}])
+        """
+        from .readers import from_dicts
+        return from_dicts(cls, records, parse_numbers, **options)
+
+    @classmethod
+    def from_csv(cls, source, parse_numbers=True, has_header=True,
+                 delimiter=',', encoding='utf-8', **options):
+        """
+        Build a table from a CSV path or open handle.
+
+        Numeric-looking text is converted by default; a column left as strings
+        would be left-aligned and look wrong. Pass ``parse_numbers=False`` to
+        keep the text exactly as written.
+        """
+        from .readers import from_csv
+        return from_csv(cls, source, parse_numbers, has_header, delimiter,
+                        encoding, **options)
+
+    @classmethod
+    def from_html(cls, source, index=0, parse_numbers=True, encoding='utf-8',
+                  **options):
+        """
+        Build a table from an HTML table element.
+
+        ``source`` may be markup, a path, or an open handle; ``index`` picks
+        which table to read from a document containing several. Uses the
+        standard library parser, so this needs no dependency.
+        """
+        from .readers import from_html
+        return from_html(cls, source, index, parse_numbers, encoding, **options)
+
+    @classmethod
+    def from_pandas(cls, dataframe, include_index=False, **options):
+        """
+        Build a table from a pandas DataFrame or Series.
+
+        Requires pandas: pip install prettyTables[pandas]
+        """
+        from .readers import from_pandas
+        return from_pandas(cls, dataframe, include_index, **options)
+
+    @classmethod
+    def from_excel(cls, path, sheet=None, has_header=True,
+                   parse_numbers=False, **options):
+        """
+        Build a table from a worksheet in an .xlsx file.
+
+        Requires openpyxl: pip install prettyTables[excel]
+        """
+        from .readers import from_excel
+        return from_excel(cls, path, sheet, has_header, parse_numbers,
+                          **options)
+
+    # end +--------------------------+ DATA READING +---------------------------+ end
+    # +-----------------------------------------------------------------------------+
+
+    # +-----------------------------------------------------------------------------+
+    # start +------------------------+ DATA WRITING +------------------------+ start
+
+    def to_records(self, include_index=False):
+        """The table as a list of dicts, one per row."""
+        from .writers import to_records
+        return to_records(self, include_index)
+
+    def to_csv(self, target=None, include_index=False, delimiter=',',
+               encoding='utf-8'):
+        """
+        Write the table as CSV.
+
+        Returns the CSV as a string when no target is given. Colour is
+        stripped -- escape sequences would corrupt the fields.
+        """
+        from .writers import to_csv
+        return to_csv(self, target, include_index, delimiter, encoding)
+
+    def to_markdown(self, include_index=False, align=True):
+        """
+        Render as a GitHub-flavoured Markdown table.
+
+        Pipes inside cells are escaped, since an unescaped one would split the
+        cell and shift every column after it.
+        """
+        from .writers import to_markdown
+        return to_markdown(self, include_index, align)
+
+    def to_html(self, target=None, title='Table', paginate=25,
+                include_index=False, searchable=True, encoding='utf-8'):
+        """
+        Write a self-contained HTML page with sorting, filtering and paging.
+
+        Everything is inline -- no external requests -- so the file works
+        offline and from a file:// URL. ``paginate`` is the page size; 0 puts
+        every row on one page. Returns the markup when no target is given.
+        """
+        from .writers import to_html
+        return to_html(self, target, title, paginate, include_index,
+                       searchable, encoding)
+
+    def to_excel(self, path, sheet_name='Sheet1', include_index=False,
+                 autofit=True, freeze_header=True):
+        """
+        Write an .xlsx workbook.
+
+        Numbers are written as numbers so the spreadsheet can compute with
+        them. Requires openpyxl: pip install prettyTables[excel]
+        """
+        from .writers import to_excel
+        return to_excel(self, path, sheet_name, include_index, autofit,
+                        freeze_header)
 
     # end +--------------------------+ DATA READING +---------------------------+ end
     # +-----------------------------------------------------------------------------+

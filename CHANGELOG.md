@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.2.0](https://github.com/Opus-Perpetuus/prettyTables/compare/v1.1.5...v1.2.0) (2026-08-03)
+
+
+### Features
+
+* ANSI colour for headers, borders, columns, rows and individual cells, with NO_COLOR and TTY detection ([f7ea1c9](https://github.com/Opus-Perpetuus/prettyTables/commit/f7ea1c9))
+* read from CSV, HTML, dicts, pandas and Excel; write CSV, Markdown, self-contained paginated HTML and Excel ([c54fa06](https://github.com/Opus-Perpetuus/prettyTables/commit/c54fa06))
+* parse numeric strings via `parse_str_numbers`, absorbing celulartable's type parsing ([ce5362b](https://github.com/Opus-Perpetuus/prettyTables/commit/ce5362b))
+* `max_width` and `too_narrow_message` for tables that cannot fit ([f8309b8](https://github.com/Opus-Perpetuus/prettyTables/commit/f8309b8))
+* `Table.missing` sentinel for building tables with gaps ([c54fa06](https://github.com/Opus-Perpetuus/prettyTables/commit/c54fa06))
+
+
+### Bug Fixes
+
+* measure and pad cells by visible width, fixing alignment for CJK, Hangul and emoji ([7a350d2](https://github.com/Opus-Perpetuus/prettyTables/commit/7a350d2))
+* exclude hidden rows from column width measurement ([#22](https://github.com/Opus-Perpetuus/prettyTables/issues/22)) ([e480f4e](https://github.com/Opus-Perpetuus/prettyTables/commit/e480f4e))
+* shrink the widest column first instead of every column in proportion ([#16](https://github.com/Opus-Perpetuus/prettyTables/issues/16)) ([842f64e](https://github.com/Opus-Perpetuus/prettyTables/commit/842f64e))
+* never hand a column a width budget of zero, which raised from textwrap ([#14](https://github.com/Opus-Perpetuus/prettyTables/issues/14)) ([842f64e](https://github.com/Opus-Perpetuus/prettyTables/commit/842f64e))
+* with auto_wrap off, the trimmed table now fits the terminal (Known Issue #2) ([842f64e](https://github.com/Opus-Perpetuus/prettyTables/commit/842f64e))
+
+
+### Performance Improvements
+
+* C extension for text measurement, 17-34x on the hot path, with a pure-Python fallback ([23981d4](https://github.com/Opus-Perpetuus/prettyTables/commit/23981d4))
+
 ### [1.1.5](https://github.com/Kyostenas/prettyTables/compare/v1.1.4...v1.1.5) (2022-07-11)
 
 

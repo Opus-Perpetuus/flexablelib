@@ -1,5 +1,6 @@
 """ CELL WRAPPING AND ADJUSTMENT """
 
+from .fast import pad_to_width, visible_width
 from .utils import is_some_instance
 from .options import FLT_FILTER, INT_FILTER
 
@@ -61,7 +62,8 @@ def _center_cell(cell: Union[str, Union[List[str], Tuple[str]]],
                  fill_char: str = ' '
                 ) -> Union[str, Tuple[str]]:
     """
-    Center a cell. Uses ``str().center()`` but can also center
+    Center a cell. Pads by visible width, so ANSI escape sequences and
+    double-width characters are measured correctly. Can also center
     wrapped cells (lists or tuples).
     
     Examples::
@@ -75,11 +77,11 @@ def _center_cell(cell: Union[str, Union[List[str], Tuple[str]]],
         centered = list(map(str, cell))  # Convert to strings to prevent errors.
         for part_i, cell_part in enumerate(centered):
             # Center the cell part.
-            centered[part_i] = cell_part.center(cell_length, fill_char)
+            centered[part_i] = pad_to_width(cell_part, cell_length, 'c', fill_char)
         centered = tuple(centered)
     else:
         # If it is not, center the cell.
-        centered = str(cell).center(cell_length, fill_char)
+        centered = pad_to_width(str(cell), cell_length, 'c', fill_char)
 
     return centered
 
@@ -89,7 +91,7 @@ def _ljust_cell(cell: Union[str, Union[List[str], Tuple[str]]],
                 fill_char: str = ' '
                ) -> Union[str, Tuple[str]]:
     """
-    Aligns to the left a cell. Uses ``str().ljust()`` but can also 
+    Aligns a cell to the left, padding by visible width. Can also 
     align wrapped cells (lists or tuples).
     
     Examples::
@@ -103,11 +105,11 @@ def _ljust_cell(cell: Union[str, Union[List[str], Tuple[str]]],
         left_adjusted = list(map(str, cell)) # Convert to strings to prevent errors.
         for part_i, cell_part in enumerate(left_adjusted):
             # Align the cell part to the left.
-            left_adjusted[part_i] = cell_part.ljust(cell_length, fill_char)
+            left_adjusted[part_i] = pad_to_width(cell_part, cell_length, 'l', fill_char)
         left_adjusted = tuple(left_adjusted)
     else:
         # If it is not, align the cell to the left.
-        left_adjusted = str(cell).ljust(cell_length, fill_char)
+        left_adjusted = pad_to_width(str(cell), cell_length, 'l', fill_char)
 
     return left_adjusted
 
@@ -117,7 +119,7 @@ def _rjust_cell(cell: Union[str, Union[List[str], Tuple[str]]],
                 fill_char: str = ' '
                )-> Union[str, Tuple[str]]:
     """
-    Aligns to the right a cell. Uses ``str().rjust()`` but can also 
+    Aligns a cell to the right, padding by visible width. Can also 
     align wrapped cells (lists or tuples).
       
     Examples::
@@ -131,11 +133,11 @@ def _rjust_cell(cell: Union[str, Union[List[str], Tuple[str]]],
         right_adjusted = list(map(str, cell)) # Convert to strings to prevent errors.
         for part_i, cell_part in enumerate(right_adjusted):
             # Align the cell part to the right.
-            right_adjusted[part_i] = cell_part.rjust(cell_length, fill_char)
+            right_adjusted[part_i] = pad_to_width(cell_part, cell_length, 'r', fill_char)
         right_adjusted = tuple(right_adjusted)
     else:
         # If it is not, align the cell to the right.
-        right_adjusted = str(cell).rjust(cell_length, fill_char)
+        right_adjusted = pad_to_width(str(cell), cell_length, 'r', fill_char)
 
     return right_adjusted
 
@@ -171,10 +173,10 @@ def fljust(string: str,
     right_width = sides_widths[RIGHT_SIDE_WIDTH_I]
     
     # Align the left part to the right.
-    left = left_string.rjust(left_width, fill_char) 
+    left = pad_to_width(left_string, left_width, 'r', fill_char) 
     
     # Align the right part to the left.
-    right = right_string.ljust(right_width, fill_char)
+    right = pad_to_width(right_string, right_width, 'l', fill_char)
     
     return '.'.join([left, right])
 
@@ -189,7 +191,7 @@ def __fljust_part(cell_part: Any,
     If it has a point, it will be aligned as a float with ``fljust()``.
     Int numbers are also aligned with the int part of the floats, but
     using ``_add_cell_spacing()``.
-    Any other element (nor float nor int) is aligned with ``str().rjust()``
+    Any other element (nor float nor int) is right-aligned by visible width
     
     Examples::
 
@@ -230,7 +232,7 @@ def __fljust_part(cell_part: Any,
     # If it is an int, align it as an int.
     # Will be aligned to the int part of the float.
     if is_int_number:
-        cell_len = len(str_cell)
+        cell_len = visible_width(str_cell)
         
         # Get the left and right sides widths, subtracting
         # the length of the int part to the left and adding
@@ -269,8 +271,8 @@ def __fljust_part(cell_part: Any,
         
     # If it is not a float nor an int, align it to the right.
     else:
-        return str_cell.rjust(
-            cell_length, fill_char
+        return pad_to_width(
+            str_cell, cell_length, 'r', fill_char
         )
 
 
