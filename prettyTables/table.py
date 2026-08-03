@@ -1500,6 +1500,26 @@ class Table(object):
     # +-----------------------------------------------------------------------------+
     # start +------------------------+ COLUMN ADDING +------------------------+ start
 
+    @property
+    def missing(self):
+        """
+        The sentinel value that marks a cell as absent.
+
+        A cell holding this renders as ``missing_value`` and does not affect
+        the column's inferred type, so a numeric column with gaps stays
+        numeric and stays right-aligned. Assigning None or '' instead would
+        make the column textual.
+
+        Used by the readers to represent NaN and NULL, and available for
+        building tables with gaps by hand::
+
+            table.add_column('temp', [3.5, table.missing, 22.0])
+
+        The sentinel is compared by identity and is per-table, so use the one
+        belonging to the table you are filling.
+        """
+        return self.__value_placer
+
     # +------------------------+ FITTING +--------------------------+
 
     @property
@@ -2787,17 +2807,141 @@ class Table(object):
     # +-----------------------------------------------------------------------------+
     # start +------------------------+ DATA READING +-------------------------+ start
 
-    def __read_pandas_dataframe(self):
-        pass
+    # Readers and writers are imported inside each method rather than at
+    # module scope: readers.py needs the Table class, so importing it here
+    # would be circular, and the optional dependencies must not be touched
+    # until the corresponding format is actually used.
 
-    def __read_csv_file(self):
-        pass
+    @classmethod
+    def from_records(cls, rows, headers=None, parse_numbers=True, **options):
+        """
+        Build a table from a sequence of rows.
 
-    def __read_html_table(self):
-        pass
+        With no headers, the first row supplies them::
 
-    def __read_text_file(self):
-        pass
+            Table.from_records([['Ann', 30], ['Bob', 41]], headers=['Name', 'Age'])
+        """
+        from .readers import from_records
+        return from_records(cls, rows, headers, parse_numbers, **options)
+
+    @classmethod
+    def from_dicts(cls, records, parse_numbers=False, **options):
+        """
+        Build a table from a sequence of mappings, one per row.
+
+        Columns are the union of every key in first-seen order, so records
+        with differing keys still line up::
+
+            Table.from_dicts([{'name': 'Ann'}, {'name': 'Bob', 'age': 41}])
+        """
+        from .readers import from_dicts
+        return from_dicts(cls, records, parse_numbers, **options)
+
+    @classmethod
+    def from_csv(cls, source, parse_numbers=True, has_header=True,
+                 delimiter=',', encoding='utf-8', **options):
+        """
+        Build a table from a CSV path or open handle.
+
+        Numeric-looking text is converted by default; a column left as strings
+        would be left-aligned and look wrong. Pass ``parse_numbers=False`` to
+        keep the text exactly as written.
+        """
+        from .readers import from_csv
+        return from_csv(cls, source, parse_numbers, has_header, delimiter,
+                        encoding, **options)
+
+    @classmethod
+    def from_html(cls, source, index=0, parse_numbers=True, encoding='utf-8',
+                  **options):
+        """
+        Build a table from an HTML table element.
+
+        ``source`` may be markup, a path, or an open handle; ``index`` picks
+        which table to read from a document containing several. Uses the
+        standard library parser, so this needs no dependency.
+        """
+        from .readers import from_html
+        return from_html(cls, source, index, parse_numbers, encoding, **options)
+
+    @classmethod
+    def from_pandas(cls, dataframe, include_index=False, **options):
+        """
+        Build a table from a pandas DataFrame or Series.
+
+        Requires pandas: pip install prettyTables[pandas]
+        """
+        from .readers import from_pandas
+        return from_pandas(cls, dataframe, include_index, **options)
+
+    @classmethod
+    def from_excel(cls, path, sheet=None, has_header=True,
+                   parse_numbers=False, **options):
+        """
+        Build a table from a worksheet in an .xlsx file.
+
+        Requires openpyxl: pip install prettyTables[excel]
+        """
+        from .readers import from_excel
+        return from_excel(cls, path, sheet, has_header, parse_numbers,
+                          **options)
+
+    # end +--------------------------+ DATA READING +---------------------------+ end
+    # +-----------------------------------------------------------------------------+
+
+    # +-----------------------------------------------------------------------------+
+    # start +------------------------+ DATA WRITING +------------------------+ start
+
+    def to_records(self, include_index=False):
+        """The table as a list of dicts, one per row."""
+        from .writers import to_records
+        return to_records(self, include_index)
+
+    def to_csv(self, target=None, include_index=False, delimiter=',',
+               encoding='utf-8'):
+        """
+        Write the table as CSV.
+
+        Returns the CSV as a string when no target is given. Colour is
+        stripped -- escape sequences would corrupt the fields.
+        """
+        from .writers import to_csv
+        return to_csv(self, target, include_index, delimiter, encoding)
+
+    def to_markdown(self, include_index=False, align=True):
+        """
+        Render as a GitHub-flavoured Markdown table.
+
+        Pipes inside cells are escaped, since an unescaped one would split the
+        cell and shift every column after it.
+        """
+        from .writers import to_markdown
+        return to_markdown(self, include_index, align)
+
+    def to_html(self, target=None, title='Table', paginate=25,
+                include_index=False, searchable=True, encoding='utf-8'):
+        """
+        Write a self-contained HTML page with sorting, filtering and paging.
+
+        Everything is inline -- no external requests -- so the file works
+        offline and from a file:// URL. ``paginate`` is the page size; 0 puts
+        every row on one page. Returns the markup when no target is given.
+        """
+        from .writers import to_html
+        return to_html(self, target, title, paginate, include_index,
+                       searchable, encoding)
+
+    def to_excel(self, path, sheet_name='Sheet1', include_index=False,
+                 autofit=True, freeze_header=True):
+        """
+        Write an .xlsx workbook.
+
+        Numbers are written as numbers so the spreadsheet can compute with
+        them. Requires openpyxl: pip install prettyTables[excel]
+        """
+        from .writers import to_excel
+        return to_excel(self, path, sheet_name, include_index, autofit,
+                        freeze_header)
 
     # end +--------------------------+ DATA READING +---------------------------+ end
     # +-----------------------------------------------------------------------------+
