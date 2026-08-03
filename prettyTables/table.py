@@ -28,8 +28,9 @@ from .table_strings import (
     DataRows
 )
 from .utils import (
-    get_window_size, 
+    get_window_size,
     is_multi_row,
+    is_some_instance,
     ValuePlacer,
     IndexCounter,
     read_file
@@ -45,6 +46,7 @@ from .cells import (
     _wrap_rows,
     _zip_wrapped_rows
 )
+from .colors import colorize, supports_color
 
 from copy import deepcopy
 from textwrap import wrap
@@ -786,6 +788,16 @@ class Table(object):
         #   t: title
         #   c: capitalized
         self.__header_style = header_style
+        # +------------------------+ COLOUR +---------------------------+
+        # Specs are resolved to escape sequences once per render, not per
+        # cell. None everywhere means no colour and no cost.
+        self.__header_color = None
+        self.__border_color = None
+        self.__column_colors = {}
+        self.__row_colors = {}
+        self.__color_rule = None
+        # None means "decide from the output stream"; True and False force it.
+        self.__use_colors = None
         self.__show_margin = True
         self.__show_empty_columns = True
         self.__show_empty_rows = True
@@ -1480,7 +1492,188 @@ class Table(object):
     # +-----------------------------------------------------------------------------+
     # start +------------------------+ COLUMN ADDING +------------------------+ start
 
-    def add_column(self, 
+    # +------------------------+ COLOUR +---------------------------+
+
+    @property
+    def header_color(self):
+        """
+        Colour applied to the header row.
+
+        Accepts a name, a 256-colour index, a hex triple, or a combination:
+        'cyan', 'bold yellow', '#ff8800', 'color:93', 'black on white'.
+        """
+        return self.__header_color
+
+    @header_color.setter
+    def header_color(self, value):
+        self.__header_color = value
+
+    @property
+    def border_color(self):
+        """Colour applied to every border character."""
+        return self.__border_color
+
+    @border_color.setter
+    def border_color(self, value):
+        self.__border_color = value
+
+    @property
+    def column_colors(self) -> dict:
+        """
+        Colour per column, keyed by header name::
+
+            table.column_colors = {'Status': 'green', 'Errors': 'bold red'}
+        """
+        return self.__column_colors
+
+    @column_colors.setter
+    def column_colors(self, value: dict):
+        self.__column_colors = dict(value) if value else {}
+
+    @property
+    def row_colors(self) -> dict:
+        """
+        Colour per row, keyed by row index::
+
+            table.row_colors = {0: 'dim', 3: 'bold'}
+        """
+        return self.__row_colors
+
+    @row_colors.setter
+    def row_colors(self, value):
+        if value is None:
+            self.__row_colors = {}
+        elif isinstance(value, dict):
+            self.__row_colors = dict(value)
+        else:
+            # A bare sequence is taken as colours for consecutive rows.
+            self.__row_colors = {i: c for i, c in enumerate(value)}
+
+    @property
+    def color_rule(self):
+        """
+        A callable deciding the colour of individual cells.
+
+        Called as ``rule(value, row_index, column_name)`` and returning a
+        colour spec, or None to leave the cell alone. It takes precedence over
+        ``row_colors`` and ``column_colors``::
+
+            table.color_rule = lambda v, r, c: 'red' if c == 'Delta' and v < 0 else None
+
+        The callable receives the original value, before it is turned into a
+        string, so numeric comparisons work directly.
+        """
+        return self.__color_rule
+
+    @color_rule.setter
+    def color_rule(self, value):
+        if value is not None and not callable(value):
+            raise TypeError('color_rule must be callable or None')
+        self.__color_rule = value
+
+    @property
+    def use_colors(self):
+        """
+        Whether to emit colour: True, False, or None to decide automatically.
+
+        Automatic means colour is emitted only when standard output is a
+        terminal, and never when NO_COLOR is set. Because ``compose()`` returns
+        a string that the caller may send anywhere, this errs toward not
+        embedding escape sequences in something destined for a file.
+        """
+        return self.__use_colors
+
+    @use_colors.setter
+    def use_colors(self, value):
+        self.__use_colors = value
+
+    @property
+    def __colors_active(self) -> bool:
+        """Resolve the colour decision for this render."""
+        if self.__use_colors is None:
+            return supports_color()
+        return bool(self.__use_colors)
+
+    def __color_for_cell(self, value, row_index: int, column_name: str):
+        """
+        Colour of a single cell, or None.
+
+        Precedence: an explicit rule, then the row, then the column.
+        """
+        if self.__color_rule is not None:
+            decided = self.__color_rule(value, row_index, column_name)
+            if decided:
+                return decided
+        if row_index in self.__row_colors:
+            return self.__row_colors[row_index]
+        return self.__column_colors.get(column_name)
+
+    def __has_any_color(self) -> bool:
+        """True if anything at all was configured to be coloured."""
+        return bool(
+            self.__header_color
+            or self.__border_color
+            or self.__column_colors
+            or self.__row_colors
+            or self.__color_rule
+        )
+
+    @staticmethod
+    def __paint_one(cell, spec):
+        """
+        Colour a single aligned cell, which may be wrapped into several lines.
+
+        A wrapped cell arrives as a tuple of sub-rows; each is coloured
+        separately so the sequence opens and closes within one physical line
+        and cannot bleed across the row.
+        """
+        if is_some_instance(cell, list, tuple):
+            return tuple(colorize(str(part), spec) for part in cell)
+        return colorize(str(cell), spec)
+
+    def __paint_header(self, header_cells, spec):
+        """Colour every header cell. One cell per column."""
+        return [self.__paint_one(cell, spec) for cell in header_cells]
+
+    def __paint_cells(self, columns, color_of):
+        """
+        Colour body cells, consulting ``color_of(column_index, row_index)``.
+
+        Cells whose colour resolves to None are left untouched, so a table with
+        one coloured column pays nothing on the others.
+        """
+        painted = []
+        for column_i, column in enumerate(columns):
+            cells = []
+            for row_i, cell in enumerate(column):
+                spec = color_of(column_i, row_i)
+                cells.append(self.__paint_one(cell, spec) if spec else cell)
+            painted.append(tuple(cells))
+        return painted
+
+    def __raw_value_at(self, column_titles, column_i, row_i):
+        """
+        The original, unformatted value of a cell, for ``color_rule``.
+
+        Handing the rule the padded string would make numeric comparisons
+        impossible, so the value is looked up from the stored data instead.
+        Returns None when no rule is set, to skip the lookup entirely.
+        """
+        if self.__color_rule is None:
+            return None
+        try:
+            title = column_titles[column_i]
+        except IndexError:
+            return None
+        source = self.__columns_with_i if self.__show_index else self.__columns
+        try:
+            return source[title][row_i]
+        except (KeyError, IndexError):
+            return None
+
+    # +------------------------+ COLUMNS +---------------------------+
+
+    def add_column(self,
                    header=None, 
                    data: Union[list, tuple]=None
                   ) -> None:
@@ -2391,6 +2584,15 @@ class Table(object):
             self.__show_empty_columns,
             float_column_widths
         )
+        # Colour is applied after alignment, never before. By this point every
+        # cell has been padded to its exact visible width, so wrapping it in
+        # escape sequences cannot disturb any measurement, and the float
+        # aligner has already done its split on the decimal point.
+        colors_on = self.__colors_active and self.__has_any_color()
+        if colors_on and self.__header_color:
+            aligned_header = self.__paint_header(
+                aligned_header, self.__header_color
+            )
         aligned_header = self.__zip_columns(aligned_header, headers=True)
         aligned_columns = _align_columns(
             self.__style_composition,
@@ -2402,6 +2604,15 @@ class Table(object):
             self.__show_empty_columns,
             float_column_widths
         )
+        if colors_on:
+            aligned_columns = self.__paint_cells(
+                aligned_columns,
+                lambda cell_i, row_i: self.__color_for_cell(
+                    self.__raw_value_at(column_titles, cell_i, row_i),
+                    row_i,
+                    column_titles[cell_i] if cell_i < len(column_titles) else '',
+                ),
+            )
         aligned_columns = self.__zip_columns(aligned_columns)
         # String separators and data rows are joined
         separators: HorizontalComposition = _get_separators(
@@ -2411,13 +2622,19 @@ class Table(object):
             self.__show_empty_columns,
             column_alignments_list,
         )
+        if colors_on and self.__border_color:
+            separators = HorizontalComposition(*[
+                colorize(line, self.__border_color) if line is not None else None
+                for line in separators
+            ])
         data_rows: DataRows = _get_data_rows(
-            self.__style_composition, 
-            aligned_header, 
+            self.__style_composition,
+            aligned_header,
             aligned_columns,
             self.__show_headers,
             self.__empty_row_indexes,
             self.__show_empty_rows,
+            self.__border_color if colors_on else None,
         )
 
         # Table string is formed

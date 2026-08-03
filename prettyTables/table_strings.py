@@ -11,6 +11,7 @@ from .options import (
     NONE_VALUE_REPLACEMENT,
     COLUMN_ALIGNS
 )
+from .colors import colorize
 from .utils import is_multi_row
 
 from typing import Any, List, Generator
@@ -616,12 +617,13 @@ def __get_data_row(left: str,
         return joined_row
 
 
-def _get_data_rows(style_composition: TableComposition, 
-                   header: tuple, 
-                   body: tuple, 
+def _get_data_rows(style_composition: TableComposition,
+                   header: tuple,
+                   body: tuple,
                    show_headers: bool,
-                   empty_rows_i: List[int], 
-                   show_empty_rows: bool) -> DataRows:
+                   empty_rows_i: List[int],
+                   show_empty_rows: bool,
+                   border_color: str = None) -> DataRows:
     """
     Receives aligned cells and joins them with the vertical separators
     of the given ``style_composition``.
@@ -651,14 +653,20 @@ def _get_data_rows(style_composition: TableComposition,
 
     """
     
+    # Colouring the separators here, rather than the assembled row, keeps the
+    # escape sequences out of the cell text -- the cells were already padded to
+    # their exact visible width and must not be disturbed.
+    def paint(separator: str) -> str:
+        return colorize(separator, border_color) if border_color else separator
+
     # Process header only if it will be shown.
     if show_headers:
         # Get the vertical separators for the header.
         header_lines: SeparatorLine = style_composition.vertical_header_lines
-        header_left = __check_if_none(header_lines.left)
-        header_middle = __check_if_none(header_lines.middle)
-        header_right = __check_if_none(header_lines.right)
-        
+        header_left = paint(__check_if_none(header_lines.left))
+        header_middle = paint(__check_if_none(header_lines.middle))
+        header_right = paint(__check_if_none(header_lines.right))
+
         # Process header.
         str_header = __get_data_row(
             header_left, 
@@ -672,9 +680,9 @@ def _get_data_rows(style_composition: TableComposition,
 
     # Get the vertical separators for the body (rows).
     body_lines: SeparatorLine = style_composition.vertical_table_body_lines
-    body_left = __check_if_none(body_lines.left)
-    body_middle = __check_if_none(body_lines.middle)
-    body_right = __check_if_none(body_lines.right)
+    body_left = paint(__check_if_none(body_lines.left))
+    body_middle = paint(__check_if_none(body_lines.middle))
+    body_right = paint(__check_if_none(body_lines.right))
     
     # Process each row.
     strs_body = [] 
