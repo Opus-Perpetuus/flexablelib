@@ -36,11 +36,13 @@ from .utils import (
     read_file
 )
 from .options import (
-    NONE_VALUE_REPLACEMENT, 
-    DEFAULT_STYLE, 
-    I_COL_TIT, 
+    NONE_VALUE_REPLACEMENT,
+    DEFAULT_STYLE,
+    I_COL_TIT,
     DEFAULT_TRIMMING_SIGN,
-    TABLE_ALIGNS
+    TABLE_ALIGNS,
+    MIN_COLUMN_SIZE,
+    CELL_MARGIN
 )
 from .cells import (
     _wrap_rows,
@@ -798,6 +800,12 @@ class Table(object):
         self.__color_rule = None
         # None means "decide from the output stream"; True and False force it.
         self.__use_colors = None
+        # +---------------------+ FITTING +-----------------------------+
+        # None means "use the terminal width".
+        self.__max_width = None
+        # Shown instead of the table when it cannot fit legibly. None keeps
+        # the old behaviour of rendering it anyway, however cramped.
+        self.__too_narrow_message = None
         self.__show_margin = True
         self.__show_empty_columns = True
         self.__show_empty_rows = True
@@ -1492,6 +1500,76 @@ class Table(object):
     # +-----------------------------------------------------------------------------+
     # start +------------------------+ COLUMN ADDING +------------------------+ start
 
+    # +------------------------+ FITTING +--------------------------+
+
+    @property
+    def max_width(self):
+        """
+        Width the table must fit into, or None to use the terminal width.
+
+        Setting this makes rendering independent of the terminal, which is
+        what you want when composing to a file or a fixed-width report.
+        """
+        return self.__max_width
+
+    @max_width.setter
+    def max_width(self, value):
+        if value is not None and value < 1:
+            raise ValueError('max_width must be positive or None')
+        self.__max_width = value
+
+    @property
+    def too_narrow_message(self):
+        """
+        Text shown instead of the table when it cannot fit legibly.
+
+        A table squeezed far below the width of its own data wraps every cell
+        to a couple of characters and becomes unreadable. Setting a message
+        says so plainly instead. None, the default, renders the table anyway.
+
+        The message may use ``{needed}`` and ``{available}`` placeholders::
+
+            table.too_narrow_message = (
+                'Table needs {needed} columns, terminal has {available}.'
+            )
+        """
+        return self.__too_narrow_message
+
+    @too_narrow_message.setter
+    def too_narrow_message(self, value):
+        self.__too_narrow_message = value
+
+    def __available_width(self) -> int:
+        """Width the table has to fit into."""
+        if self.__max_width is not None:
+            return self.__max_width
+        console_columns, _ = get_window_size()
+        return console_columns
+
+    def __minimum_table_width(self) -> int:
+        """
+        Narrowest the table could possibly be rendered.
+
+        Every column shrunk to MIN_COLUMN_SIZE, plus the margins and the
+        vertical separators the current style draws between them. Below this
+        the table cannot be produced legibly at all.
+        """
+        column_count = (
+            self.internal_column_count if self.__show_index
+            else self.column_count
+        )
+        if column_count == 0:
+            return 0
+        composition = self.__style_composition
+        margins = (CELL_MARGIN * 2) if composition.margin else 0
+        body_lines = composition.vertical_table_body_lines
+        separator_count = sum(
+            1 for part in (body_lines.left, body_lines.right) if part is not None
+        )
+        if body_lines.middle is not None:
+            separator_count += column_count - 1
+        return column_count * (MIN_COLUMN_SIZE + margins) + separator_count
+
     # +------------------------+ COLOUR +---------------------------+
 
     @property
@@ -2064,6 +2142,15 @@ class Table(object):
         Crafts the table and returns it as a string.
         """
         if len(self.__columns) != 0:
+            # Refuse to render into a space where the result would be
+            # illegible, if the caller asked to be told -- issue #14.
+            if self.__too_narrow_message is not None:
+                available = self.__available_width()
+                needed = self.__minimum_table_width()
+                if needed > available:
+                    return self.__too_narrow_message.format(
+                        needed=needed, available=available
+                    )
             # self.__parse_data()  # TODO add parsing
             rows, rows_with_i = self.__call_table_objects()
             self.__typify_table()
@@ -2154,9 +2241,9 @@ class Table(object):
         """
         adjust = False
         difference = 0
-        console_cols, console_lines = get_window_size()
-        if console_cols < table_width:
-            difference = (table_width - console_cols) + 1
+        available = self.__available_width()
+        if available < table_width:
+            difference = (table_width - available) + 1
             adjust = True
         if adjust:
             headers, rows, rows_with_i = self.__adjust_column_widths(
