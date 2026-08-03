@@ -234,15 +234,10 @@ def test_issue_24_a_single_wide_row_keeps_every_column():
 # Issue #16 -- Make auto-wrapping prioritise the biggest columns.
 # +-------------------------------------------------------------------------+
 
-@pytest.mark.xfail(
-    reason=(
-        'Issue #16: __get_amounts_to_reduce spreads the reduction across all '
-        'columns proportionally, so a 4-wide column is wrapped even though the '
-        '24-wide one could absorb the whole difference on its own.'
-    ),
-    strict=False,
-)
-def test_issue_16_a_narrow_column_should_survive_a_shrink(terminal):
+def test_issue_16_a_narrow_column_survives_a_shrink(terminal):
+    # Fixed: __get_amounts_to_reduce levels the widest column down instead of
+    # reducing every column in proportion, so a 4-wide column is left alone
+    # while the 24-wide one absorbs the whole difference.
     terminal(20)
     table = Table(style_name='thin_borderline')
     table.add_column('Name', ['Jade', 'John'])
@@ -309,35 +304,37 @@ def test_issue_14_the_floor_is_lower_for_a_borderless_style(terminal):
     rendered = str(table)
 
     assert 'needs' not in rendered
-    assert 'comment' in rendered or 'comm' in rendered
+    # Both columns sit at MIN_COLUMN_SIZE, so every cell is broken into
+    # three-character fragments and no whole word survives on one line. What
+    # this test asserts is that a table was rendered at all, where
+    # thin_borderline at the same width refuses.
+    assert 'Jad' in rendered
+    assert len(rendered.splitlines()) > 4
 
 
-def test_issue_14_without_a_message_a_hopeless_width_raises(terminal):
+def test_issue_14_without_a_message_a_hopeless_width_still_renders(terminal):
     """
-    Characterises what ``too_narrow_message`` is there to avoid.
+    With no message set, a hopeless width must still produce a table.
 
-    At 8 columns the proportional reduction hands 'Name' a budget of exactly
-    0, and ``textwrap.wrap(piece, 0)`` rejects a width of zero. The default
-    path does not render an ugly table -- it raises.
+    This used to raise. The proportional reduction handed 'Name' a budget of
+    exactly 0 and ``textwrap.wrap(piece, 0)`` rejects a width of zero. Now
+    that the reduction levels the widest column down and floors every column
+    at MIN_COLUMN_SIZE, no budget can reach zero, so the default path renders
+    something cramped rather than raising.
     """
     terminal(8)
     table = build_issue_14_table()
 
     assert table.too_narrow_message is None
-    with pytest.raises(ValueError):
-        str(table)
+    rendered = str(table)
+
+    assert rendered.startswith('┌')
+    assert 'Jade' in rendered or 'Jad' in rendered
 
 
-@pytest.mark.xfail(
-    reason=(
-        'A column budget of 0 reaches textwrap.wrap(), which rejects it. '
-        'Setting too_narrow_message avoids the path but does not fix it: '
-        'shrinking should floor a column at MIN_COLUMN_SIZE rather than let '
-        'it reach zero.'
-    ),
-    strict=False,
-)
-def test_issue_14_shrinking_should_never_hand_a_column_a_budget_of_zero(terminal):
+def test_issue_14_shrinking_never_hands_a_column_a_budget_of_zero(terminal):
+    # Fixed: the reduction floors every column at MIN_COLUMN_SIZE, so no
+    # budget reaches zero and textwrap.wrap() is never handed a width of 0.
     terminal(8)
     table = build_issue_14_table()
 

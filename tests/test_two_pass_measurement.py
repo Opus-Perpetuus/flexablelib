@@ -73,11 +73,11 @@ def test_the_second_pass_remeasures_the_wrapped_content(terminal):
     """
     This is the assertion the whole two-pass design exists for.
 
-    With a 20-column terminal the shrink step hands 'Name' a budget of 2 and
-    'Comment' a budget of 10. Re-wrapping at those budgets produces content
-    that is *narrower* than the budget for 'Comment' -- its longest resulting
-    line is 'comment', 7 characters -- so the final border must encode 7, not
-    10 and certainly not the 24 the first pass measured.
+    With a 20-column terminal the shrink step takes the whole difference out
+    of 'Comment', the wide column, and leaves 'Name' at its natural 4.
+    Re-wrapping 'Comment' at its reduced budget produces content narrower
+    still -- its longest resulting line is 'comment', 7 characters -- so the
+    final border must encode 7, not the 24 the first pass measured.
 
     If the second ``__get_column_widths(semi=False)`` were skipped, this test
     would see [4, 24].
@@ -86,28 +86,28 @@ def test_the_second_pass_remeasures_the_wrapped_content(terminal):
     rendered = str(build_table(auto_wrap=True))
     top_border = rendered.splitlines()[0]
 
-    assert widths_from_border(top_border, INTERSECTION) == [2, 7]
-    assert table_width(rendered) == 16
+    assert widths_from_border(top_border, INTERSECTION) == [4, 7]
+    assert table_width(rendered) == 18
 
 
 def test_wrapping_turns_one_logical_row_into_several_printed_rows(terminal):
     terminal(20)
     rendered = str(build_table(auto_wrap=True))
 
-    # The four fragments textwrap produces for LONG_COMMENT at width 10.
+    # The four fragments textwrap produces for LONG_COMMENT.
     for fragment in ('a very', 'long', 'comment', 'here'):
         assert fragment in rendered
 
-    # The header wrapped too: 'Name' at a budget of 2 becomes 'Na' / 'me'.
-    assert '│ Na │' in rendered
-    assert '│ me │' in rendered
+    # 'Name' is left whole. It is the narrow column, and the reduction is
+    # taken from the wide one first, so it never needs wrapping.
+    assert '│ Name │' in rendered
 
 
 def test_every_line_of_a_wrapped_table_has_the_same_width(terminal):
     terminal(20)
     rendered = str(build_table(auto_wrap=True))
 
-    assert {len(line) for line in rendered.splitlines()} == {16}
+    assert {len(line) for line in rendered.splitlines()} == {18}
 
 
 # +-------------------------------------------------------------------------+
@@ -119,32 +119,26 @@ def test_without_auto_wrap_the_cells_are_trimmed_with_a_sign(terminal):
     rendered = str(build_table(auto_wrap=False))
 
     assert '...' in rendered
-    assert 'a very ...' in rendered
-    # The trimming budget for 'Name' goes negative, so even short cells lose
-    # their last character before the sign is appended.
-    assert 'Jad...' in rendered
-    assert 'Joh...' in rendered
+    assert 'a ver...' in rendered
+    # 'Name' keeps its natural width, so its cells are not trimmed at all.
+    assert 'Jade' in rendered
+    assert 'John' in rendered
 
 
 def test_the_second_pass_measures_the_trimmed_content_including_the_sign(terminal):
-    # 'Name' was trimmed to 'Nam...' (6) and 'Comment' to 'a very ...' (10),
-    # so the sign made both columns wider than the budget they were cut to.
+    # Only 'Comment' is trimmed, to 'Comme...' (8) including the sign.
+    # 'Name' is untouched at its natural 4.
     terminal(20)
     rendered = str(build_table(auto_wrap=False))
 
-    assert widths_from_border(rendered.splitlines()[0], INTERSECTION) == [6, 10]
+    assert widths_from_border(rendered.splitlines()[0], INTERSECTION) == [4, 8]
 
 
-@pytest.mark.xfail(
-    reason=(
-        'Known Issue #2 in the README: with auto_wrap=False the adjustment to '
-        'the console potentially fails. Appending the trimming sign can make a '
-        'column wider than the budget it was trimmed to, and nothing measures '
-        'again afterwards.'
-    ),
-    strict=False,
-)
-def test_trimmed_table_should_also_fit_the_terminal(terminal):
+def test_trimmed_table_also_fits_the_terminal(terminal):
+    # Was Known Issue #2 in the README. Reducing the widest column first
+    # leaves enough slack that appending the trimming sign no longer pushes
+    # the table past the terminal.
+
     terminal(20)
     rendered = str(build_table(auto_wrap=False))
 
@@ -164,8 +158,8 @@ def test_max_width_replaces_the_terminal_width(terminal):
 
     rendered = str(table)
 
-    assert widths_from_border(rendered.splitlines()[0], INTERSECTION) == [2, 7]
-    assert table_width(rendered) == 16
+    assert widths_from_border(rendered.splitlines()[0], INTERSECTION) == [4, 7]
+    assert table_width(rendered) == 18
 
 
 def test_max_width_wins_over_a_narrow_terminal_too(terminal):

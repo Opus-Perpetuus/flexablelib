@@ -2334,27 +2334,63 @@ class Table(object):
         Index column will never get its space reduced.
         """
         if self.__show_index:
-            sums_of_widths = sum(self.__column_widths_as_list_with_i)
-            widths = self.__column_widths_as_list_with_i
-            widths.pop(0)
+            # Copy: the stored list is read again later, and the original
+            # popped the index entry straight out of it.
+            widths = list(self.__column_widths_as_list_with_i)[1:]
         else:
-            sums_of_widths = sum(self.__column_widths_as_list)
-            widths = self.__column_widths_as_list
-        proportions = [
-            col_width / sums_of_widths 
-            for col_width in widths
-        ]
-        trimm_sign_len = len(DEFAULT_TRIMMING_SIGN)
-        amnt_to_reduce_per_column = [
-            round(prop * difference) + (trimm_sign_len if (
-                not self.__auto_wrap_table
-            ) else 0)
-            for prop in proportions
-        ]
-        if self.show_index:
-            amnt_to_reduce_per_column.insert(0, 0)
-        
-        return amnt_to_reduce_per_column
+            widths = list(self.__column_widths_as_list)
+
+        if not widths:
+            return [0] if self.__show_index else []
+
+        # Take the space off the widest columns first, levelling them down
+        # towards the next widest, and only reach the narrow ones once the
+        # wide ones have nothing left to give.
+        #
+        # Reducing every column in proportion to its width, as this did
+        # before, shrinks a 4-wide column whenever a 24-wide one is beside it,
+        # wrapping data that had room to spare while the wide column keeps
+        # more than it needs. That is issue #16.
+        reductions = [0] * len(widths)
+        remaining = difference
+
+        while remaining > 0:
+            current = [width - taken for width, taken in zip(widths, reductions)]
+            widest = max(current)
+            if widest <= MIN_COLUMN_SIZE:
+                # Nothing may shrink further without becoming unreadable.
+                break
+
+            at_widest = [i for i, width in enumerate(current) if width == widest]
+            below = [width for width in current if width < widest]
+            # Level down to the next distinct width, but never below the floor.
+            target = max(max(below) if below else MIN_COLUMN_SIZE,
+                         MIN_COLUMN_SIZE)
+            drop_each = widest - target or 1
+
+            if drop_each * len(at_widest) > remaining:
+                # The last of the difference, shared among the widest columns.
+                share, leftover = divmod(remaining, len(at_widest))
+                for position, index in enumerate(at_widest):
+                    reductions[index] += share + (1 if position < leftover else 0)
+                remaining = 0
+            else:
+                for index in at_widest:
+                    reductions[index] += drop_each
+                remaining -= drop_each * len(at_widest)
+
+        # Trimming appends a marker, which costs width of its own.
+        if not self.__auto_wrap_table:
+            trimming_sign_length = len(DEFAULT_TRIMMING_SIGN)
+            reductions = [
+                taken + trimming_sign_length if taken else taken
+                for taken in reductions
+            ]
+
+        if self.__show_index:
+            reductions.insert(0, 0)
+
+        return reductions
     
     def __adjust_column_widths(self, 
                                difference: int, 
