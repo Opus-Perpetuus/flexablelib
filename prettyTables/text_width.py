@@ -45,6 +45,10 @@ _ANSI_RE = re.compile(
 
 _RESET = '\x1b[0m'
 
+# ASCII control characters, which are zero-width. Used to guard the fast path
+# in visible_width().
+_CONTROL_RE = re.compile(r'[\x00-\x1f\x7f]')
+
 # Character widths are looked up far more often than they are distinct, so the
 # results are memoised. In the C implementation this becomes a lookup table.
 _width_cache = {}
@@ -103,10 +107,14 @@ def visible_width(text: str) -> int:
     """
     if not text:
         return 0
-    # The common case is plain ASCII with no escapes and no wide characters,
-    # where the width is simply the length. Checking for that is much cheaper
-    # than walking the string.
-    if text.isascii() and '\x1b' not in text:
+    # The common case is printable ASCII, where the width is simply the length.
+    # Checking for that is much cheaper than walking the string.
+    #
+    # The control-character test is not optional: tabs, backspaces and bells
+    # are ASCII but measure zero, so returning len() for a string containing
+    # them would contradict char_width and put this function out of step with
+    # the C implementation.
+    if text.isascii() and not _CONTROL_RE.search(text):
         return len(text)
     return sum(char_width(char) for char in strip_ansi(text))
 
