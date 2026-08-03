@@ -2239,18 +2239,33 @@ class Table(object):
             )
             self.__get_column_widths(semi=True)
             table_width = self.__get_string_table_width()
-            headers, rows, rows_with_i = self.__check_columns_size(
-                table_width, 
-                rows, 
+            adjusted, headers, rows, rows_with_i = self.__check_columns_size(
+                table_width,
+                rows,
                 rows_with_i
             )
-            self.__wrap_data(
-                rows, 
-                rows_with_i, 
-                semi=False,
-                headers_after_semi=headers
-            )
-            self.__get_column_widths(semi=False)
+            if adjusted:
+                # Widths changed, so the data has to be re-wrapped against the
+                # new budgets and measured again.
+                self.__wrap_data(
+                    rows,
+                    rows_with_i,
+                    semi=False,
+                    headers_after_semi=headers
+                )
+                self.__get_column_widths(semi=False)
+            else:
+                # The table already fits. The second pass would wrap the same
+                # data against the same widths, with the same headers, and
+                # write the same numbers into the same attributes -- so it is
+                # pure duplicated work. Point the final structures at what the
+                # first pass produced instead.
+                #
+                # This is the common case: most tables fit their terminal.
+                self.__processed_columns = self.__semi_processed_columns
+                self.__processed_columns_with_i = (
+                    self.__semi_processed_columns_with_i
+                )
 
         return self.__form_string(
             table_with_i=self.__show_index
@@ -2326,7 +2341,7 @@ class Table(object):
         if adjust:
             headers, rows, rows_with_i = self.__adjust_column_widths(
                 difference,
-                rows, 
+                rows,
                 rows_with_i
             )
         else:
@@ -2334,7 +2349,7 @@ class Table(object):
                 headers = self.__headers_with_i
             else:
                 headers = self.__headers
-        return headers, rows, rows_with_i
+        return adjust, headers, rows, rows_with_i
     
     def __get_amounts_to_reduce(self, difference: int) -> list:
         """
@@ -2581,7 +2596,18 @@ class Table(object):
         """
         # For adding the index. The index is in the first column
         # or the index 0.
-        rows_with_i = deepcopy(self.__rows_with_i)
+        # The index column holds one shared IndexCounter, which counts up as
+        # the render consumes it. It has to start from its configured origin
+        # on every render or the second one continues where the first stopped.
+        #
+        # deepcopy used to give a fresh counter as a side effect of copying
+        # the whole table. Resetting it says what is meant, and skips
+        # recursing through every value to achieve it.
+        self.__index_counter.reset_count()
+
+        # One level of copying is enough: the pipeline replaces whole cells,
+        # it never mutates one in place.
+        rows_with_i = [list(row) for row in self.__rows_with_i]
         for row_i, row in enumerate(rows_with_i):
             if self.__show_empty_rows:
                 rows_with_i[row_i][0] = row[0](
@@ -2604,7 +2630,7 @@ class Table(object):
                 
         # For adding the missing value where the ValuePlacer
         # is used.
-        rows = deepcopy(self.__rows)
+        rows = [list(row) for row in self.__rows]
         for row_i, row in enumerate(rows):
             for column_i, column in enumerate(row):
                 if isinstance(column, ValuePlacer):
