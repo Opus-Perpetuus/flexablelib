@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.3.0](https://github.com/Opus-Perpetuus/prettyTables/compare/v1.2.0...v1.3.0) (2026-08-03)
+
+
+### Features
+
+* merge cells across columns, down rows, or both, via `merge_cells()` ([39f6e56](https://github.com/Opus-Perpetuus/prettyTables/commit/39f6e56))
+
+
+### Performance Improvements
+
+* skip the redundant second measuring pass when the table already fits, and cut per-cell helper overhead; 2000x4 renders in 16.9ms against 30.6ms, making this the fastest of prettyTables, prettytable, tabulate and pandas .to_string() on the same data ([88b01f0](https://github.com/Opus-Perpetuus/prettyTables/commit/88b01f0))
+
+
+### Bug Fixes
+
+* the index column no longer continues counting across renders; it is reset explicitly rather than by a side effect of deep-copying the table ([88b01f0](https://github.com/Opus-Perpetuus/prettyTables/commit/88b01f0))
+* `is_some_instance` returned None instead of False when nothing matched ([88b01f0](https://github.com/Opus-Perpetuus/prettyTables/commit/88b01f0))
+
 ## [1.2.0](https://github.com/Opus-Perpetuus/prettyTables/compare/v1.1.5...v1.2.0) (2026-08-03)
 
 
