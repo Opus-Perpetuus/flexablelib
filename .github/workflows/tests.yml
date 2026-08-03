@@ -10,6 +10,9 @@ permissions:
   contents: read
 
 jobs:
+  # The package must work with no build step at all: the C extension is
+  # declared optional precisely so an install without a compiler still works,
+  # and these jobs exercise the pure-Python fallback in text_width.py.
   pytest:
     name: pytest (python ${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
@@ -17,14 +20,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # 3.8 and 3.9 are the versions setup.py declares support for.
-          # ubuntu-24.04 (ubuntu-latest) no longer offers them.
+          # ubuntu-24.04 (ubuntu-latest) no longer offers 3.8 and 3.9.
           - { python-version: '3.8', os: ubuntu-22.04 }
           - { python-version: '3.9', os: ubuntu-22.04 }
           - { python-version: '3.10', os: ubuntu-latest }
           - { python-version: '3.11', os: ubuntu-latest }
           - { python-version: '3.12', os: ubuntu-latest }
           - { python-version: '3.13', os: ubuntu-latest }
+          - { python-version: '3.14', os: ubuntu-latest }
 
     steps:
       - uses: actions/checkout@v4
@@ -41,5 +44,33 @@ jobs:
       # Run from the repository root: the package is imported straight from
       # the source tree, and the style_name setter reads style_examples.md
       # relative to the working directory.
+      - name: Run the test suite
+        run: python -m pytest
+
+  # Without this job the C measurement code would never run in CI, and
+  # text_width.py's contract is that the two implementations agree exactly.
+  accelerated:
+    name: pytest (C extension)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Build the extension in place
+        run: |
+          python -m pip install --upgrade pip setuptools
+          python -m pip install -e .
+          python -m pip install -r requirements-dev.txt
+
+      # The extension is optional, so a failed build is not an error -- which
+      # would leave this job silently testing the fallback again.
+      - name: Confirm the C extension is the live backend
+        run: |
+          python -c "from prettyTables.fast import ACCELERATED, implementation; assert ACCELERATED, 'extension not loaded, backend is ' + implementation()"
+
       - name: Run the test suite
         run: python -m pytest
