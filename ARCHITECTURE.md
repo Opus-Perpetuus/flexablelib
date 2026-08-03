@@ -257,15 +257,14 @@ the working directory, not to the file.
 
 Things that are deliberately unfinished, so you do not mistake them for bugs:
 
-**Empty stubs.** `__parse_data()`, `__parse_int_boolean()`, `__parse_exponentials()`,
-`__parse_bytes()`, `__parse_escape_codes()`, and the whole data-reading section
-(`__read_pandas_dataframe()`, `__read_csv_file()`, `__read_html_table()`, `__read_text_file()`)
-are placeholders. `__expand_to_window` is flagged `TODO` in `__init__`.
+**Empty stubs.** `__parse_data()` is a placeholder, and `__parse_int_boolean()`,
+`__parse_exponentials()`, `__parse_bytes()` and `__parse_escape_codes()` are still commented
+out. `__expand_to_window` is flagged `TODO` in `__init__`.
 
-**Untested new modules.** `colors.py`, `text_width.py`, `fast.py` and `_speedups.c` arrived
-after the test suite was written. Only `text_width.py` and the `fast.py` backend selection are
-covered, by `tests/test_text_width.py`. Nothing exercises `colors.py` or the colour properties
-on `Table`.
+**Untested new modules.** `colors.py`, `readers.py`, `writers.py`, `fast.py`, `text_width.py`
+and `_speedups.c` arrived after the test suite was written. Only `text_width.py` and the
+`fast.py` backend selection are covered, by `tests/test_text_width.py`. Nothing exercises
+`colors.py`, the colour properties on `Table`, or the `from_*` / `to_*` methods.
 
 **`read_file()` decodes with the platform default encoding.** `utils.read_file` opens with
 `open(filename, 'r+')` and no `encoding=`, so reading `style_examples.md` — which is full of
