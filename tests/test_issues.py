@@ -1,17 +1,22 @@
 """
-Regression tests for the open issues.
+Regression tests for the issues.
 
 https://github.com/Opus-Perpetuus/prettyTables/issues
 
-Every reproduction below is marked ``xfail(strict=False)``: the test states the
-behaviour the issue asks for, so it reports ``xfail`` while the bug is present
-and ``xpass`` the moment it is fixed -- at which point the marker should be
-dropped rather than the assertion changed. ``strict=False`` keeps CI green
-either way.
+Issues #22 and #24 are fixed, so their reproductions are plain tests that
+assert the corrected behaviour and would fail again on a regression.
+
+Reproductions of issues still open state the behaviour the issue asks for and
+are marked ``xfail(strict=False)``: they report ``xfail`` while the bug is
+present and ``xpass`` the moment it is fixed -- at which point the marker
+should be dropped rather than the assertion changed. ``strict=False`` keeps CI
+green either way.
 
 Issue #10 (code formatting and documentation) has no behavioural surface and
 is not covered here.
 """
+
+from textwrap import dedent
 
 import pytest
 
@@ -22,8 +27,8 @@ INTERSECTION = '┬'   # thin_borderline's top border
 
 
 # +-------------------------------------------------------------------------+
-# Issue #22 -- Hidden (empty) rows with a big missing value still affect the
-#              size of the column.
+# Issue #22 -- Hidden (empty) rows with a big missing value still affected the
+#              size of the column.  FIXED.
 # +-------------------------------------------------------------------------+
 
 def build_issue_22_table():
@@ -31,8 +36,8 @@ def build_issue_22_table():
     The reproduction from the issue, verbatim.
 
     The last ``add_row()`` is empty, so ``show_empty_rows = False`` hides it.
-    Its two missing values are still measured, though, and 'missing_value__'
-    is 15 characters wide.
+    It still holds the 15-character missing value in every column, and before
+    the fix those values were measured even though they are never printed.
     """
     table = Table()
     table.add_column('header1', ['data1', 'data2'])
@@ -68,22 +73,56 @@ def test_issue_22_the_empty_column_is_not_printed():
     assert len(widths_from_border(rendered.splitlines()[0], INTERSECTION)) == 2
 
 
-@pytest.mark.xfail(
-    reason=(
-        'Issue #22: the hidden empty row is skipped when the rows are printed '
-        'but not when the columns are measured, so header1 is sized to fit a '
-        "missing value that never appears. Should be 7 wide ('header1'), "
-        'renders 15 wide.'
-    ),
-    strict=False,
-)
-def test_issue_22_a_hidden_row_should_not_widen_its_column():
+def test_issue_22_a_hidden_row_does_not_widen_its_column():
+    """
+    'header1' holds 'data1'..'data7' plus one hidden missing value. It must be
+    sized to the header, 7 wide -- not to the 15-character value that the
+    hidden row carries and that nothing ever prints.
+    """
     rendered = str(build_issue_22_table())
 
     widths = widths_from_border(rendered.splitlines()[0], INTERSECTION)
 
     assert widths[0] == 7
     assert '│ header1 │' in rendered
+
+
+def test_issue_22_the_visible_missing_values_still_count():
+    """
+    The other side of the fix. 'column 2' *does* show 'missing_value__' on
+    three visible rows, so it stays 15 wide -- skipping hidden rows must not
+    turn into skipping missing values.
+    """
+    rendered = str(build_issue_22_table())
+
+    widths = widths_from_border(rendered.splitlines()[0], INTERSECTION)
+
+    assert widths[1] == 15
+    assert '│ missing_value__ │' in rendered
+
+
+def test_issue_22_renders_exactly_the_output_the_report_asked_for():
+    expected = dedent("""
+        ┌─────────┬─────────────────┐
+        │ header1 │        column 2 │
+        ╞═════════╪═════════════════╡
+        │ data1   │ missing_value__ │
+        ├─────────┼─────────────────┤
+        │ data2   │ missing_value__ │
+        ├─────────┼─────────────────┤
+        │ data3   │         12.4325 │
+        ├─────────┼─────────────────┤
+        │ data4   │        111.22   │
+        ├─────────┼─────────────────┤
+        │ data5   │ missing_value__ │
+        ├─────────┼─────────────────┤
+        │ data6   │          0.4    │
+        ├─────────┼─────────────────┤
+        │ data7   │     321111      │
+        └─────────┴─────────────────┘
+    """).strip('\n')
+
+    assert str(build_issue_22_table()) == expected
 
 
 # +-------------------------------------------------------------------------+
@@ -165,18 +204,9 @@ def test_issue_23_a_shrunk_table_should_fit_the_terminal(terminal):
 
 # +-------------------------------------------------------------------------+
 # Issue #24 -- Adding rows with more than one column, without ever adding a
-#              column, renders only the first column.
+#              column, rendered only the first column.  NO LONGER REPRODUCES.
 # +-------------------------------------------------------------------------+
 
-@pytest.mark.xfail(
-    reason=(
-        'Issue #24: rows added without any add_column() call should still '
-        'produce every column. Reading add_row/__check_data_and_fill_last_row '
-        'suggests this path is now correct, so this may already be fixed and '
-        'the issue stale -- an xpass here is the signal to close it.'
-    ),
-    strict=False,
-)
 def test_issue_24_rows_added_without_columns_keep_every_column():
     table = Table()
     table.add_row(['a', 'b', 'c'])
@@ -190,10 +220,6 @@ def test_issue_24_rows_added_without_columns_keep_every_column():
         assert value in rendered
 
 
-@pytest.mark.xfail(
-    reason='Issue #24, with a single row.',
-    strict=False,
-)
 def test_issue_24_a_single_wide_row_keeps_every_column():
     table = Table()
     table.add_row(['a', 'b'])
