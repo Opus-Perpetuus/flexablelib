@@ -85,7 +85,8 @@ def test_a_string_at_or_over_the_width_is_returned_unchanged(backend):
 def test_escape_sequences_take_no_columns(backend):
     coloured = '\x1b[31mab\x1b[0m'
 
-    assert len(coloured) == 13
+    # Five characters of prefix, two of text, four of reset.
+    assert len(coloured) == 11
     assert backend.visible_width(coloured) == 2
 
 

@@ -4,7 +4,7 @@ VISIBLE TEXT WIDTH
 Every layout decision in this package depends on one question: how many terminal
 columns does this string occupy? `len()` is the wrong answer twice over.
 
-1. ANSI escape sequences take zero columns. `len('\\x1b[31mab\\x1b[0m')` is 13,
+1. ANSI escape sequences take zero columns. `len('\\x1b[31mab\\x1b[0m')` is 11,
    but the terminal shows two characters. Measuring with `len()` makes every
    coloured table drift out of alignment.
 2. Not every character is one column wide. CJK ideographs, Hangul, and most
