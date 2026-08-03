@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 512">
+  <title>prettyTables</title>
+  <g id="icon">
+    <polygon points="48,72 176,136 48,200 48,156 88,136 48,116" fill="#334155"/>
+    <rect x="240" y="72" width="104" height="128" fill="#F97316"/>
+    <rect x="158" y="280" width="36" height="128" fill="#94A3B8"/>
+    <rect x="286" y="280" width="36" height="128" fill="#94A3B8"/>
+    <rect x="48" y="248" width="384" height="40" fill="#334155"/>
+    <rect x="48" y="400" width="384" height="40" fill="#334155"/>
+  </g>
+  <g id="wordmark">
+    <text x="480" y="274" font-family="Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="72" font-weight="700" textLength="260" lengthAdjust="spacing" fill="#5A6472">pretty</text>
+    <text x="740" y="274" font-family="Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="72" font-weight="700" textLength="260" lengthAdjust="spacing" fill="#EA580C">Tables</text>
+  </g>
+</svg>

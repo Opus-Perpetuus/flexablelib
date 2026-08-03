@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 512" role="img" aria-labelledby="logoTitle">
+  <title id="logoTitle">prettyTables</title>
+
+  <g id="icon">
+    <rect x="72" y="88" width="336" height="14" fill="#4338CA"/>
+    <rect x="72" y="116" width="336" height="34" fill="#4338CA"/>
+    <rect x="72" y="164" width="336" height="11" fill="#4338CA"/>
+    <rect x="72" y="181" width="336" height="11" fill="#4338CA"/>
+
+    <rect x="158" y="220" width="96" height="40" fill="#818CF8"/>
+    <rect x="274" y="220" width="106" height="40" fill="#6366F1"/>
+    <rect x="98" y="284" width="156" height="40" fill="#818CF8"/>
+    <rect x="274" y="284" width="58" height="40" fill="#6366F1"/>
+    <rect x="194" y="348" width="60" height="40" fill="#818CF8"/>
+    <rect x="274" y="348" width="130" height="40" fill="#6366F1"/>
+
+    <rect x="254" y="210" width="20" height="188" fill="#F59E0B"/>
+
+    <rect x="72" y="410" width="336" height="14" fill="#4338CA"/>
+  </g>
+
+  <g id="wordmark">
+    <text x="478" y="284" font-family="Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="76" font-weight="700" letter-spacing="-3"><tspan fill="#5A6472">pretty</tspan><tspan fill="#4338CA">Tables</tspan></text>
+  </g>
+</svg>
