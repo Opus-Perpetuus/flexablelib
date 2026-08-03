@@ -192,11 +192,19 @@ prettyTables/
 │   ├── cells.py             cell padding, justification, wrapping
 │   ├── options.py           constants and defaults
 │   └── utils.py             type predicates and small helpers
+├── tests/                   pytest suite — see ARCHITECTURE.md#testing
 ├── logos/                   brand assets — see logos/README.md
 ├── ARCHITECTURE.md          how it all fits together
 ├── style_examples.md        all 42 styles rendered
 ├── package.json             canonical version number; drives the release
 └── setup.py                 reads the version from package.json
+```
+
+Run the tests from the repository root:
+
+```
+pip install -r requirements-dev.txt
+python -m pytest
 ```
 
 See [**ARCHITECTURE.md**](ARCHITECTURE.md) for the rendering pipeline, how styles are defined,

@@ -262,15 +262,54 @@ Things that are deliberately unfinished, so you do not mistake them for bugs:
 (`__read_pandas_dataframe()`, `__read_csv_file()`, `__read_html_table()`, `__read_text_file()`)
 are placeholders. `__expand_to_window` is flagged `TODO` in `__init__`.
 
-**No test suite.** There is no `tests/` directory, and `tests/` is listed in `.gitignore`.
-Nothing verifies the two-pass measurement logic.
-
-**No CI.** There is no `.github/` directory — no workflows, no issue templates.
-
 **Version drift.** `setup.py` declares support for Python 3.8 and 3.9 only, and does not set
 `python_requires`. It also still uses `distutils.core.setup`, which was removed from the
 standard library in Python 3.12 — building on a modern interpreter requires `setuptools` to
-provide the shim.
+provide the shim. The test suite runs on 3.8 through 3.13.
+
+**`read_file()` decodes with the platform default encoding.** `utils.read_file` opens with
+`open(filename, 'r+')` and no `encoding=`, so reading `style_examples.md` — which is full of
+box-drawing characters — depends on the locale. This is why CI runs on Linux only.
+
+**The `style_name` setter reads from disk.** Setting `table.style_name = ...` calls
+`read_file('style_examples.md')` and discards the result, resolving the path against the
+*current working directory*. Setting a style from anywhere but the repository root raises
+`FileNotFoundError`. `Table(style_name=...)` does not have this problem.
+
+**`__columns` can drift out of order from `__rows`.** When a column added later is taller than
+the existing ones, `__adjust_columns_to_row_count` pads the short columns with
+`insert(0, value_placer)`, which shifts their existing values down by one. Rendering is
+unaffected — it reads `__rows` — but the public `columns` property returns the shifted view.
 
 For behavioural bugs, see the [open issues](https://github.com/Opus-Perpetuus/prettyTables/issues)
 and the Known Issues section of the [README](README.md).
+
+## Testing
+
+`tests/` holds a pytest suite and `.github/workflows/tests.yml` runs it on Python 3.8 to 3.13.
+Run it from the repository root:
+
+```
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
+| File | Covers |
+| --- | --- |
+| `tests/test_two_pass_measurement.py` | `compose()`'s measure → fit → re-wrap → re-measure cycle |
+| `tests/test_columns.py` | type inference and the two-sided float measurement |
+| `tests/test_cells.py` | padding, justification, wrapping, transposition |
+| `tests/test_styles.py` | all 42 styles rendered, plus style selection |
+| `tests/test_readme_examples.py` | the README's outputs, as golden strings |
+| `tests/test_issues.py` | reproductions for the open issues, as `xfail` |
+
+Two things have to be pinned or the results are not reproducible, and `tests/conftest.py`
+does both with autouse fixtures:
+
+- `utils.get_window_size()` reads the real console. It is imported into `table.py`'s namespace,
+  so the patch target is `prettyTables.table.get_window_size`, not the one in `utils`.
+- the working directory, because of the `style_name` setter described above.
+
+Reproductions of open issues assert the behaviour the issue *asks for*, marked
+`xfail(strict=False)`. They report `xfail` while the bug is present and `xpass` once it is
+fixed — at which point the marker comes off rather than the assertion changing.
