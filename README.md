@@ -1,3 +1,21 @@
+<p align="center">
+  <img src="logos/export/logo.svg" alt="prettyTables" width="440">
+</p>
+
+<p align="center">
+  <em>Format tabular data with pretty styles.</em>
+</p>
+
+<p align="center">
+  <a href="https://pypi.org/project/prettyTables/"><img alt="PyPI version" src="https://img.shields.io/pypi/v/prettyTables?style=flat-square&color=4338CA&logo=pypi&logoColor=white"></a>
+  <a href="https://pypi.org/project/prettyTables/"><img alt="Python versions" src="https://img.shields.io/pypi/pyversions/prettyTables?style=flat-square&color=4338CA&logo=python&logoColor=white"></a>
+  <a href="https://pypi.org/project/prettyTables/"><img alt="Downloads per month" src="https://img.shields.io/pypi/dm/prettyTables?style=flat-square&color=F59E0B"></a>
+  <a href="https://pypi.org/project/prettyTables/"><img alt="Development status" src="https://img.shields.io/pypi/status/prettyTables?style=flat-square&color=F59E0B"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/pypi/l/prettyTables?style=flat-square&color=64748B"></a>
+</p>
+
+---
+
 # **Pretty Tables**
 
 This is a python package that aims to provide a simple and pretty way of printing tables to the console making use of a class.
@@ -160,3 +178,26 @@ internal_column_count: 4
 - When auto-wrapping is ``False`` the adjusting of the table to the console will potentially fail.
 - Naming a column ``"i"`` will mess up what columns show if the index column is displaying.
 - Exponential numbers only align incorrectly.
+
+# Project Layout
+
+```
+prettyTables/
+├── prettyTables/            the package itself (no runtime dependencies)
+│   ├── __init__.py          public API: Table, TableComposition, SeparatorLine
+│   ├── table.py             the Table class — state and render orchestration
+│   ├── columns.py           type inference, alignment, column widths
+│   ├── style_compositions.py   the 42 border styles, as data
+│   ├── table_strings.py     separator lines and data rows
+│   ├── cells.py             cell padding, justification, wrapping
+│   ├── options.py           constants and defaults
+│   └── utils.py             type predicates and small helpers
+├── logos/                   brand assets — see logos/README.md
+├── ARCHITECTURE.md          how it all fits together
+├── style_examples.md        all 42 styles rendered
+├── package.json             canonical version number; drives the release
+└── setup.py                 reads the version from package.json
+```
+
+See [**ARCHITECTURE.md**](ARCHITECTURE.md) for the rendering pipeline, how styles are defined,
+and how to add one.
