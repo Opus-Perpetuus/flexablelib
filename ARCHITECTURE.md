@@ -262,10 +262,10 @@ Things that are deliberately unfinished, so you do not mistake them for bugs:
 (`__read_pandas_dataframe()`, `__read_csv_file()`, `__read_html_table()`, `__read_text_file()`)
 are placeholders. `__expand_to_window` is flagged `TODO` in `__init__`.
 
-**Version drift.** `setup.py` declares support for Python 3.8 and 3.9 only, and does not set
-`python_requires`. It also still uses `distutils.core.setup`, which was removed from the
-standard library in Python 3.12 — building on a modern interpreter requires `setuptools` to
-provide the shim. The test suite runs on 3.8 through 3.13.
+**Untested new modules.** `colors.py`, `text_width.py`, `fast.py` and `_speedups.c` arrived
+after the test suite was written. Only `text_width.py` and the `fast.py` backend selection are
+covered, by `tests/test_text_width.py`. Nothing exercises `colors.py` or the colour properties
+on `Table`.
 
 **`read_file()` decodes with the platform default encoding.** `utils.read_file` opens with
 `open(filename, 'r+')` and no `encoding=`, so reading `style_examples.md` — which is full of
@@ -286,8 +286,9 @@ and the Known Issues section of the [README](README.md).
 
 ## Testing
 
-`tests/` holds a pytest suite and `.github/workflows/tests.yml` runs it on Python 3.8 to 3.13.
-Run it from the repository root:
+`tests/` holds a pytest suite and `.github/workflows/tests.yml` runs it on Python 3.8 to 3.14,
+plus one job that builds the C extension so both measurement backends are exercised. Run it
+from the repository root:
 
 ```
 pip install -r requirements-dev.txt
@@ -298,6 +299,7 @@ python -m pytest
 | --- | --- |
 | `tests/test_two_pass_measurement.py` | `compose()`'s measure → fit → re-wrap → re-measure cycle |
 | `tests/test_columns.py` | type inference and the two-sided float measurement |
+| `tests/test_text_width.py` | visible width, and C/Python backend equivalence |
 | `tests/test_cells.py` | padding, justification, wrapping, transposition |
 | `tests/test_styles.py` | all 42 styles rendered, plus style selection |
 | `tests/test_readme_examples.py` | the README's outputs, as golden strings |
