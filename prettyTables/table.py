@@ -1049,18 +1049,72 @@ class Table(object):
     # +-----------------------------------------------------------------------------+
     # start +---------------------------+ GETTERS +---------------------------+ start
 
+    def __resolved_cell(self, value, position: int):
+        """
+        One stored cell as the value a caller outside the table should see.
+
+        Storage keeps two sentinels the renderer knows how to read: a shared
+        ``IndexCounter`` standing in for the index column, and a
+        ``ValuePlacer`` marking an absent cell. Handed out as they are, they
+        print as ``<prettyTables.utils.ValuePlacer object at 0x7f...>``, which
+        is what anyone iterating ``table.rows`` saw where a gap was.
+
+        ``position`` is the row the cell sits in, which is what turns the one
+        shared counter into the number that row actually shows.
+        """
+        if isinstance(value, IndexCounter):
+            return self.__i_start + position * self.__i_step
+        if isinstance(value, ValuePlacer):
+            return self.__missing_value
+        return value
+
+    def __resolved_rows(self, rows) -> List[list]:
+        """Stored rows with the sentinels resolved, as a fresh list."""
+        return [
+            [self.__resolved_cell(cell, position) for cell in row]
+            for position, row in enumerate(rows)
+        ]
+
+    def __resolved_columns(self, columns) -> dict:
+        """Stored columns with the sentinels resolved, as a fresh dict."""
+        return {
+            header: [
+                self.__resolved_cell(cell, position)
+                for position, cell in enumerate(column)
+            ]
+            for header, column in columns.items()
+        }
+
     @property
     def columns(self) -> dict:
         """
         The data of the table by columns.
-        
-        Comes arranged in a dictionary with the 
+
+        Comes arranged in a dictionary with the
         following structure::
-        
+
             {
                 'header': (data, data, ...),
                 ...
             }
+
+        Absent cells come back as ``missing_value``. Use :attr:`raw_columns`
+        to see the sentinel itself.
+        """
+        return self.__resolved_columns(self.__columns)
+
+    @property
+    def raw_columns(self) -> dict:
+        """
+        :attr:`columns` with the sentinels left in place.
+
+        An absent cell is the ``missing`` object rather than the text it
+        renders as, so a gap can be told apart from a cell that genuinely
+        holds that text::
+
+            for value in table.raw_columns['temp']:
+                if value is table.missing:
+                    ...
         """
         return self.__columns
 
@@ -1077,16 +1131,21 @@ class Table(object):
     def internal_columns(self) -> dict:
         """
         Includes columns that the class adds internally,
-        for now only the index column (when shown). 
-        
+        for now only the index column (when shown).
+
         Uses the same format as the columns property.
         """
+        return self.__resolved_columns(self.raw_internal_columns)
+
+    @property
+    def raw_internal_columns(self) -> dict:
+        """:attr:`internal_columns` with the sentinels left in place."""
         if self.__show_index:
             return self.__columns_with_i
         else:
             return self.__columns
-        
-    
+
+
     @property
     def internal_headers(self) -> list:
         """
@@ -1101,15 +1160,31 @@ class Table(object):
     def rows(self) -> List[list]:
         """
         The data of the table as rows.
+
+        Absent cells come back as ``missing_value``. Use :attr:`raw_rows` to
+        see the sentinel itself.
         """
+        return self.__resolved_rows(self.__rows)
+
+    @property
+    def raw_rows(self) -> List[list]:
+        """:attr:`rows` with the sentinels left in place."""
         return self.__rows
-    
+
     @property
     def internal_rows(self) -> List[list]:
         """
-        The data of the table as rows, including the 
+        The data of the table as rows, including the
         index column (when shown).
+
+        The index cells are the numbers the table displays, counted from
+        ``index_start`` in steps of ``index_step``.
         """
+        return self.__resolved_rows(self.raw_internal_rows)
+
+    @property
+    def raw_internal_rows(self) -> List[list]:
+        """:attr:`internal_rows` with the sentinels left in place."""
         if self.__show_index:
             return self.__rows_with_i
         else:
@@ -4248,6 +4323,26 @@ class Table(object):
         from .writers import to_html
         return to_html(self, target, title, paginate, include_index,
                        searchable, encoding)
+
+    def open_in_browser(self, title='Table', paginate=25, include_index=False,
+                        searchable=True, path=None, new_tab=True):
+        """
+        Show the table in a browser, using the same page as :meth:`to_html`.
+
+        For the moment a terminal cannot give a wide table what a browser can:
+        room to scroll sideways, a column to sort by, a box to filter with.
+        This writes that page out and opens it::
+
+            table.open_in_browser()
+            table.open_in_browser(title='Q3 sales', paginate=0)
+
+        With no ``path`` the page is written to a temporary file, whose path
+        is returned. Nothing is fetched over the network, so the page works
+        offline and inside a sandbox.
+        """
+        from .writers import open_in_browser
+        return open_in_browser(self, title, paginate, include_index,
+                               searchable, path, new_tab)
 
     def _repr_html_(self):
         """

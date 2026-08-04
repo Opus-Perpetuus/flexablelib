@@ -218,11 +218,16 @@ table.to_csv('out.csv')
 table.to_markdown()
 table.to_html('report.html', paginate=25)
 table.to_excel('report.xlsx')
+table.open_in_browser()              # the same page, straight to a browser tab
 ```
 
 `to_html` writes one self-contained file — the stylesheet and the sorting,
 filtering and pagination script are inline — so it works offline and from a
-`file://` URL.
+`file://` URL. `open_in_browser` renders that page to a temporary file and
+opens it, which is the quickest way to give a wide table the room a terminal
+cannot: somewhere to scroll sideways, a column to sort by, a box to filter
+with. It returns the path it wrote, and takes `path=` to write somewhere you
+choose.
 
 Text formats deliver everything as strings, and a column of strings is
 left-aligned. `parse_str_numbers` converts numeric-looking text so it aligns as
@@ -247,6 +252,24 @@ table.merge_cells(0, 0, 2, 2, value='Total', align='r')
 
 A merge never widens the table -- columns are still sized by their unmerged
 content -- so text longer than its span is truncated.
+
+Merges survive export. HTML and Excel say it in their own words:
+
+```python
+table.to_excel('report.xlsx')   # real merged cells, ranges and all
+table._repr_html_()             # <td rowspan="2" colspan="3">
+```
+
+CSV, Markdown and `to_records()` have no cell that covers its neighbours, so
+they follow the convention a spreadsheet uses when saving to one of them: the
+merged text goes in the top-left cell of the block and the cells it covered
+come out empty. The grid keeps its shape, which is what anything parsing the
+file back needs.
+
+In the `to_html` page the spans are drawn while the table is in the state it
+was exported in. Sorting, filtering or paging moves rows away from the
+neighbours they were merged with, so those views show the cells unmerged;
+clearing the filter brings the spans back.
 
 # Performance
 

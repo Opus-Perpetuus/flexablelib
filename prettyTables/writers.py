@@ -8,6 +8,7 @@ methods rather than called directly::
     table.to_markdown()
     table.to_html('report.html', paginate=25)
     table.to_excel('report.xlsx')
+    table.open_in_browser()
 
 CSV, Markdown and HTML need nothing beyond the standard library. Only Excel
 requires openpyxl, and only when used.
@@ -23,8 +24,10 @@ import html as _html
 import io as _io
 import json
 from typing import Any, List, Optional, Sequence
+from urllib.request import pathname2url
 
 from .fast import strip_ansi
+from .merges import grid_spans
 from .options import FLT_FILTER, INT_FILTER
 from .utils import IndexCounter, ValuePlacer
 
@@ -63,7 +66,7 @@ def _script_json(payload) -> str:
 
 def _table_data(table, include_index: bool):
     """
-    (headers, rows) honouring the index setting, with the sentinels resolved.
+    (headers, rows, spans) honouring the index setting, sentinels resolved.
 
     Storage keeps two placeholder objects that only the console renderer knew
     how to read: one shared ``IndexCounter`` standing in for the index column,
@@ -76,13 +79,17 @@ def _table_data(table, include_index: bool):
     Resolving them here fixes every writer at once, because they all come
     through this function. The index is computed the same way the renderer
     computes it, from ``index_start`` and ``index_step``.
+
+    ``spans`` carries the table's merged regions in the coordinates of the
+    grid being written, so a writer can honour them without working out for
+    itself whether the index column shifted everything one to the right.
     """
     if include_index:
         headers = [str(header) for header in table.internal_headers]
-        rows = table.internal_rows
+        rows = table.raw_internal_rows
     else:
         headers = [str(header) for header in table.headers]
-        rows = table.rows
+        rows = table.raw_rows
 
     missing = table.missing_value
     start, step = table.index_start, table.index_step
@@ -99,13 +106,81 @@ def _table_data(table, include_index: bool):
             else:
                 cells.append(cell)
         resolved.append(cells)
-    return headers, resolved
+
+    spans = grid_spans(
+        table.merged_regions, len(resolved), len(headers),
+        index_offset=1 if numbering else 0,
+    )
+    return headers, resolved, spans
+
+
+def _merged_value(region, rows):
+    """
+    What a merged region shows: its own text, or the top-left cell's.
+
+    The console renderer makes the same choice, so a table exported to any
+    format says what the terminal said.
+    """
+    if region.value is not None:
+        return region.value
+    row = rows[region.first_row]
+    if region.first_column < len(row):
+        return row[region.first_column]
+    return ''
+
+
+_ALIGN_CSS = {'l': 'left', 'c': 'center', 'r': 'right'}
+
+
+def _span_attributes(region) -> str:
+    """
+    The ``rowspan``/``colspan``/alignment attributes for one merged cell.
+
+    A span of one is left out: writing ``colspan="1"`` is legal but noise, and
+    the markup reads better without it.
+    """
+    attributes = []
+    if region.row_count > 1:
+        attributes.append(f' rowspan="{region.row_count}"')
+    if region.column_count > 1:
+        attributes.append(f' colspan="{region.column_count}"')
+    alignment = _ALIGN_CSS.get(region.align)
+    if alignment:
+        attributes.append(f' style="text-align:{alignment}"')
+    return ''.join(attributes)
+
+
+def _flattened(rows, spans):
+    """
+    Rows with merges applied the only way a flat format can express them.
+
+    CSV, Markdown and a list of dicts have no cell that covers its
+    neighbours. The convention every spreadsheet uses when saving to one of
+    them is what is used here: the merged text sits in the top-left cell of
+    the block and the cells it covered are emptied. Reading the file back
+    gives a grid of the same shape, which is what a consumer parsing it needs.
+    """
+    if not spans:
+        return rows
+
+    flat = [list(row) for row in rows]
+    for (row_index, column_index), region in spans.origins.items():
+        flat[row_index][column_index] = _merged_value(region, rows)
+    for row_index, column_index in spans.covered:
+        if column_index < len(flat[row_index]):
+            flat[row_index][column_index] = ''
+    return flat
 
 
 def to_records(table, include_index: bool = False) -> List[dict]:
-    """The table as a list of dicts, one per row."""
-    headers, rows = _table_data(table, include_index)
-    return [dict(zip(headers, row)) for row in rows]
+    """
+    The table as a list of dicts, one per row.
+
+    A merged block puts its text in the first key it covers and leaves the
+    rest empty, so every record still has the same keys.
+    """
+    headers, rows, spans = _table_data(table, include_index)
+    return [dict(zip(headers, row)) for row in _flattened(rows, spans)]
 
 
 def to_simple_html(table, include_index: bool = False) -> str:
@@ -114,8 +189,11 @@ def to_simple_html(table, include_index: bool = False) -> str:
 
     No document chrome, scripts or pagination -- just thead/tbody so Jupyter
     and friends can embed the table in a cell output.
+
+    Merged regions become ``colspan``/``rowspan``, which is HTML's own way of
+    saying what the console draws by painting over the rules between cells.
     """
-    headers, rows = _table_data(table, include_index)
+    headers, rows, spans = _table_data(table, include_index)
     parts = ['<table>']
     title = getattr(table, 'title', None)
     if title:
@@ -130,12 +208,19 @@ def to_simple_html(table, include_index: bool = False) -> str:
             )
         parts.append('</tr></thead>')
     parts.append('<tbody>')
-    for row in rows:
+    for row_index, row in enumerate(rows):
         parts.append('<tr>')
-        for cell in row:
-            parts.append(
-                '<td>{0}</td>'.format(_html.escape(_plain(cell)))
-            )
+        for column_index, cell in enumerate(row):
+            if (row_index, column_index) in spans.covered:
+                continue
+            region = spans.origins.get((row_index, column_index))
+            if region is None:
+                parts.append('<td>{0}</td>'.format(_html.escape(_plain(cell))))
+                continue
+            parts.append('<td{0}>{1}</td>'.format(
+                _span_attributes(region),
+                _html.escape(_plain(_merged_value(region, rows))),
+            ))
         parts.append('</tr>')
     parts.append('</tbody></table>')
     return ''.join(parts)
@@ -148,8 +233,12 @@ def to_csv(table, target=None, include_index: bool = False,
 
     With no target, returns the CSV as a string; otherwise writes to the given
     path or open handle and returns None.
+
+    A merged block writes its text in the top-left field of the block and
+    leaves the fields it covers empty, the way a spreadsheet saves one.
     """
-    headers, rows = _table_data(table, include_index)
+    headers, rows, spans = _table_data(table, include_index)
+    rows = _flattened(rows, spans)
 
     def dump(handle):
         writer = _csv.writer(handle, delimiter=delimiter)
@@ -232,12 +321,17 @@ def to_markdown(table, include_index: bool = False,
     under the header carries the alignment colons, so the rendered document
     lines its numbers up the way the terminal does. Without it the rule is
     plain dashes and nothing is padded.
+
+    Markdown has no way to spell a cell that covers its neighbours, so a
+    merged block puts its text in the top-left cell and empties the rest --
+    the closest a Markdown table gets, and what keeps the columns aligned.
     """
     from .fast import visible_width, pad_to_width
 
-    headers, rows = _table_data(table, include_index)
+    headers, rows, spans = _table_data(table, include_index)
     if not headers:
         return ''
+    rows = _flattened(rows, spans)
 
     def cell(value):
         return _plain(value).replace('|', '\\|').replace('\n', ' ')
@@ -347,6 +441,15 @@ _HTML_SCRIPT = """
   var perPage = DATA.perPage, page = 0, sortCol = -1, sortDir = 0;
   var view = rows.slice();
 
+  var spanOrigins = (DATA.spans && DATA.spans.origins) || [];
+  var originKeys = {}, coveredKeys = {};
+  spanOrigins.forEach(function (origin) {
+    originKeys['' + origin[0] + ':' + origin[1]] = origin;
+  });
+  ((DATA.spans && DATA.spans.covered) || []).forEach(function (cell) {
+    coveredKeys['' + cell[0] + ':' + cell[1]] = true;
+  });
+
   var q = document.getElementById('q');
   var body = document.getElementById('body');
   var count = document.getElementById('count');
@@ -383,19 +486,55 @@ _HTML_SCRIPT = """
     render();
   }
 
+  function escapeText(value) {
+    var div = document.createElement('div');
+    div.textContent = value;
+    return div.innerHTML;
+  }
+
+  // Merges are stated as grid coordinates, so they only describe the table
+  // while it is in the order and completeness it was exported in. Sorting,
+  // filtering or paging breaks that correspondence, and a rowspan would then
+  // reach over a row that is no longer its neighbour.
+  function spansUsable() {
+    if (!spanOrigins.length) return false;
+    if (sortDir !== 0 && sortCol >= 0) return false;
+    if (q.value.trim()) return false;
+    return perPage <= 0 || (page === 0 && view.length <= perPage);
+  }
+
+  function renderMerged() {
+    return view.map(function (row, r) {
+      var cells = row.map(function (cell, i) {
+        if (coveredKeys['' + r + ':' + i]) return '';
+        var origin = originKeys['' + r + ':' + i];
+        if (!origin) {
+          return '<td' + (numeric[i] ? ' class="num"' : '') + '>' +
+                 escapeText(cell) + '</td>';
+        }
+        var attrs = '';
+        if (origin[2] > 1) attrs += ' rowspan="' + origin[2] + '"';
+        if (origin[3] > 1) attrs += ' colspan="' + origin[3] + '"';
+        return '<td' + attrs + ' style="text-align:' + origin[4] + '">' +
+               escapeText(cell) + '</td>';
+      });
+      return '<tr>' + cells.join('') + '</tr>';
+    }).join('');
+  }
+
   function render() {
     var start = perPage > 0 ? page * perPage : 0;
     var slice = perPage > 0 ? view.slice(start, start + perPage) : view;
     if (!slice.length) {
       body.innerHTML = '<tr><td class="empty" colspan="' + cols.length +
                        '">No matching rows</td></tr>';
+    } else if (spansUsable()) {
+      body.innerHTML = renderMerged();
     } else {
       body.innerHTML = slice.map(function (row) {
         return '<tr>' + row.map(function (cell, i) {
-          var div = document.createElement('div');
-          div.textContent = cell;
           return '<td' + (numeric[i] ? ' class="num"' : '') + '>' +
-                 div.innerHTML + '</td>';
+                 escapeText(cell) + '</td>';
         }).join('') + '</tr>';
       }).join('');
     }
@@ -456,10 +595,17 @@ def to_html(table, target=None, title: str = 'Table', paginate: int = 25,
     Values are passed to the page as JSON data and written into the DOM as
     text, never as markup, so a cell containing HTML is displayed rather than
     interpreted.
+
+    Merged regions render as ``rowspan``/``colspan`` while the table is in the
+    state it was exported in. Sorting, filtering or paging moves rows away
+    from the neighbours they were merged with, so in those views the spans are
+    dropped and the merged text stays in its own cell -- clearing the filter
+    brings them back.
     """
-    headers, rows = _table_data(table, include_index)
+    headers, rows, spans = _table_data(table, include_index)
     header_texts = [_plain(header) for header in headers]
-    row_texts = [[_plain(cell) for cell in row] for row in rows]
+    row_texts = [[_plain(cell) for cell in row]
+                 for row in _flattened(rows, spans)]
 
     # A column is treated as numeric for sorting and alignment when every
     # non-empty cell in it parses as a number.
@@ -481,6 +627,18 @@ def to_html(table, target=None, title: str = 'Table', paginate: int = 25,
         'rows': row_texts,
         'numeric': numeric_flags,
         'perPage': max(0, int(paginate)),
+        # Row and column here are grid coordinates, not identifiers of a
+        # particular row object, which is why the script only trusts them
+        # while the grid is in its exported order.
+        'spans': {
+            'origins': [
+                [row_index, column_index, region.row_count,
+                 region.column_count, _ALIGN_CSS.get(region.align, 'left')]
+                for (row_index, column_index), region
+                in sorted(spans.origins.items())
+            ],
+            'covered': sorted([row, column] for row, column in spans.covered),
+        },
     }
 
     head_cells = ''.join(
@@ -547,6 +705,48 @@ var DATA = {_script_json(payload)};
     return None
 
 
+def open_in_browser(table, title: str = 'Table', paginate: int = 25,
+                    include_index: bool = False, searchable: bool = True,
+                    path=None, new_tab: bool = True) -> str:
+    """
+    Write the page :func:`to_html` produces and open it in a browser.
+
+    Returns the path of the file that was opened.
+
+    With no ``path``, the page goes to a uniquely named file in the system
+    temporary directory. It is deliberately not deleted when this returns: the
+    browser is a separate process and may not have read the file yet, and
+    deleting it would race with that. The operating system clears the
+    directory in its own time; pass ``path`` to put the file somewhere you
+    control instead.
+
+    A ``file://`` URL is used rather than the bare path so that a path with
+    spaces, or one on Windows, reaches the browser intact. The page needs
+    nothing from the network, so it works with no connection at all.
+    """
+    import os
+    import tempfile
+    import webbrowser
+
+    markup = to_html(table, None, title, paginate, include_index, searchable)
+
+    if path is None:
+        handle, path = tempfile.mkstemp(prefix='prettyTables-', suffix='.html')
+        with os.fdopen(handle, 'w', encoding='utf-8') as file:
+            file.write(markup)
+    else:
+        path = os.fspath(path)
+        with open(path, 'w', encoding='utf-8') as file:
+            file.write(markup)
+
+    url = 'file://' + pathname2url(os.path.abspath(path))
+    if new_tab:
+        webbrowser.open_new_tab(url)
+    else:
+        webbrowser.open(url)
+    return path
+
+
 def to_excel(table, path, sheet_name: str = 'Sheet1',
              include_index: bool = False, autofit: bool = True,
              freeze_header: bool = True) -> None:
@@ -556,6 +756,9 @@ def to_excel(table, path, sheet_name: str = 'Sheet1',
     Numbers are written as numbers rather than text, so the spreadsheet can
     compute with them, and are right-aligned to match. The header row is bold
     and frozen, and column widths are fitted to the content.
+
+    Merged regions become real merged cells, which is what a spreadsheet means
+    by the word, so the workbook opens looking like the table did.
     """
     try:
         from openpyxl import Workbook
@@ -567,7 +770,8 @@ def to_excel(table, path, sheet_name: str = 'Sheet1',
             'Install it with: pip install prettyTables[excel]'
         )
 
-    headers, rows = _table_data(table, include_index)
+    headers, rows, spans = _table_data(table, include_index)
+    written_rows = _flattened(rows, spans)
 
     workbook = Workbook()
     worksheet = workbook.active
@@ -581,7 +785,7 @@ def to_excel(table, path, sheet_name: str = 'Sheet1',
         cell.fill = header_fill
         cell.alignment = Alignment(horizontal='left', vertical='center')
 
-    for row_index, row in enumerate(rows, start=2):
+    for row_index, row in enumerate(written_rows, start=2):
         for column_index, value in enumerate(row, start=1):
             # Keep real numbers numeric so formulas and charts work; anything
             # else goes in as its plain text.
@@ -594,10 +798,22 @@ def to_excel(table, path, sheet_name: str = 'Sheet1',
             if isinstance(written, (int, float)) and not isinstance(written, bool):
                 cell.alignment = Alignment(horizontal='right')
 
+    # Merge after every value is in place. Merging first would make openpyxl
+    # refuse the writes to the cells now inside the block.
+    for (row_index, column_index), region in spans.origins.items():
+        worksheet.merge_cells(
+            start_row=row_index + 2, start_column=column_index + 1,
+            end_row=region.last_row + 2, end_column=region.last_column + 1,
+        )
+        worksheet.cell(row=row_index + 2, column=column_index + 1).alignment = (
+            Alignment(horizontal=_ALIGN_CSS.get(region.align, 'center'),
+                      vertical='center')
+        )
+
     if autofit:
         for column_index, header in enumerate(headers, start=1):
             longest = len(_plain(header))
-            for row in rows:
+            for row in written_rows:
                 if column_index - 1 < len(row):
                     longest = max(longest, len(_plain(row[column_index - 1])))
             # A little padding, and a ceiling so one long cell cannot push a

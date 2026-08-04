@@ -125,6 +125,29 @@ so on. `__show_index` selects which set `__form_string()` reads from.
 counts, while `internal_row_count` / `internal_column_count` report the `_with_i` counts. With
 the index shown these differ by one column — which is exactly what the README demonstrates.
 
+### The two sentinels, and where they stop
+
+Storage holds two objects that are not values. `ValuePlacer` marks an absent
+cell: it is not `None` and not `''`, because either of those would make a
+numeric column textual and cost it its right alignment. `IndexCounter` stands
+in for the index column, one shared instance repeated down `__rows_with_i`,
+since the number each row shows is a function of its position and
+`index_start` / `index_step`.
+
+They are an internal encoding, so **the table boundary is where they get
+resolved.** `rows`, `columns`, `internal_rows` and `internal_columns` hand
+back the values a caller expects; `raw_rows`, `raw_columns`,
+`raw_internal_rows` and `raw_internal_columns` keep the sentinel, which is
+what identity comparison against `table.missing` needs. The writers do the
+same resolution in `_table_data()` because they read the raw view.
+
+Skipping that resolution is not a subtle failure: it puts
+`<prettyTables.utils.ValuePlacer object at 0x7f...>` in the middle of a row,
+which is both meaningless and wide enough to wreck whatever it lands in. Both
+sentinels now carry string forms saying what they are, so a leak that does get
+through is legible rather than catastrophic — but the fix for a leak is always
+to resolve it at the boundary, not to lean on the repr.
+
 ## How styles work
 
 Styles are **data, not code**. A style is a `TableComposition` namedtuple with 15 fields
@@ -352,6 +375,34 @@ rows; and where the body starts is counted off the same list of parts that gets
 joined into the table. Reconstructing either of them separately is how a title
 line, or a divider, used to shift every merge out of place.
 
+### Merges outside the console
+
+Painting the assembled string is the console's answer, and it is the only
+format that can be given one. `grid_spans()` is the other half: it turns the
+regions into per-cell information -- which cell owns a span, how far it
+reaches, which cells it hides -- in the coordinates of the grid being written.
+
+Writers ask for it once, through `_table_data()`, which also settles the
+question every writer would otherwise settle for itself: merge coordinates
+ignore the index column, output coordinates do not, so the offset is applied
+in one place. Getting that wrong merges the wrong cells rather than failing,
+which is why it is not left to each writer.
+
+From there the formats split by what they can express:
+
+- **HTML and Excel** say it natively -- `rowspan`/`colspan`, and real merged
+  ranges -- so the export looks like the table did.
+- **CSV, Markdown and `to_records()`** have no such cell. They take the
+  convention a spreadsheet uses when saving to one of them: merged text in the
+  top-left cell, the covered cells emptied. The grid keeps its shape.
+
+The `to_html` page is the interesting case, because it is interactive. A
+`rowspan` is a claim about *grid neighbours*, and sorting, filtering or paging
+destroys that neighbourhood -- a span would then reach over a row that is no
+longer underneath it. The script therefore applies the spans only in the
+pristine view and renders flat otherwise, rather than trying to recompute
+spans per view, which cannot be done correctly for an arbitrary permutation.
+
 ## Known gaps
 
 Things that are deliberately unfinished, so you do not mistake them for bugs:
@@ -398,6 +449,8 @@ python -m pytest
 | `tests/test_styles.py` | all 42 styles rendered, plus style selection |
 | `tests/test_readme_examples.py` | the README's outputs, as golden strings |
 | `tests/test_issues.py` | reproductions for the open issues, as `xfail` |
+| `tests/test_merges.py` | merging in each direction, and that it never widens the table |
+| `tests/test_merged_exports.py` | merges in every writer, sentinel resolution, `open_in_browser()` |
 
 Two things have to be pinned or the results are not reproducible, and `tests/conftest.py`
 does both with autouse fixtures:

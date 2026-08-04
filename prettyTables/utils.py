@@ -222,11 +222,29 @@ class IndexCounter(object):
 
 class ValuePlacer(object):
     """
-    A little class to place a value in a cell
+    The sentinel a table stores where a cell is absent.
+
+    It is not a value; it is a mark saying "nothing here", which lets a
+    numeric column keep its type and its alignment across the gaps. What the
+    gap *looks* like is the table's ``missing_value``, resolved at the point
+    the data leaves the table.
+
+    Both string forms say that plainly rather than reporting an object and an
+    address. One escaping into printed output is a bug in whatever let it out,
+    but ``<prettyTables.utils.ValuePlacer object at 0x7f...>`` in the middle
+    of a row tells the reader nothing about what happened, and it is wide
+    enough to wreck the layout of whatever it lands in.
     """
+
     def __init__(self):
         pass
-    
+
     def __call__(self, value):
         return value
-    
+
+    def __repr__(self):
+        return '<missing>'
+
+    def __str__(self):
+        return ''
+

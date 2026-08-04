@@ -127,6 +127,66 @@ def normalise(first_row, first_column, last_row, last_column, value, align,
     return region
 
 
+class GridSpans(NamedTuple):
+    """
+    The merges of a table expressed as a grid, for the non-console writers.
+
+    ``origins`` maps the top-left cell of each region to that region.
+    ``covered`` holds every other cell the regions swallow. Together they are
+    all a writer needs: emit the origin once, carrying its span, and skip the
+    covered cells.
+
+    Coordinates here are in *output* space -- the index column, when a writer
+    is including it, has already been counted -- so a writer can look a cell up
+    with the same indexes it is iterating with.
+    """
+
+    origins: dict
+    covered: set
+
+    def __bool__(self):
+        return bool(self.origins)
+
+
+def grid_spans(regions, row_count, column_count, index_offset=0) -> GridSpans:
+    """
+    Turn merged regions into per-cell span information.
+
+    The console renderer paints merges over the finished text, which no other
+    format can use: CSV has no notion of a cell covering its neighbours, and
+    HTML and Excel each spell it their own way. This gives every writer the
+    same starting point -- which cell owns a span, how far it reaches, and
+    which cells it hides.
+
+    Regions are clipped to the grid rather than dropped, so a merge that runs
+    past the last row (possible once a filter has removed rows) still renders
+    over the part of it that exists.
+    """
+    origins = {}
+    covered = set()
+
+    for region in regions:
+        first_row = max(0, region.first_row)
+        first_column = max(0, region.first_column + index_offset)
+        last_row = min(row_count - 1, region.last_row)
+        last_column = min(column_count - 1, region.last_column + index_offset)
+        if last_row < first_row or last_column < first_column:
+            continue
+        if last_row == first_row and last_column == first_column:
+            continue
+
+        origins[(first_row, first_column)] = MergedRegion(
+            first_row, first_column, last_row, last_column,
+            region.value, region.align,
+        )
+        for row in range(first_row, last_row + 1):
+            for column in range(first_column, last_column + 1):
+                if (row, column) != (first_row, first_column):
+                    covered.add((row, column))
+
+    return GridSpans(origins, covered)
+
+
 class Layout(NamedTuple):
     """
     Where each column sits inside a rendered line.
