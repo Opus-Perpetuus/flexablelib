@@ -18,7 +18,30 @@ than the span it was given is truncated, not accommodated.
 
 from typing import List, NamedTuple, Optional
 
-from .fast import pad_to_width, visible_width, truncate_to_width
+from .fast import (
+    has_ansi,
+    pad_to_width,
+    partition_by_width,
+    slice_by_width,
+    strip_by_width,
+    truncate_to_width,
+    visible_width,
+)
+
+# Painting over a stretch of line can remove the escape that closed a colour --
+# the reset ending a coloured border, say, when the merge starts just after it.
+# The replacement then inherits a colour nobody asked for. Opening the painted
+# span with a reset of its own costs nothing on a plain table, because it is
+# only added where escapes were actually removed.
+_RESET = '\x1b[0m'
+
+
+def _repaint(line, start, end, replacement):
+    """Replace the visible columns [start, end) of a line, ending any colour."""
+    before, removed, after = partition_by_width(line, start, end)
+    if has_ansi(removed) and not replacement.startswith(_RESET):
+        replacement = _RESET + replacement
+    return before + replacement + after
 
 
 class MergedRegion(NamedTuple):
@@ -108,54 +131,84 @@ class Layout(NamedTuple):
     """
     Where each column sits inside a rendered line.
 
-    ``spans`` holds one (start, end) pair per column, as slice bounds into the
-    line, covering the cell text and its margins but not the separators around
-    it. ``separators`` holds the offset of each vertical rule between columns,
-    so a horizontal merge knows which characters to paint over.
+    ``spans`` holds one (start, end) pair per *drawn* column, as visible-column
+    bounds within the line, covering the cell text and its margins but not the
+    separators around it. ``separators`` holds the offset of each vertical rule
+    between columns, so a horizontal merge knows which characters to paint
+    over. ``span_of_column`` maps a table column index to its entry in
+    ``spans``, and has no entry for a column the table is not drawing.
     """
 
     spans: List[tuple]
     separators: List[int]
+    span_of_column: dict
 
 
-def compute_layout(column_widths, composition) -> Layout:
+def compute_layout(column_widths, composition, hidden=()) -> Layout:
     """
     Work out the column offsets for a style and set of widths.
 
     Mirrors how table_strings assembles a row: an optional left rule, then for
     each column its margins and content, with a rule between neighbours and an
     optional one at the end.
+
+    ``hidden`` lists the columns the table is leaving out -- empty ones, when
+    ``show_empty_columns`` is off. They take up no room in the rendered line,
+    so counting them here would put every offset after them too far right.
     """
     body = composition.vertical_table_body_lines
     margin = 1 if composition.margin else 0
+    hidden = set(hidden)
 
     offset = len(body.left) if body.left is not None else 0
     spans = []
     separators = []
+    span_of_column = {}
 
     for index, width in enumerate(column_widths):
-        if index:
+        if index in hidden:
+            continue
+        if spans:
             if body.middle is not None:
                 separators.append(offset)
                 offset += len(body.middle)
         cell_width = width + margin * 2
+        span_of_column[index] = len(spans)
         spans.append((offset, offset + cell_width))
         offset += cell_width
 
-    return Layout(spans, separators)
+    return Layout(spans, separators, span_of_column)
 
 
 def _region_bounds(region, layout, index_offset):
-    """Slice bounds in a line for the whole horizontal span of a region."""
-    first = region.first_column + index_offset
-    last = region.last_column + index_offset
-    if first >= len(layout.spans) or last >= len(layout.spans):
+    """
+    Where a region sits in a line, as visible-column offsets.
+
+    Returns the span covering the whole block, the span of its top-left cell,
+    and the index of its rightmost drawn column. A merge given no replacement
+    text reads its content from that top-left cell -- not from the strip of
+    table under the whole block, which is the neighbouring columns and the
+    rules between them.
+
+    Columns the table is not drawing are skipped over, so a merge that reaches
+    across a hidden empty column still lands on the columns either side of it.
+    Returns None when the region is drawn nowhere at all.
+    """
+    drawn = [
+        layout.span_of_column[column]
+        for column in range(region.first_column + index_offset,
+                            region.last_column + index_offset + 1)
+        if column in layout.span_of_column
+    ]
+    if not drawn:
         return None
-    return layout.spans[first][0], layout.spans[last][1]
+
+    first, last = drawn[0], drawn[-1]
+    return (layout.spans[first][0], layout.spans[last][1]), layout.spans[first], last
 
 
 def apply(lines, row_line_map, regions, column_widths, composition,
-          index_offset, filler=' '):
+          index_offset, hidden_columns=(), filler=' '):
     """
     Rewrite assembled lines so each region renders as one cell.
 
@@ -166,14 +219,15 @@ def apply(lines, row_line_map, regions, column_widths, composition,
     lines and painted over where a region spans them vertically.
 
     ``index_offset`` is 1 when the index column is displayed, since region
-    coordinates ignore it.
+    coordinates ignore it. ``hidden_columns`` lists the columns the table is
+    not drawing, which take up no room in a line.
 
     Returns the rewritten lines.
     """
     if not regions:
         return lines
 
-    layout = compute_layout(column_widths, composition)
+    layout = compute_layout(column_widths, composition, hidden_columns)
     lines = list(lines)
     margin = 1 if composition.margin else 0
 
@@ -181,7 +235,7 @@ def apply(lines, row_line_map, regions, column_widths, composition,
         bounds = _region_bounds(region, layout, index_offset)
         if bounds is None:
             continue
-        start, end = bounds
+        (start, end), (cell_start, cell_end), last_span = bounds
         span_width = end - start - margin * 2
         if span_width < 1:
             continue
@@ -195,8 +249,12 @@ def apply(lines, row_line_map, regions, column_widths, composition,
         text = region.value
         if text is None:
             # No replacement text given: keep what the top-left cell holds.
+            # Read that cell alone. Reading the whole span instead used to pull
+            # in the next column and the rule between them, and since that text
+            # already filled the span exactly, painting it back changed nothing
+            # -- the merge silently did not happen.
             first_line = lines[target_lines[0]]
-            text = first_line[start:end].strip()
+            text = strip_by_width(slice_by_width(first_line, cell_start, cell_end))
         text = str(text)
 
         if visible_width(text) > span_width:
@@ -204,16 +262,17 @@ def apply(lines, row_line_map, regions, column_widths, composition,
         painted = (filler * margin
                    + pad_to_width(text, span_width, region.align, filler)
                    + filler * margin)
+        blank = filler * (end - start)
 
         # The text sits on the middle line of the block, so a tall merge reads
         # as one cell rather than a label with empty space under it.
         text_line = target_lines[len(target_lines) // 2]
         for line_index in target_lines:
             line = lines[line_index]
-            if len(line) < end:
+            if visible_width(line) < end:
                 continue
-            replacement = painted if line_index == text_line else filler * (end - start)
-            lines[line_index] = line[:start] + replacement + line[end:]
+            replacement = painted if line_index == text_line else blank
+            lines[line_index] = _repaint(line, start, end, replacement)
 
         # Paint over the separator lines that fall inside the block, so the
         # merged region reads as one cell top to bottom.
@@ -224,18 +283,18 @@ def apply(lines, row_line_map, regions, column_widths, composition,
         # exactly the three-way junction needed ('├' where '┼' was).
         body_rule = composition.table_body_line
         junction = body_rule.left if body_rule is not None else None
-        last_column_index = region.last_column + index_offset
-        joins_more_columns = last_column_index + 1 < len(layout.spans)
+        joins_more_columns = last_span + 1 < len(layout.spans)
 
+        covered = set(target_lines)
         for line_index in range(min(target_lines), max(target_lines)):
-            if line_index in target_lines:
+            if line_index in covered:
                 continue
             line = lines[line_index]
-            if len(line) < end:
+            if visible_width(line) < end:
                 continue
-            rewritten = line[:start] + filler * (end - start) + line[end:]
-            if junction and joins_more_columns and len(rewritten) > end:
-                rewritten = rewritten[:end] + junction + rewritten[end + 1:]
+            rewritten = _repaint(line, start, end, blank)
+            if junction and joins_more_columns and visible_width(rewritten) > end:
+                rewritten = _repaint(rewritten, end, end + 1, junction)
             lines[line_index] = rewritten
 
     return lines

@@ -205,3 +205,14 @@ def test_stored_rows_unchanged_after_format_and_sort():
     table.sort_by = 'value'
     str(table)
     assert [list(row) for row in table.rows] == original
+
+
+def test_the_package_can_be_star_imported():
+    # __all__ held the classes themselves rather than their names, so the
+    # import machinery raised TypeError before binding anything.
+    namespace = {}
+    exec('from prettyTables import *', namespace)
+
+    assert 'Table' in namespace
+    assert 'TableComposition' in namespace
+    assert 'SeparatorLine' in namespace

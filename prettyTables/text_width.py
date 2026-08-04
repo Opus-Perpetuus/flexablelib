@@ -175,6 +175,116 @@ def tokenize(text: str) -> Iterator[Tuple[str, str]]:
         yield ('text', text[position:])
 
 
+def partition_by_width(text: str, start: int, end: int) -> Tuple[str, str, str]:
+    """
+    Split a string at two visible-column offsets.
+
+    Returns the part before column `start`, the part covering columns
+    `[start, end)`, and the part from column `end` on, so that concatenating
+    the three reproduces the input exactly.
+
+    Cutting on visible columns rather than string indexes is what makes a
+    coloured table rewritable at all. `\\x1b[1;35m` is seven characters and no
+    columns, so a raw slice taken at a column offset lands in the middle of the
+    escape: it splits the sequence, leaks the remainder as literal text, and
+    puts every offset after it out by seven. That is one bug, not two -- the
+    same mistake shows up as a widened row and as a merge that quietly does
+    nothing.
+
+    Escape sequences are never split; each is kept with the region whose
+    columns it opens. A double-width cluster that straddles a boundary is kept
+    whole and assigned to the region its first column falls in. Table cells are
+    padded to exact widths and joined with single-column rules, so boundaries
+    fall between clusters and that case does not arise here.
+    """
+    before: List[str] = []
+    inside: List[str] = []
+    after: List[str] = []
+    column = 0
+
+    for kind, value in tokenize(text):
+        if kind == 'ansi':
+            bucket = (before if column < start
+                      else inside if column < end
+                      else after)
+            bucket.append(value)
+            continue
+        for cluster, cluster_width in measured_clusters(value):
+            bucket = (before if column < start
+                      else inside if column < end
+                      else after)
+            bucket.append(cluster)
+            column += cluster_width
+
+    return ''.join(before), ''.join(inside), ''.join(after)
+
+
+def strip_by_width(text: str) -> str:
+    """
+    Drop leading and trailing whitespace, keeping every escape sequence.
+
+    `str.strip()` cannot do this. A cell coloured by `column_colors` reads
+    `\\x1b[1;35m Jane \\x1b[0m`: the spaces are the cell margin, but they sit
+    between escapes, so the string neither starts nor ends with whitespace and
+    `strip()` returns it untouched. Padding that into a wider merged span then
+    puts the text off centre by the margin.
+
+    Escapes found outside the trimmed range are kept, at the end they were
+    found on. They are what colours the text; dropping them would strip a
+    merged cell of the styling the cell it came from had.
+    """
+    pieces = []
+    for kind, value in tokenize(text):
+        if kind == 'ansi':
+            pieces.append((True, value))
+        else:
+            for cluster, _ in measured_clusters(value):
+                pieces.append((False, cluster))
+
+    # Escapes are skipped over rather than stopping the scan: the whitespace
+    # being trimmed usually sits *inside* them, which is the whole reason
+    # str.strip() is no use here.
+    content = [
+        position for position, (is_ansi, value) in enumerate(pieces)
+        if not is_ansi and not value.isspace()
+    ]
+    if not content:
+        return ''.join(value for is_ansi, value in pieces if is_ansi)
+
+    first, last = content[0], content[-1] + 1
+    leading = ''.join(value for is_ansi, value in pieces[:first] if is_ansi)
+    trailing = ''.join(value for is_ansi, value in pieces[last:] if is_ansi)
+    body = ''.join(value for _, value in pieces[first:last])
+    return leading + body + trailing
+
+
+def slice_by_width(text: str, start: int, end: int) -> str:
+    """
+    The part of `text` occupying visible columns `[start, end)`.
+
+    If the slice carries any escape sequence it is closed with a reset, since
+    the sequence that would have closed it may well sit outside the cut. This
+    is the same convention `truncate_to_width` follows, and for the same
+    reason: a slice that leaves colour open bleeds it into whatever is printed
+    next.
+    """
+    _, inside, _ = partition_by_width(text, start, end)
+    if inside and _ANSI_RE.search(inside) and not inside.endswith(_RESET):
+        inside += _RESET
+    return inside
+
+
+def splice_by_width(text: str, start: int, end: int, replacement: str) -> str:
+    """
+    Replace the visible columns `[start, end)` of `text` with `replacement`.
+
+    Whatever the replacement measures is what the result measures there; the
+    caller is responsible for handing over a string of the right visible width.
+    """
+    before, _, after = partition_by_width(text, start, end)
+    return before + replacement + after
+
+
 def pad_to_width(text: str, width: int, align: str = 'l', fill: str = ' ') -> str:
     """
     Pad to an exact visible width.

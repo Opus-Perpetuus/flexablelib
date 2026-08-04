@@ -336,6 +336,22 @@ place for all 42 styles. Where a horizontal rule meets the right edge of a
 merged block, the four-way junction is replaced by the body rule's `left`
 character, since no line arrives from the left there any more.
 
+**Those offsets are terminal columns, and must be applied as terminal
+columns.** `merges.py` cuts lines with `partition_by_width()` from
+`text_width.py`, never with a plain string slice. The two agree only for
+uncoloured ASCII: `\x1b[1;35m` is seven characters and no columns, so a raw
+slice taken at a column offset lands inside the escape, splits it, and puts
+every later offset out by seven. That single mistake surfaced as two apparently
+separate bugs -- a coloured row rendered wider than the rest of the table, and
+a merge that silently did nothing -- which is worth remembering the next time
+either symptom shows up.
+
+Which rows a merge covers comes from the line map that `__join_body_rows()`
+returns, because only that function knows how many rule lines it put between
+rows; and where the body starts is counted off the same list of parts that gets
+joined into the table. Reconstructing either of them separately is how a title
+line, or a divider, used to shift every merge out of place.
+
 ## Known gaps
 
 Things that are deliberately unfinished, so you do not mistake them for bugs:
