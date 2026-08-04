@@ -45,6 +45,26 @@ def repo_root_cwd(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def neutral_colour_environment(monkeypatch):
+    """
+    Take the ambient colour decision away from the tests.
+
+    ``use_colors`` defaults to None, meaning "decide from the environment",
+    and ``supports_color()`` reads ``FORCE_COLOR``, ``NO_COLOR`` and whether
+    stdout is a terminal. A developer whose shell exports ``FORCE_COLOR`` --
+    many do -- therefore runs a different suite from CI, where none of those
+    are set: a test asserting on escape sequences passes on one and fails on
+    the other, and a test that merely *sets* a colour silently stops
+    exercising colour at all.
+
+    Clearing the variables pins the automatic answer to "no colour
+    anywhere". A test that wants colour says so with ``use_colors = True``.
+    """
+    for variable in ('FORCE_COLOR', 'NO_COLOR', 'CLICOLOR_FORCE', 'CLICOLOR'):
+        monkeypatch.delenv(variable, raising=False)
+
+
+@pytest.fixture(autouse=True)
 def default_terminal(monkeypatch):
     """
     Give every test a wide, fixed terminal so CI never renders differently
