@@ -814,6 +814,7 @@ class Table(object):
         # Filled during compose so filter/sort and empty-row hiding share
         # the same row indices for the current render.
         self.__compose_empty_row_indexes = None
+        self.__compose_row_order = None
         # +--------------------------+ STYLE +---------------------------+
         # HEADER STYLES: None, l, u, t, c
         #   None: unmodified
@@ -2190,6 +2191,15 @@ class Table(object):
         Handing the rule the padded string would make numeric comparisons
         impossible, so the value is looked up from the stored data instead.
         Returns None when no rule is set, to skip the lookup entirely.
+
+        ``row_i`` counts rendered rows, which is not the same as counting
+        stored ones once ``sort_by`` or ``row_filter`` has had a say. It is
+        translated back through the order the renderer settled on, or the
+        rule would be shown -- and would colour -- a different row's value.
+
+        The index column is never handed to the rule: it holds an internal
+        counter object, not a number, and a rule comparing it numerically
+        raised TypeError.
         """
         if self.__color_rule is None:
             return None
@@ -2197,11 +2207,19 @@ class Table(object):
             title = column_titles[column_i]
         except IndexError:
             return None
+        if self.__show_index and column_i == 0:
+            return None
+
+        order = self.__compose_row_order
+        if order is not None and row_i < len(order):
+            row_i = order[row_i]
+
         source = self.__columns_with_i if self.__show_index else self.__columns
         try:
-            return source[title][row_i]
+            value = source[title][row_i]
         except (KeyError, IndexError):
             return None
+        return None if isinstance(value, (ValuePlacer, IndexCounter)) else value
 
     # +------------------------+ COLUMNS +---------------------------+
 
@@ -2623,6 +2641,7 @@ class Table(object):
         # Cleared every render; set after the display rows are materialised
         # so filter/sort and empty-row hiding agree on the same indices.
         self.__compose_empty_row_indexes = None
+        self.__compose_row_order = None
         if len(self.__columns) != 0:
             # Refuse to render into a space where the result would be
             # illegible, if the caller asked to be told -- issue #14.
@@ -3117,11 +3136,18 @@ class Table(object):
                 self.__column_widths[col_title],
                 -to_reduce
             ])
+        # ``column_i`` and ``col_title`` were just read out of the with-index
+        # lists, so the alignment must be written back to the with-index ones
+        # too. Saying index=False here indexed a list one entry shorter than
+        # the loop that produced ``column_i``: the last column always raised
+        # IndexError, and before that it quietly set the wrong column's
+        # alignment. Any narrowing at all -- max_width, a small terminal,
+        # column_max_width -- hit it as soon as show_index was on.
         return self.__wrap_or_trim_data(
             column_i,
             new_width,
             columns,
-            index=False,
+            index=self.__show_index,
             col_type_name=col_type,
             column_title=col_title
         )
@@ -3246,11 +3272,39 @@ class Table(object):
                 width = max(1, int(hi))
             widths[column_i] = width
             store[header] = width
+            self.__refit_float_sides(header, width)
 
         if self.__show_index:
             self.__column_widths_as_list_with_i = widths
         else:
             self.__column_widths_as_list = widths
+
+    def __refit_float_sides(self, header, width):
+        """
+        Keep a float column's decimal axis in step with a changed width.
+
+        Two numbers describe a float column. The width draws the frame; the
+        ``(left, point, right)`` triple pads every cell in it, and nothing in
+        the cell aligner consults the width at all. Raising one without the
+        other -- which is what ``column_min_width`` and ``expand_to_window``
+        did -- drew a wider frame around body rows that kept their measured
+        size, leaving the table's own rules hanging past its contents.
+
+        Room is added to the left of the axis, which is where
+        ``__get_float_column_width`` puts it when it measures a column.
+        """
+        for store in (self.__float_columns_widths,
+                      self.__float_columns_widths_with_i):
+            sides = store.get(header)
+            if sides is None:
+                continue
+            left, point, right = sides
+            spare = width - (left + point + right)
+            if spare <= 0:
+                # Narrowing is not a padding decision: the cells have to give
+                # up characters first, which __shrink_float_column does.
+                continue
+            store[header] = (left + spare, point, right)
 
     def __enforce_column_max_widths(self, rows, rows_with_i):
         """
@@ -3363,6 +3417,8 @@ class Table(object):
                 new_width = min(new_width, int(hi))
             widths[column_i] = new_width
             store[headers[column_i]] = new_width
+            # A float column pads from its decimal axis, not from this number.
+            self.__refit_float_sides(headers[column_i], new_width)
 
         if self.__show_index:
             self.__column_widths_as_list_with_i = widths
@@ -3490,6 +3546,11 @@ class Table(object):
         # Filter and sort the display copies together so the index column
         # stays aligned with its row.
         order = self.__display_row_order(rows)
+        # Kept so ``color_rule`` can find the stored cell behind a rendered
+        # one. Without it the rule was handed the value sitting at the same
+        # position in storage, which is a different row entirely as soon as
+        # sort_by or row_filter reorders anything.
+        self.__compose_row_order = order
         empty_stored = set(self.__empty_row_indexes)
         self.__compose_empty_row_indexes = [
             new_i for new_i, old_i in enumerate(order)
@@ -3809,14 +3870,30 @@ class Table(object):
             float_column_widths
         )
         if colors_on:
-            aligned_columns = self.__paint_cells(
-                aligned_columns,
-                lambda cell_i, row_i: self.__color_for_cell(
-                    self.__raw_value_at(column_titles, cell_i, row_i),
-                    row_i,
-                    column_titles[cell_i] if cell_i < len(column_titles) else '',
-                ),
+            # ``aligned_columns`` holds only the columns being drawn, so its
+            # positions are not column indexes once an empty column is being
+            # left out. Colouring by raw position painted the neighbour to the
+            # right of every hidden column, and the last column not at all.
+            hidden = (
+                set() if self.__show_empty_columns
+                else set(self.__empty_column_indexes)
             )
+            drawn = [
+                column_i for column_i in range(len(column_titles))
+                if column_i not in hidden
+            ]
+
+            def color_of(cell_i, row_i):
+                if cell_i >= len(drawn):
+                    return None
+                column_i = drawn[cell_i]
+                return self.__color_for_cell(
+                    self.__raw_value_at(column_titles, column_i, row_i),
+                    row_i,
+                    column_titles[column_i],
+                )
+
+            aligned_columns = self.__paint_cells(aligned_columns, color_of)
         aligned_columns = self.__zip_columns(aligned_columns)
         # String separators and data rows are joined
         separators: HorizontalComposition = _get_separators(
@@ -3932,7 +4009,13 @@ class Table(object):
         )
         rule = None
         if explicit_dividers:
-            rule = '-' * max(visible_width(body_rows[0]), 1)
+            # One physical line's width, not the whole row block's. A wrapped
+            # row is several lines joined by newlines, and measuring it whole
+            # drew the rule at the sum of them -- four times the table width
+            # for a four-line row. Sorting alone could move a wrapped row into
+            # first place and break a table that rendered correctly before.
+            first_line = body_rows[0].split('\n')[0]
+            rule = '-' * max(visible_width(first_line), 1)
 
         separator_lines = body_line.count('\n') if separator_line is not None else 0
 

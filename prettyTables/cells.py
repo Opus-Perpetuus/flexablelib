@@ -181,8 +181,17 @@ def fljust(string: str,
     right = pad_to_width(right_string, right_width, 'l', fill_char)
 
     # A number with no point leaves the point's own column blank, so it is
-    # still exactly as wide as the ones that have one.
-    return ''.join([left, point or fill_char, right])
+    # still exactly as wide as the ones that have one -- but only when that
+    # column exists. A column of exponentials (1e-07, 1e+16) has no point
+    # anywhere in it and so measures a point width of zero; emitting a fill
+    # character regardless made every body row one column wider than the frame
+    # drawn around it. The two-element form has no point width to consult and
+    # is documented as taking numbers that always have a point, so it keeps
+    # the column.
+    point_width = sides_widths[POINT_WIDTH_I] if len(sides_widths) > 2 else 1
+    middle = pad_to_width(point, point_width, 'l', fill_char)
+
+    return ''.join([left, middle, right])
 
 
 def __fljust_part(cell_part: Any, 

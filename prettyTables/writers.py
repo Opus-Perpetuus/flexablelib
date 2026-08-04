@@ -26,6 +26,7 @@ from typing import Any, List, Optional, Sequence
 
 from .fast import strip_ansi
 from .options import FLT_FILTER, INT_FILTER
+from .utils import IndexCounter, ValuePlacer
 
 
 def _plain(value: Any) -> str:
@@ -39,15 +40,66 @@ def _plain(value: Any) -> str:
     return strip_ansi(str(value)) if value is not None else ''
 
 
+def _script_json(payload) -> str:
+    """
+    JSON safe to embed inside a ``<script>`` element.
+
+    An HTML parser ends a script at the first ``</script``, wherever it
+    appears -- quoting means nothing to it, so a cell holding that text closed
+    the element early, dropped the rest of the program into the page as
+    visible text, and let the remainder of the cell be parsed as real markup.
+
+    Escaping the three characters that can start a tag or an entity avoids it.
+    ``\\u003c`` and friends are ordinary JSON escapes, so the value the page
+    receives is unchanged.
+    """
+    return (
+        json.dumps(payload)
+        .replace('&', '\\u0026')
+        .replace('<', '\\u003c')
+        .replace('>', '\\u003e')
+    )
+
+
 def _table_data(table, include_index: bool):
-    """(headers, rows) as plain strings, honouring the index setting."""
+    """
+    (headers, rows) honouring the index setting, with the sentinels resolved.
+
+    Storage keeps two placeholder objects that only the console renderer knew
+    how to read: one shared ``IndexCounter`` standing in for the index column,
+    and a ``ValuePlacer`` marking an absent cell. Handed to a writer as they
+    are, they exported their own repr --
+    ``<prettyTables.utils.ValuePlacer object at 0x7f...>`` -- into CSV,
+    Markdown, HTML and Excel alike, and in HTML the repr also made a numeric
+    column look textual and lose its alignment.
+
+    Resolving them here fixes every writer at once, because they all come
+    through this function. The index is computed the same way the renderer
+    computes it, from ``index_start`` and ``index_step``.
+    """
     if include_index:
         headers = [str(header) for header in table.internal_headers]
         rows = table.internal_rows
     else:
         headers = [str(header) for header in table.headers]
         rows = table.rows
-    return headers, [[cell for cell in row] for row in rows]
+
+    missing = table.missing_value
+    start, step = table.index_start, table.index_step
+    numbering = include_index and table.show_index
+
+    resolved = []
+    for position, row in enumerate(rows):
+        cells = []
+        for column, cell in enumerate(row):
+            if numbering and column == 0 and isinstance(cell, IndexCounter):
+                cells.append(start + position * step)
+            elif isinstance(cell, ValuePlacer):
+                cells.append(missing)
+            else:
+                cells.append(cell)
+        resolved.append(cells)
+    return headers, resolved
 
 
 def to_records(table, include_index: bool = False) -> List[dict]:
@@ -478,7 +530,7 @@ def to_html(table, target=None, title: str = 'Table', paginate: int = 25,
   </div>
 </div>
 <script>
-var DATA = {json.dumps(payload)};
+var DATA = {_script_json(payload)};
 {_HTML_SCRIPT}
 </script>
 </body>

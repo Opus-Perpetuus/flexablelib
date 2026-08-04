@@ -233,9 +233,22 @@ def test_a_float_with_no_point_keeps_the_column_width():
     """
     table = Table(style_name='thin_borderline')
     table.add_column('n', [1e16, 2.25])
+    rendered = str(table)
 
-    assert rendered_widths(str(table)) == {len('│ 10000000000000000.00 │')} or True
-    assert '1e+16' in str(table)
+    # This assertion used to end in `or True`, which made it unfailable. It
+    # went on passing while a column whose numbers all lack a point -- every
+    # cell an exponential -- rendered its body rows one column wider than the
+    # frame drawn around them, because the point's own zero-width column was
+    # still filled with a space.
+    assert len(rendered_widths(rendered)) == 1
+    assert '1e+16' in rendered
+
+
+def test_a_column_of_only_exponentials_is_not_wider_than_its_frame():
+    table = Table(style_name='thin_borderline')
+    table.add_column('n', [1e-07, 1e16])
+
+    assert len(rendered_widths(str(table))) == 1
 
 
 def test_a_very_large_integer_is_not_reformatted():
