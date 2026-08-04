@@ -23,8 +23,8 @@ import csv as _csv
 import html as _html
 import io as _io
 import json
+from pathlib import Path
 from typing import Any, List, Optional, Sequence
-from urllib.request import pathname2url
 
 from .fast import strip_ansi
 from .merges import grid_spans
@@ -739,7 +739,12 @@ def open_in_browser(table, title: str = 'Table', paginate: int = 25,
         with open(path, 'w', encoding='utf-8') as file:
             file.write(markup)
 
-    url = 'file://' + pathname2url(os.path.abspath(path))
+    # Path.as_uri() rather than 'file://' + pathname2url(): the latter changed
+    # in Python 3.14 to return an RFC 8089 path of its own ('///tmp/x'), so
+    # gluing a scheme in front of it produced 'file://///tmp/x' there and
+    # 'file:///tmp/x' everywhere else. as_uri() spells the whole URL, and
+    # percent-encodes, the same way on every supported version and on Windows.
+    url = Path(os.path.abspath(path)).as_uri()
     if new_tab:
         webbrowser.open_new_tab(url)
     else:
