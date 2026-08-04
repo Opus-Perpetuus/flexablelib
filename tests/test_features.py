@@ -51,6 +51,8 @@ def test_custom_format_per_column():
 
 
 def test_column_min_and_max_width():
+    from prettyTables.fast import visible_width
+
     table = Table(style_name='plain')
     table.add_column('name', ['ab'])
     table.add_column('note', ['abcdefghijklmnop'])
@@ -59,14 +61,35 @@ def test_column_min_and_max_width():
     table.auto_wrap = False
 
     rendered = str(table)
-    lines = rendered.splitlines()
-    # Header line: name padded to at least 8, note capped.
-    assert 'name' in lines[0]
-    assert '...' in rendered or 'abcdef' in rendered
-    # note column content never wider than 6 visible chars in a cell
-    # after trim marker budget.
-    body = [line for line in lines if line and not set(line) <= set('- ')]
-    assert body
+
+    # Full untrimmed content must not survive a max of 6.
+    assert 'abcdefghijklmnop' not in rendered
+    assert '...' in rendered
+
+    # Every line of the plain table is the two cells joined by a space.
+    # The note cell (second field) must be at most 6 visible columns.
+    for line in rendered.splitlines():
+        if not line.strip():
+            continue
+        # Split on the single padding space between columns is fragile when
+        # name is padded; measure the whole line against min name + gap + max note.
+        # name floor 8 + 1 space + note max 6 = 15.
+        assert visible_width(line) <= 15, repr(line)
+
+    # Direct single-column case: body cell cannot exceed the cap.
+    tight = Table(style_name='plain')
+    tight.add_column('note', ['abcdefghijklmnop'])
+    tight.column_max_width = 6
+    tight.auto_wrap = False
+    tight_s = str(tight)
+    assert 'abcdefghijklmnop' not in tight_s
+    body_lines = [
+        line for line in tight_s.splitlines()
+        if line.strip() and 'note' not in line
+    ]
+    assert body_lines
+    for line in body_lines:
+        assert visible_width(line) <= 6, repr(line)
 
 
 def test_header_align_independent_of_body():

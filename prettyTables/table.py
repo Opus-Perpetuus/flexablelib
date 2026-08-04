@@ -2645,6 +2645,22 @@ class Table(object):
                 semi=True
             )
             self.__get_column_widths(semi=True)
+            # Cap content to column_max_width by the same wrap/trim path the
+            # terminal fit uses. Must run against the natural content widths
+            # -- clamping the numbers first makes every reduction zero and
+            # leaves the cells full-size so the body overflows the header.
+            max_hit, headers, rows, rows_with_i = (
+                self.__enforce_column_max_widths(rows, rows_with_i)
+            )
+            if max_hit:
+                self.__wrap_data(
+                    rows,
+                    rows_with_i,
+                    semi=False,
+                    headers_after_semi=headers,
+                )
+                self.__get_column_widths(semi=False)
+            # Raise floors from column_min_width and re-assert max budgets.
             self.__clamp_column_widths()
             table_width = self.__get_string_table_width()
             # Grow first when asked, then shrink if still over budget.
@@ -2656,15 +2672,6 @@ class Table(object):
                 rows,
                 rows_with_i
             )
-            # column_max_width may force a wrap/trim even when the table
-            # already fits the terminal.
-            if not adjusted and self.__column_max_width is not None:
-                if self.__clamp_column_widths():
-                    adjusted = True
-                    headers = (
-                        self.__headers_with_i if self.__show_index
-                        else self.__headers
-                    )
             if adjusted:
                 # Widths changed, so the data has to be re-wrapped against the
                 # new budgets and measured again.
@@ -2676,7 +2683,7 @@ class Table(object):
                 )
                 self.__get_column_widths(semi=False)
                 self.__clamp_column_widths()
-            else:
+            elif not max_hit:
                 # The table already fits. The second pass would wrap the same
                 # data against the same widths, with the same headers, and
                 # write the same numbers into the same attributes -- so it is
@@ -3201,10 +3208,10 @@ class Table(object):
         """
         Enforce column_min_width / column_max_width on the measured widths.
 
-        Returns True when any column was forced narrower than its content,
-        so the fit pass must wrap or trim.
+        Only the width numbers are changed here. Content that still exceeds a
+        max is reduced by :meth:`__enforce_column_max_widths`, which walks the
+        same wrap/trim path as a terminal fit.
         """
-        forced_narrow = False
         if self.__show_index:
             headers = list(self.__headers_with_i)
             widths = list(self.__column_widths_as_list_with_i)
@@ -3215,7 +3222,7 @@ class Table(object):
             store = self.__column_widths
 
         if not widths:
-            return False
+            return
 
         for column_i, header in enumerate(headers):
             # Index column (position 0 with show_index) is not user-facing.
@@ -3232,15 +3239,11 @@ class Table(object):
             if lo is not None:
                 width = max(width, int(lo))
             if hi is not None:
-                hi = int(hi)
-                if hi < 1:
-                    hi = 1
+                hi = max(1, int(hi))
                 if width > hi:
                     width = hi
-                    forced_narrow = True
-            if lo is not None and hi is not None and int(lo) > int(hi):
-                width = int(hi)
-                forced_narrow = True
+            if lo is not None and hi is not None and int(lo) > max(1, int(hi)):
+                width = max(1, int(hi))
             widths[column_i] = width
             store[header] = width
 
@@ -3248,7 +3251,82 @@ class Table(object):
             self.__column_widths_as_list_with_i = widths
         else:
             self.__column_widths_as_list = widths
-        return forced_narrow
+
+    def __enforce_column_max_widths(self, rows, rows_with_i):
+        """
+        Wrap or trim any column whose content exceeds ``column_max_width``.
+
+        Returns ``(changed, headers, rows, rows_with_i)``. When nothing is
+        over the cap, ``changed`` is false and the rows are returned as-is.
+        """
+        if self.__column_max_width is None:
+            headers = (
+                self.__headers_with_i if self.__show_index else self.__headers
+            )
+            return False, headers, rows, rows_with_i
+
+        if self.__show_index:
+            widths = list(self.__column_widths_as_list_with_i)
+            headers = list(self.__headers_with_i)
+            if rows_with_i:
+                columns = list(map(list, zip(*rows_with_i)))
+            else:
+                columns = [[] for _ in headers]
+        else:
+            widths = list(self.__column_widths_as_list)
+            headers = list(self.__headers)
+            if rows:
+                columns = list(map(list, zip(*rows)))
+            else:
+                columns = [[] for _ in headers]
+
+        reductions = []
+        any_reduce = False
+        for column_i, header in enumerate(headers):
+            user_i = None if (self.__show_index and column_i == 0) else (
+                column_i - 1 if self.__show_index else column_i
+            )
+            hi = self.__bound_for_column(
+                self.__column_max_width, header, user_i
+            )
+            if hi is None or user_i is None and self.__show_index and column_i == 0:
+                reductions.append(0)
+                continue
+            hi = max(1, int(hi))
+            if widths[column_i] > hi:
+                reductions.append(widths[column_i] - hi)
+                any_reduce = True
+            else:
+                reductions.append(0)
+
+        if not any_reduce:
+            return False, headers, rows, rows_with_i
+
+        adjusted_headers = []
+        adjusted_columns = []
+        for column_i, to_reduce in enumerate(reductions):
+            wpped_header, wpped_body = self.__adjust_column_to_new_width(
+                column_i,
+                to_reduce,
+                columns,
+            )
+            adjusted_headers.append(wpped_header)
+            adjusted_columns.append(wpped_body)
+
+        if self.__show_index:
+            new_rows_with_i = list(map(list, zip(*adjusted_columns))) if any(
+                adjusted_columns
+            ) else []
+            # Keep the non-index rows in sync with the trimmed body cells.
+            new_rows = [
+                row[1:] for row in new_rows_with_i
+            ] if new_rows_with_i else list(rows)
+            return True, adjusted_headers, new_rows, new_rows_with_i
+
+        new_rows = list(map(list, zip(*adjusted_columns))) if any(
+            adjusted_columns
+        ) else []
+        return True, adjusted_headers, new_rows, rows_with_i
 
     def __expand_columns_to_window(self, table_width):
         """Distribute spare horizontal space across user columns."""

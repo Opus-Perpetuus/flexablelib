@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.4.1](https://github.com/Opus-Perpetuus/prettyTables/compare/v1.4.0...v1.4.1) (2026-08-03)
+
+
+### Bug Fixes
+
+* `column_max_width` now wraps or trims cell content to the cap (was only
+  changing the measured width number, so long cells still overflowed)
+
 ## [1.4.0](https://github.com/Opus-Perpetuus/prettyTables/compare/v1.3.0...v1.4.0) (2026-08-03)
 
 
