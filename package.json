@@ -1,6 +1,6 @@
 {
   "name": "prettytables",
-  "version": "1.4.2",
+  "version": "1.5.0",
   "description": "Format tabular data with pretty styles.",
   "main": "__init__.py",
   "scripts": {

@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.5.0](https://github.com/Opus-Perpetuus/prettyTables/compare/v1.4.2...v1.5.0) (2026-08-03)
+
+
+### Features
+
+* `open_in_browser()` renders the `to_html()` page to a temporary file and
+  opens it, which is the quickest way to give a wide table the sideways room,
+  the sortable columns and the filter box a terminal cannot. Returns the path
+  it wrote; takes `path=` to write somewhere you choose
+* merged cells now export. HTML and Excel say it natively -- `rowspan` /
+  `colspan`, and real merged ranges -- so the file looks like the table did
+* `raw_rows`, `raw_columns`, `raw_internal_rows` and `raw_internal_columns`
+  expose the storage view with the sentinels intact, which is what an identity
+  comparison against `table.missing` needs
+
+
+### Bug Fixes
+
+* a merge reached no further than the console. `to_csv()`, `to_markdown()`,
+  `to_records()`, `to_html()`, `_repr_html_()` and `to_excel()` all rendered
+  the cells of a merged block separately, because merging was applied by
+  painting over the assembled console string and no other format could be
+  given that treatment
+* `rows`, `columns`, `internal_rows` and `internal_columns` handed back the
+  table's own storage, so anything printing them got
+  `<prettyTables.utils.ValuePlacer object at 0x...>` where a cell was absent,
+  and the shared index counter object where the index number should have been.
+  They resolve both sentinels now, and return a copy rather than the live
+  structure
+* both sentinels carry string forms saying what they are, so one that does
+  escape reads as `<missing>` rather than an object address wide enough to
+  wreck the layout it lands in
+
 ## [1.4.2](https://github.com/Opus-Perpetuus/prettyTables/compare/v1.4.1...v1.4.2) (2026-08-03)
 
 
