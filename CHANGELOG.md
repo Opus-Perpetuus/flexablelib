@@ -2,6 +2,40 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.4.2](https://github.com/Opus-Perpetuus/prettyTables/compare/v1.4.1...v1.4.2) (2026-08-03)
+
+
+### Bug Fixes
+
+* `merge_cells()` with no `value=` now merges. It took its text from the whole
+  span rather than the top-left cell, picking up the neighbouring columns and
+  the rules between them; that already filled the span exactly, so painting it
+  back changed nothing and the merge silently did not happen
+* merges survive colour. Layout offsets are terminal columns and were applied
+  with a plain string slice, which lands inside an escape sequence and puts
+  every later offset out by its length -- one `column_colors` entry rendered
+  the merged row wider than the rest of the table
+* merges land on the right rows with a `title`, with `add_divider()`, and
+  across a hidden empty column
+* a float column whose numbers all lack a decimal point (`1e-07`, `1e+16`) no
+  longer renders every body row a column wider than its frame
+* `column_min_width` and `expand_to_window` widen a float column's cells, not
+  just the frame drawn around them
+* `show_index = True` no longer raises `IndexError` when the table is narrowed
+  by `max_width`, a small terminal, or `column_max_width`
+* `add_divider()` draws its rule at the table width when the first displayed
+  row wraps to several lines
+* every writer (`to_csv`, `to_records`, `to_markdown`, `to_html`,
+  `_repr_html_`, `to_excel`) exports the missing value and the index numbers
+  instead of `<prettyTables.utils.ValuePlacer object at 0x...>`
+* `color_rule` receives the cell it is actually colouring under `sort_by` and
+  `row_filter`, is not handed the index column's internal counter, and
+  `column_colors` name the right column past a hidden empty one
+* `to_html()` no longer lets a cell containing `</script>` close the page's
+  script element and have its own markup parsed
+* `from prettyTables import *` works; `__all__` held the classes rather than
+  their names
+
 ## [1.4.1](https://github.com/Opus-Perpetuus/prettyTables/compare/v1.4.0...v1.4.1) (2026-08-03)
 
 
