@@ -21,9 +21,8 @@ from prettyTables.options import COLUMN_ALIGNS
 # Module-level privates, fetched by string so class-body name mangling can
 # never rewrite the lookup.
 _get_column_type = getattr(columns, '__get_column_type')
-_get_float_widths = getattr(columns, '__get_float_widths')
-_get_sides_widths = getattr(columns, '__get_sides_widths')
-_float_col_total_width = getattr(columns, '__float_col_total_width')
+_split_float_cell = getattr(columns, '__split_float_cell')
+_measure_float_cell = getattr(columns, '__measure_float_cell')
 _get_float_column_width = getattr(columns, '__get_float_column_width')
 _get_single_column_width = getattr(columns, '__get_single_column_width')
 
@@ -85,178 +84,85 @@ def test_alignments_per_type_follows_typographic_convention():
 
 
 # +-------------------------------------------------------------------------+
-# __get_float_widths: the three widths of one cell
+# __split_float_cell: classifying one cell of a float column
 # +-------------------------------------------------------------------------+
 
-def test_get_float_widths_splits_a_float_into_left_point_right():
-    sides, reduce = _get_float_widths(
-        cell='12.4325',
-        is_float=True,
-        head_size=8,
-        max_widths_of_sides=[15, 0, 0],
-    )
-
-    assert sides == (2, 1, 4)
-    assert reduce is False
+def test_split_float_cell_splits_a_float_into_left_point_right():
+    assert _split_float_cell('12.4325') == (2, 1, 4)
 
 
-def test_get_float_widths_puts_an_int_entirely_on_the_left_side():
-    sides, reduce = _get_float_widths(
-        cell='321111',
-        is_float=False,
-        head_size=8,
-        max_widths_of_sides=[3, 1, 4],
-    )
-
-    assert sides == (6, 0, 0)
-    assert reduce is False
+def test_split_float_cell_puts_an_int_entirely_on_the_left_side():
+    assert _split_float_cell('321111') == (6, 0, 0)
 
 
-def test_get_float_widths_flags_a_reduction_for_an_oversized_non_number():
+def test_split_float_cell_handles_a_number_that_starts_at_the_point():
+    assert _split_float_cell('.5') == (0, 1, 1)
+
+
+def test_split_float_cell_counts_the_minus_sign():
+    assert _split_float_cell('-1.25') == (2, 1, 2)
+
+
+def test_split_float_cell_reads_an_exponential():
     """
-    A missing value wider than anything measured so far takes the whole width
-    on the left side and asks the caller to give back the space the decimal
-    part would have needed.
+    Python prints small and large floats this way whether or not anyone
+    asked. The exponent rides on the right of the point, so 1.5e-05 lines up
+    with 2.25 on their points.
     """
-    sides, reduce = _get_float_widths(
-        cell='missing_value__',
-        is_float=None,
-        head_size=8,
-        max_widths_of_sides=[],
-    )
-
-    assert sides == (15, 0, 0)
-    assert reduce is True
+    assert _split_float_cell('1.5e-05') == (1, 1, 5)
 
 
-def test_get_float_widths_ignores_a_non_number_that_already_fits():
-    sides, reduce = _get_float_widths(
-        cell='missing_value__',
-        is_float=None,
-        head_size=8,
-        max_widths_of_sides=[15, 0, 0],
-    )
+def test_split_float_cell_handles_an_exponential_with_no_point():
+    """
+    ``1e+16`` is a float with nothing on the decimal axis, so all of it sits
+    on the left and it claims no point of its own.
+    """
+    assert _split_float_cell('1e+16') == (5, 0, 0)
 
-    assert sides == ()
-    assert reduce is False
+
+def test_split_float_cell_returns_none_for_anything_that_is_not_a_number():
+    assert _split_float_cell('missing_value__') is None
+    assert _split_float_cell('12abc') is None
+    assert _split_float_cell('1.2.3') is None
 
 
 # +-------------------------------------------------------------------------+
-# __get_sides_widths: accumulating the maximum of each side
+# __measure_float_cell: numbers and text are accumulated apart
 # +-------------------------------------------------------------------------+
 
-def test_get_sides_widths_seeds_the_maximums_from_the_first_float():
-    max_len_of_sides = []
+def test_measure_float_cell_grows_only_the_side_that_got_bigger():
+    sides, texts = [1, 1, 3], []
 
-    reduce = _get_sides_widths(
-        cell=9.651,
-        max_len_of_sides=max_len_of_sides,
-        head_size=7,
-        will_reduce=False,
-    )
-
-    assert max_len_of_sides == [1, 1, 3]
-    assert reduce is False
-
-
-def test_get_sides_widths_grows_only_the_side_that_got_bigger():
-    max_len_of_sides = [1, 1, 3]
-
-    _get_sides_widths(
-        cell=245.7,
-        max_len_of_sides=max_len_of_sides,
-        head_size=7,
-        will_reduce=False,
-    )
+    _measure_float_cell(245.7, sides, texts)
 
     # 245 is wider on the left, but .7 is narrower on the right, so only the
     # left maximum moves.
-    assert max_len_of_sides == [3, 1, 3]
+    assert sides == [3, 1, 3]
+    assert texts == []
 
 
-def test_get_sides_widths_leaves_an_int_alone_when_it_already_fits():
-    max_len_of_sides = [3, 1, 3]
-
-    reduce = _get_sides_widths(
-        cell=3,
-        max_len_of_sides=max_len_of_sides,
-        head_size=7,
-        will_reduce=False,
-    )
-
-    assert max_len_of_sides == [3, 1, 3]
-    assert reduce is False
-
-
-def test_get_sides_widths_gives_the_decimal_space_back_after_an_oversized_cell():
+def test_measure_float_cell_keeps_text_out_of_the_numeric_sides():
     """
-    The reduce handshake, in two steps.
-
-    A missing value wider than the floats takes the whole column on the left
-    side and returns ``True``. The next cell is then measured with
-    ``will_reduce=True``, which subtracts the point plus the decimal digits
-    from the left maximum -- otherwise that much blank space would be left
-    hanging on the left of every row -- and reports ``None`` to switch the
-    flag back off.
+    The heart of issue #23. A missing value is not a number, so it must never
+    land in the left-hand slot -- otherwise the point and the decimals get
+    added on top of it and the column ends up wider than any cell in it.
     """
-    max_len_of_sides = [1, 1, 3]
+    sides, texts = [1, 1, 3], []
 
-    reduce = _get_sides_widths(
-        cell='missing_value__',
-        max_len_of_sides=max_len_of_sides,
-        head_size=7,
-        will_reduce=False,
-    )
-    assert max_len_of_sides == [15, 1, 3]
-    assert reduce is True
+    _measure_float_cell('missing_value__', sides, texts)
 
-    reduce = _get_sides_widths(
-        cell=12.4325,
-        max_len_of_sides=max_len_of_sides,
-        head_size=7,
-        will_reduce=True,
-    )
-    # 15 - (4 decimals + 1 point) = 10 on the left; the right side grows to 4.
-    assert max_len_of_sides == [10, 1, 4]
-    assert reduce is None
+    assert sides == [1, 1, 3]
+    assert texts == [15]
 
 
-# +-------------------------------------------------------------------------+
-# __float_col_total_width: the header can widen the left side
-# +-------------------------------------------------------------------------+
+def test_measure_float_cell_folds_a_wrapped_cell_line_by_line():
+    sides, texts = [0, 0, 0], []
 
-def test_float_col_total_width_is_the_sum_of_the_sides():
-    max_len_of_sides = [3, 1, 3]
+    _measure_float_cell((3.5, ''), sides, texts)
 
-    assert _float_col_total_width(max_len_of_sides, head_size=7) == 7
-    assert max_len_of_sides == [3, 1, 3]
-
-
-def test_float_col_total_width_pads_the_left_side_to_reach_the_header():
-    """
-    When the header is wider than the number, the slack goes to the *left*
-    side, which keeps the decimal points aligned and pushes the column right.
-    """
-    max_len_of_sides = [2, 1, 2]
-
-    total = _float_col_total_width(max_len_of_sides, head_size=7)
-
-    assert total == 7
-    assert max_len_of_sides == [4, 1, 2]  # mutated in place
-
-
-def test_float_col_total_width_does_not_shrink_for_a_narrow_header():
-    max_len_of_sides = [3, 1, 4]
-
-    assert _float_col_total_width(max_len_of_sides, head_size=7) == 8
-    assert max_len_of_sides == [3, 1, 4]
-
-
-def test_float_col_total_width_with_hidden_headers():
-    max_len_of_sides = [2, 1, 2]
-
-    assert _float_col_total_width(max_len_of_sides, head_size=0) == 5
-    assert max_len_of_sides == [2, 1, 2]
+    # '' matches the integer filter, so it contributes a zero-wide left side.
+    assert sides == [1, 1, 1]
+    assert texts == []
 
 
 # +-------------------------------------------------------------------------+
@@ -310,6 +216,49 @@ def test_get_float_column_width_of_a_column_with_a_wrapped_cell():
     assert head_size == 7
     assert sides == (3, 1, 4)   # 245 | . | 6519
     assert total == 8           # wider than the 7-char header
+
+
+def test_get_float_column_width_is_never_wider_than_its_widest_cell():
+    """
+    Issue #23. The missing value is 15 wide and the numbers need 3 + 1 + 3, so
+    the column is 15 -- not 15 plus the point and the decimals.
+    """
+    _, total, sides = _get_float_column_width(
+        {'header': 'value', 'data': (9.651, 3, 245.7, 'missing_value__')},
+        show_headers=True,
+    )
+
+    assert total == 15
+    assert sum(sides) == total
+    assert sides == (11, 1, 3)   # the decimal axis sits at 11
+
+
+@pytest.mark.parametrize('data', [
+    (9.651, 3, 245.7, 'missing_value__'),
+    ('missing_value__', 9.651, 3, 245.7),
+    (9.651, 'missing_value__', 3, 245.7),
+])
+def test_get_float_column_width_does_not_depend_on_the_row_order(data):
+    """
+    The old measurement corrected for an oversized text cell only on the
+    *next* number it saw, so moving that cell changed the column width.
+    """
+    _, total, sides = _get_float_column_width(
+        {'header': 'value', 'data': data},
+        show_headers=True,
+    )
+
+    assert (total, sides) == (15, (11, 1, 3))
+
+
+def test_get_float_column_width_skips_hidden_rows():
+    _, total, _ = _get_float_column_width(
+        {'header': 'value', 'data': (9.651, 3, 245.7, 'missing_value__')},
+        show_headers=True,
+        skip_rows=frozenset({3}),
+    )
+
+    assert total == 7
 
 
 def test_column_widths_returns_widths_and_the_float_sides():

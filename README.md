@@ -45,12 +45,20 @@ print(new_table)
 ### Output
 ```
 ++
-
 ++
-
 ++
 ```
 This is an empty table. It has no data so it only displays this strange thing.
+
+A table that has columns but no rows — a query that came back empty — shows
+its headers rather than raising:
+
+```
+┌──────┬───────┐
+│ name │ value │
+╞══════╪═══════╡
+└──────┴───────┘
+```
 
 It's possible to add data as columns or rows, or even alternating each one. Any untitled column will be named automatically.
 
@@ -268,9 +276,17 @@ print(implementation())   # 'C extension' or 'pure Python'
 ```
 
 # Known Issues
-- Naming a column ``"i"`` will mess up what columns show if the index column is displaying.
-- Exponential numbers only align incorrectly.
-- Shrinking a float column to fit the terminal loses its decimal alignment ([#23](https://github.com/Opus-Perpetuus/prettyTables/issues/23)).
+
+None of the three historical known issues remain:
+
+- A column named ``"i"`` no longer collides with the index column
+  (`utils.IndexColumnTitle`).
+- Exponential numbers align on the decimal / exponent axis with the rest of
+  the float column.
+- Shrinking a float column drops decimals instead of chopping characters, so
+  decimal alignment survives a terminal fit ([#23](https://github.com/Opus-Perpetuus/prettyTables/issues/23)).
+
+Open work and the full issue map live in [docs/ISSUES.md](docs/ISSUES.md).
 
 # Project Layout
 
@@ -286,6 +302,7 @@ prettyTables/
 │   ├── options.py           constants and defaults
 │   └── utils.py             type predicates and small helpers
 ├── tests/                   pytest suite — see ARCHITECTURE.md#testing
+├── docs/                    issue history and design notes
 ├── logos/                   brand assets — see logos/README.md
 ├── ARCHITECTURE.md          how it all fits together
 ├── style_examples.md        all 42 styles rendered

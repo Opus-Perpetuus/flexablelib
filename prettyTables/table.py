@@ -14,14 +14,18 @@ from .style_compositions import (
     TableComposition
 )
 from .columns import (
-    _column_widths, 
-    _typify_column, 
-    _align_columns, 
+    _column_widths,
+    _typify_column,
+    _align_columns,
     _align_headers,
+    _float_extents,
+    _is_numeric_cell,
+    _round_float_cell,
     TYPE_NAMES,
     CAN_WRAP_TYPES,
     ALIGNMENTS_PER_TYPE as type_alignments
 )
+from .fast import truncate_to_width, visible_width, wrap_to_width
 from .table_strings import (
     _get_separators, 
     _get_data_rows, 
@@ -31,9 +35,10 @@ from .utils import (
     get_window_size,
     is_multi_row,
     is_some_instance,
+    is_empty_cell,
     ValuePlacer,
     IndexCounter,
-    read_file
+    IndexColumnTitle
 )
 from .options import (
     NONE_VALUE_REPLACEMENT,
@@ -41,6 +46,8 @@ from .options import (
     I_COL_TIT,
     DEFAULT_TRIMMING_SIGN,
     TABLE_ALIGNS,
+    COLUMN_ALIGNS,
+    ALIGNMENT_CODES,
     MIN_COLUMN_SIZE,
     CELL_MARGIN
 )
@@ -51,7 +58,6 @@ from .cells import (
 from .colors import colorize, supports_color
 
 from copy import deepcopy
-from textwrap import wrap
 from typing import (
     Any,
     List,
@@ -764,6 +770,9 @@ class Table(object):
         # +------------------------+ PARAMETERS +------------------------+
         self.__missing_value = missing_val
         self.__value_placer = ValuePlacer()
+        # Its own object, so a data column called 'i' cannot collide
+        # with it in the dicts that are keyed by header.
+        self.__index_title = IndexColumnTitle(I_COL_TIT)
         self.__str_align = None
         self.__int_align = None
         self.__float_align = None
@@ -778,10 +787,33 @@ class Table(object):
         self.__parse_numbers = True
         self.__parse_str_numbers = False
         self.__auto_wrap_table = False
-        self.__expand_to_window = False  # TODO implement expand_to_window
+        # Grow columns to fill the available width when the table is narrower.
+        self.__expand_to_window = False
         self.__leading_zeros = None
         self.__float_spaces = 2
         self.__format_exponential = True
+        # Cell formatters applied on the render path only; raw storage and
+        # type detection keep the original Python values.
+        self.__float_format = None
+        self.__int_format = None
+        self.__custom_format = None
+        # Per-column width floors and ceilings (table.max_width is the
+        # whole-table budget and is unrelated).
+        self.__column_min_width = None
+        self.__column_max_width = None
+        # Header alignment independent of the body column alignment.
+        self.__header_align = None
+        # Optional title drawn above the table.
+        self.__title = None
+        # Row indexes after which a horizontal rule is forced.
+        self.__dividers = set()
+        # Sort / filter applied to the display copy, not to stored data.
+        self.__sort_by = None
+        self.__sort_reverse = False
+        self.__row_filter = None
+        # Filled during compose so filter/sort and empty-row hiding share
+        # the same row indices for the current render.
+        self.__compose_empty_row_indexes = None
         # +--------------------------+ STYLE +---------------------------+
         # HEADER STYLES: None, l, u, t, c
         #   None: unmodified
@@ -823,10 +855,10 @@ class Table(object):
         self.__real_column_count = 0
         self.__line_spacing = 0
         self.__cell_types = {}
-        self.__cell_types_with_i = {I_COL_TIT: []}
+        self.__cell_types_with_i = {self.__index_title: []}
         self.__column_types = {}
         self.__column_types_with_i = {
-            I_COL_TIT: TYPE_NAMES.int_
+            self.__index_title: TYPE_NAMES.int_
         }
         self.__column_types_as_list = []
         self.__column_types_as_list_with_i = []
@@ -841,7 +873,7 @@ class Table(object):
         self.__table_alignment = TABLE_ALIGNS.left
         self.__column_alignments = {}
         self.__column_alignments_with_i = {
-            I_COL_TIT: type_alignments[TYPE_NAMES.int_]
+            self.__index_title: type_alignments[TYPE_NAMES.int_]
         }
         self.__column_alignments_as_list = []
         self.__column_alignments_as_list_with_i = []
@@ -850,15 +882,15 @@ class Table(object):
         self.__cells_alignment = []
         # +------------------------+ TABLE BODY +------------------------+
         self.__columns = {}
-        self.__columns_with_i = {I_COL_TIT: []}
+        self.__columns_with_i = {self.__index_title: []}
         self.__headers = []
-        self.__headers_with_i = [I_COL_TIT]
+        self.__headers_with_i = [self.__index_title]
         self.__rows = []
         self.__rows_with_i = []
         self.__processed_columns = {}
-        self.__processed_columns_with_i = {I_COL_TIT: []}
+        self.__processed_columns_with_i = {self.__index_title: []}
         self.__semi_processed_columns = {}
-        self.__semi_processed_columns_with_i = {I_COL_TIT: []}
+        self.__semi_processed_columns_with_i = {self.__index_title: []}
         self.__processed_headers = []
         self.__processed_headers_with_i = []
         self.__processed_rows = []
@@ -924,23 +956,33 @@ class Table(object):
     
     @staticmethod
     def __apply_wrap(piece: str, new_width: int) -> str:
-        try:
-            return '\n'.join(wrap(piece, new_width))
-        except TypeError:
-            return '\n'.join(wrap(str(piece), new_width))
+        """
+        Break a cell to fit ``new_width`` visible columns.
+
+        ``textwrap.wrap`` counts characters, so a column of CJK text or of
+        coloured cells wrapped a column or more too late and the table drifted
+        out of alignment. It also raises on a width of zero, which is what
+        issue #17 reported; ``wrap_to_width`` floors the width at one instead.
+        """
+        return '\n'.join(wrap_to_width(str(piece), new_width))
     
     @staticmethod
-    def __trim_with_sign(piece: str, new_widht: int) -> str:
-        try:
-            return ''.join([
-                piece[:new_widht],
-                DEFAULT_TRIMMING_SIGN
-            ])
-        except TypeError:
-            return ''.join([
-                str(piece)[:new_widht],
-                DEFAULT_TRIMMING_SIGN
-            ])
+    def __trim_with_sign(piece: str, new_width: int) -> str:
+        """
+        Cut a cell down to ``new_width`` visible columns, marker included.
+
+        The marker is part of the budget, not an addition to it. Appending it
+        afterwards -- which this used to do -- made every trimmed cell three
+        columns wider than the width it had just been trimmed to, so a table
+        that was shrunk to fit overflowed anyway.
+
+        Measurement is by visible width, so a coloured or double-width cell
+        is cut where it looks cut, and an escape sequence is never split in
+        half.
+        """
+        return truncate_to_width(
+            str(piece), new_width, DEFAULT_TRIMMING_SIGN
+        )
         
     @staticmethod
     def __check_if_none_and_get_len(value: Union[str, None]) -> int:
@@ -1121,31 +1163,71 @@ class Table(object):
         return self.__missing_value
 
     @property
-    def str_align(self): 
+    def str_align(self):
+        """
+        Alignment for every string column: ``'l'``, ``'c'`` or ``'r'``.
+
+        ``None``, the default, leaves the typographic convention in place --
+        strings left, numbers right, floats on the decimal point.
+        """
         return self.__str_align
 
     @property
     def int_align(self):
+        """
+        Alignment for every integer column. See :attr:`str_align`.
+        """
         return self.__int_align
 
     @property
     def float_align(self):
+        """
+        Alignment for every float column. See :attr:`str_align`.
+
+        ``'f'`` is the default behaviour written out: pad each cell so the
+        decimal points share one axis.
+        """
         return self.__float_align
 
     @property
     def bool_align(self):
-        return self.__float_align
+        """
+        Alignment for every boolean column. See :attr:`str_align`.
+        """
+        # Returned __float_align until now, so reading this back never
+        # reported what had been set.
+        return self.__bool_align
 
     @property
     def table_align(self):
+        """
+        Where the finished table sits in the available width.
+
+        ``'l'`` (default), ``'c'`` or ``'r'``, or the table codes
+        ``tl`` / ``tc`` / ``tr``. The table is padded with spaces on the left
+        (and right for centre) so a narrow table can sit in a wide terminal.
+        """
         return self.__table_align
 
     @property
     def col_alignment(self):
+        """
+        Alignment for particular columns, overriding the type default.
+
+        One code for the whole table, a sequence in column order, or a
+        mapping keyed by header. The index column is never affected.
+        """
         return self.__column_align
 
     @property
     def leading_zeros(self):
+        """
+        Pad integer cells with leading zeros to this many digits.
+
+        Applied on the render path when ``int_format`` is not set. A value
+        of ``None`` or ``0`` leaves integers alone. Negative signs sit outside
+        the zero padding (``-007`` for ``-7`` with three digits).
+        """
         return self.__leading_zeros
 
     @property
@@ -1204,6 +1286,114 @@ class Table(object):
         if self.__show_index:
             return self.__column_count - 1
         return self.__column_count
+
+    @property
+    def shape(self):
+        """
+        ``(rows, columns)`` as currently counted for display.
+
+        Honours ``show_empty_rows`` and ``show_empty_columns``, matching
+        ``row_count`` and ``column_count``. Does not re-render.
+        """
+        return (self.row_count, self.column_count)
+
+    @property
+    def float_format(self):
+        """
+        How float cells are printed.
+
+        A format mini-language string (``.2f``, ``{:.2f}``, ``%.2f``) or a
+        callable taking the float and returning a string. Applied only when
+        rendering; stored values and type detection stay numeric so decimal
+        alignment still works on the formatted text.
+        """
+        return self.__float_format
+
+    @property
+    def int_format(self):
+        """
+        How integer cells are printed. Same forms as :attr:`float_format`.
+        """
+        return self.__int_format
+
+    @property
+    def custom_format(self):
+        """
+        Per-column or global formatter applied after type-specific ones.
+
+        A callable ``(value) -> str``, or a mapping of header to format string
+        or callable. Only cells that still look like their original value
+        after ``float_format`` / ``int_format`` are candidates when the
+        mapping key matches.
+        """
+        return self.__custom_format
+
+    @property
+    def column_min_width(self):
+        """
+        Smallest each column may measure, as an int, sequence, or header map.
+        """
+        return self.__column_min_width
+
+    @property
+    def column_max_width(self):
+        """
+        Largest each column may measure, as an int, sequence, or header map.
+
+        Content beyond the cap is wrapped or trimmed like a terminal fit.
+        Distinct from :attr:`max_width`, which budgets the whole table.
+        """
+        return self.__column_max_width
+
+    @property
+    def header_align(self):
+        """
+        Alignment for header cells only.
+
+        One code, a sequence, or a mapping by header. Body cells keep
+        :attr:`col_alignment` and the type defaults.
+        """
+        return self.__header_align
+
+    @property
+    def title(self):
+        """
+        Optional text drawn above the table, centred on the table width.
+        """
+        return self.__title
+
+    @property
+    def sort_by(self):
+        """
+        Column header or 0-based index used to order rows at render time.
+        """
+        return self.__sort_by
+
+    @property
+    def sort_reverse(self):
+        """
+        When true, :attr:`sort_by` orders descending.
+        """
+        return self.__sort_reverse
+
+    @property
+    def row_filter(self):
+        """
+        Callable ``(row) -> bool``; rows that return false are not rendered.
+
+        Receives the stored row (before formatters). Does not mutate storage.
+        """
+        return self.__row_filter
+
+    @property
+    def expand_to_window(self):
+        """
+        When true, grow columns so the table fills the available width.
+
+        Only expands; it never shrinks. Shrinking is handled by the fit pass
+        and :attr:`max_width`.
+        """
+        return self.__expand_to_window
 
     @property
     def internal_row_count(self):
@@ -1273,6 +1463,9 @@ class Table(object):
     
     @property    
     def show_margin(self):
+        """
+        Whether cells keep the blank column the style puts on each side.
+        """
         return self.__show_margin
 
     @property
@@ -1332,31 +1525,160 @@ class Table(object):
 
     @str_align.setter
     def str_align(self, value):
-        self.__str_align = value
+        self.__str_align = self.__checked_alignment(value, 'str_align')
 
     @int_align.setter
     def int_align(self, value):
-        self.__int_align = value
+        self.__int_align = self.__checked_alignment(value, 'int_align')
 
     @float_align.setter
     def float_align(self, value):
-        self.__float_align = value
+        self.__float_align = self.__checked_alignment(value, 'float_align')
 
     @bool_align.setter
     def bool_align(self, value):
-        self.__float_align = value
+        # Wrote __float_align until now, so setting this silently moved the
+        # float columns instead and left the booleans where they were.
+        self.__bool_align = self.__checked_alignment(value, 'bool_align')
 
     @table_align.setter
     def table_align(self, value):
+        if value is None:
+            self.__table_align = None
+            return
+        allowed = {
+            COLUMN_ALIGNS.left, COLUMN_ALIGNS.center, COLUMN_ALIGNS.right,
+            TABLE_ALIGNS.left, TABLE_ALIGNS.center, TABLE_ALIGNS.right,
+            'l', 'c', 'r', 'left', 'center', 'right',
+        }
+        if value not in allowed:
+            raise ValueError(
+                'table_align must be one of l/c/r (or tl/tc/tr), got {0!r}'
+                .format(value)
+            )
         self.__table_align = value
 
     @col_alignment.setter
     def col_alignment(self, value):
-        self.__column_align = value
+        """
+        Alignment for particular columns, overriding the type default.
+
+        Accepts one code for the whole table, a sequence in column order, or
+        a mapping keyed by header::
+
+            table.col_alignment = 'c'
+            table.col_alignment = ['l', 'r', 'c']
+            table.col_alignment = {'Name': 'r'}
+        """
+        if value is None:
+            self.__column_align = None
+        elif isinstance(value, dict):
+            self.__column_align = {
+                header: self.__checked_alignment(align, 'col_alignment')
+                for header, align in value.items()
+            }
+        elif is_some_instance(value, list, tuple):
+            self.__column_align = [
+                self.__checked_alignment(align, 'col_alignment')
+                for align in value
+            ]
+        else:
+            self.__column_align = self.__checked_alignment(
+                value, 'col_alignment'
+            )
 
     @leading_zeros.setter
     def leading_zeros(self, value):
-        self.__leading_zeros = value
+        if value is None:
+            self.__leading_zeros = None
+            return
+        value = int(value)
+        if value < 0:
+            raise ValueError('leading_zeros must be >= 0 or None')
+        self.__leading_zeros = value or None
+
+    @float_format.setter
+    def float_format(self, value):
+        self.__float_format = value
+
+    @int_format.setter
+    def int_format(self, value):
+        self.__int_format = value
+
+    @custom_format.setter
+    def custom_format(self, value):
+        self.__custom_format = value
+
+    @column_min_width.setter
+    def column_min_width(self, value):
+        self.__column_min_width = value
+
+    @column_max_width.setter
+    def column_max_width(self, value):
+        self.__column_max_width = value
+
+    @header_align.setter
+    def header_align(self, value):
+        if value is None:
+            self.__header_align = None
+        elif isinstance(value, dict):
+            self.__header_align = {
+                header: self.__checked_alignment(align, 'header_align')
+                for header, align in value.items()
+            }
+        elif is_some_instance(value, list, tuple):
+            self.__header_align = [
+                self.__checked_alignment(align, 'header_align')
+                for align in value
+            ]
+        else:
+            self.__header_align = self.__checked_alignment(
+                value, 'header_align'
+            )
+
+    @title.setter
+    def title(self, value):
+        self.__title = None if value is None else str(value)
+
+    @sort_by.setter
+    def sort_by(self, value):
+        self.__sort_by = value
+
+    @sort_reverse.setter
+    def sort_reverse(self, value):
+        self.__sort_reverse = bool(value)
+
+    @row_filter.setter
+    def row_filter(self, value):
+        if value is not None and not callable(value):
+            raise TypeError('row_filter must be callable or None')
+        self.__row_filter = value
+
+    @expand_to_window.setter
+    def expand_to_window(self, value):
+        self.__expand_to_window = bool(value)
+
+    def add_divider(self, after_row=None):
+        """
+        Draw a horizontal rule after a data row.
+
+        ``after_row`` is a 0-based index into the stored rows. Omit it to
+        place the rule after the last row currently present. Styles that
+        already separate every row still accept the call; styles without
+        inter-row rules gain one at the chosen position.
+        """
+        if after_row is None:
+            if self.__real_row_count == 0:
+                return
+            after_row = self.__real_row_count - 1
+        after_row = int(after_row)
+        if after_row < 0:
+            raise ValueError('after_row must be >= 0')
+        self.__dividers.add(after_row)
+
+    def clear_dividers(self):
+        """Remove every divider placed with :meth:`add_divider`."""
+        self.__dividers.clear()
         
     @show_index.setter
     def show_index(self, value: bool):
@@ -1426,14 +1748,17 @@ class Table(object):
     @property
     def __empty_row_indexes(self) -> list:
         """
-        Search for empty columns using the ``__value_placer``
-        
-        If the count of those is the same as the length of the row,
-        it's empty.
+        Indexes of the rows that hold nothing at all.
+
+        A row is empty when every cell in it is empty, by the same standard
+        the column check applies -- the padding placeholder, ``None``, or the
+        empty string. Counting only the placeholder, as this did, meant a row
+        the caller typed as ``['', '']`` stayed on screen while a column typed
+        the same way disappeared, which is the asymmetry issue #9 was about.
         """
         empty_rows = []
         for i, row in enumerate(self.__rows):
-            if row.count(self.__value_placer) == len(row):
+            if all(is_empty_cell(cell, self.__value_placer) for cell in row):
                 empty_rows.append(i)
         return empty_rows
 
@@ -1917,13 +2242,21 @@ class Table(object):
         
         """
         checked_header = self.__check_header(header)
-        if checked_header not in self.__headers:
+        # Asked before the header is added, and remembered. The second test
+        # used to be written out again after ``__add_header`` had already put
+        # the name in the list, so it was never true and the padding step
+        # below never ran: a column shorter than the table stayed short.
+        # Nothing noticed until a later ``add_row`` padded it -- from the
+        # top, which is right for a column that row had just created and
+        # wrong for this one, and its values came out shifted down by one.
+        is_new_column = checked_header not in self.__headers
+        if is_new_column:
             self.__add_header(checked_header)
         self.__add_column_data(
-            data=data, 
+            data=data,
             column_header=checked_header
         )
-        if checked_header not in self.__headers:  # This repeated if statement is needed.
+        if is_new_column:
             self.__adjust_columns_to_row_count()
         self.__check_existent_rows_vs_row_count()
         self.__transpose_column_to_rows(data)
@@ -1980,19 +2313,36 @@ class Table(object):
         return checked_header
 
     def  __check_header(self, header: Union[str, None]) -> str:
+        """
+        The header a new column should take.
+
+        A column added after rows that were wider than the named headers
+        claims the automatic name already standing in that position, rather
+        than adding a name beside it. Anything else gets a name of its own.
+
+        Only an unnamed column claims one. A caller who passed a name asked
+        for that name, and handing them somebody else's header instead threw
+        their data into an existing column: ``add_column('a', [])`` followed
+        by ``add_column('b', [])`` produced a single column called 'a',
+        because with no rows yet the comparison below read zero and matched
+        the first header every time.
+        """
+        if header is not None:
+            return self.__process_header(header)
+
         try:
             column_count_from_rows = len(self.__rows[0])
         except IndexError:
             column_count_from_rows = 0
-        header_count = len(self.__headers)
-        if column_count_from_rows == header_count:
-            # The header gets checked here because the add_row
-            # method uses the __add_column_header too.
-            checked_header = self.__process_header(header)
-        else:
-            checked_header = self.__headers[column_count_from_rows]
-            
-        return checked_header
+
+        if column_count_from_rows < len(self.__headers):
+            # A header was declared for this position and nothing has filled
+            # it yet, so this column takes it.
+            return self.__headers[column_count_from_rows]
+
+        # The header gets checked here because the add_row method uses
+        # __add_column_header too.
+        return self.__process_header(header)
     
 
     def __add_column_data(self, data: Union[list, tuple], column_header: str) -> None:
@@ -2011,7 +2361,7 @@ class Table(object):
                 for _ in range(difference):
                     # Add index counter to the table with index.
                     # This table is used when the index is shown.
-                    self.__columns_with_i[I_COL_TIT].append(self.__index_counter)
+                    self.__columns_with_i[self.__index_title].append(self.__index_counter)
 
             # Add to the table with and without index
             self.__columns[column_header] += data
@@ -2104,7 +2454,7 @@ class Table(object):
         ... | size 5   | 39865      |
         ... +----------+------------+
         """
-        self.__columns_with_i[I_COL_TIT].append(self.__index_counter)
+        self.__columns_with_i[self.__index_title].append(self.__index_counter)
         added_to_column_count = self.__add_row_data(data)
         add_headers = True if added_to_column_count is not None else False
         self.__adjust_rows_to_column_count(add_headers, added_to_column_count)
@@ -2270,6 +2620,9 @@ class Table(object):
         """
         Crafts the table and returns it as a string.
         """
+        # Cleared every render; set after the display rows are materialised
+        # so filter/sort and empty-row hiding agree on the same indices.
+        self.__compose_empty_row_indexes = None
         if len(self.__columns) != 0:
             # Refuse to render into a space where the result would be
             # illegible, if the caller asked to be told -- issue #14.
@@ -2282,6 +2635,9 @@ class Table(object):
                     )
             # self.__parse_data()  # TODO add parsing
             rows, rows_with_i = self.__call_table_objects()
+            # __call_table_objects fills missing values, so emptiness must be
+            # taken from the stored empty-row map (and remapped if filter/sort
+            # reordered the display copy), not re-detected on filled cells.
             self.__typify_table()
             self.__wrap_data(
                 rows, 
@@ -2289,12 +2645,26 @@ class Table(object):
                 semi=True
             )
             self.__get_column_widths(semi=True)
+            self.__clamp_column_widths()
             table_width = self.__get_string_table_width()
+            # Grow first when asked, then shrink if still over budget.
+            if self.__expand_to_window:
+                self.__expand_columns_to_window(table_width)
+                table_width = self.__get_string_table_width()
             adjusted, headers, rows, rows_with_i = self.__check_columns_size(
                 table_width,
                 rows,
                 rows_with_i
             )
+            # column_max_width may force a wrap/trim even when the table
+            # already fits the terminal.
+            if not adjusted and self.__column_max_width is not None:
+                if self.__clamp_column_widths():
+                    adjusted = True
+                    headers = (
+                        self.__headers_with_i if self.__show_index
+                        else self.__headers
+                    )
             if adjusted:
                 # Widths changed, so the data has to be re-wrapped against the
                 # new budgets and measured again.
@@ -2305,6 +2675,7 @@ class Table(object):
                     headers_after_semi=headers
                 )
                 self.__get_column_widths(semi=False)
+                self.__clamp_column_widths()
             else:
                 # The table already fits. The second pass would wrap the same
                 # data against the same widths, with the same headers, and
@@ -2426,61 +2797,166 @@ class Table(object):
         # before, shrinks a 4-wide column whenever a 24-wide one is beside it,
         # wrapping data that had room to spare while the wide column keeps
         # more than it needs. That is issue #16.
+        floors = self.__column_shrink_floors()
         reductions = [0] * len(widths)
         remaining = difference
 
         while remaining > 0:
             current = [width - taken for width, taken in zip(widths, reductions)]
-            widest = max(current)
-            if widest <= MIN_COLUMN_SIZE:
-                # Nothing may shrink further without becoming unreadable.
+            # Only columns still above their own floor have anything to give.
+            givers = [i for i in range(len(current)) if current[i] > floors[i]]
+            if not givers:
+                # Nothing may shrink further without becoming unreadable, or
+                # without mangling a number.
                 break
 
-            at_widest = [i for i, width in enumerate(current) if width == widest]
-            below = [width for width in current if width < widest]
-            # Level down to the next distinct width, but never below the floor.
-            target = max(max(below) if below else MIN_COLUMN_SIZE,
-                         MIN_COLUMN_SIZE)
-            drop_each = widest - target or 1
+            widest = max(current[i] for i in givers)
+            at_widest = [i for i in givers if current[i] == widest]
+            below = [current[i] for i in givers if current[i] < widest]
+            # Level down to the next distinct width, but never below the floor
+            # of the columns doing the giving.
+            floor_here = max(floors[i] for i in at_widest)
+            target = max(max(below) if below else floor_here, floor_here)
+            drop_each = max(1, widest - target)
 
             if drop_each * len(at_widest) > remaining:
                 # The last of the difference, shared among the widest columns.
                 share, leftover = divmod(remaining, len(at_widest))
                 for position, index in enumerate(at_widest):
-                    reductions[index] += share + (1 if position < leftover else 0)
+                    wanted = share + (1 if position < leftover else 0)
+                    reductions[index] += min(
+                        wanted, current[index] - floors[index]
+                    )
                 remaining = 0
             else:
                 for index in at_widest:
-                    reductions[index] += drop_each
-                remaining -= drop_each * len(at_widest)
-
-        # Trimming appends a marker, which costs width of its own.
-        if not self.__auto_wrap_table:
-            trimming_sign_length = len(DEFAULT_TRIMMING_SIGN)
-            reductions = [
-                taken + trimming_sign_length if taken else taken
-                for taken in reductions
-            ]
+                    taken = min(drop_each, current[index] - floors[index])
+                    reductions[index] += taken
+                    remaining -= taken
 
         if self.__show_index:
             reductions.insert(0, 0)
 
         return reductions
     
-    def __adjust_column_widths(self, 
-                               difference: int, 
-                               rows: List[list], 
+    def __column_shrink_floors(self) -> list:
+        """
+        Narrowest each column may become, in the order the widths are held.
+
+        Text can always be wrapped or trimmed down to ``MIN_COLUMN_SIZE``. A
+        float column cannot: its decimals can be dropped, but the digits in
+        front of the point *are* the number, and cutting those would print a
+        different one. So a float column's floor is however wide its longest
+        integer part is. A caller-set ``column_min_width`` raises the floor
+        further.
+
+        Handing a column a reduction it cannot absorb is how a shrunk table
+        ended up still too wide -- the space was booked against a column that
+        then gave nothing back.
+        """
+        if self.__show_index:
+            # The index column is never reduced, so it is not in this list.
+            headers = list(self.__headers_with_i)[1:]
+            type_names = list(self.__column_types_as_list_with_i)[1:]
+            processed = self.__semi_processed_columns_with_i
+        else:
+            headers = list(self.__headers)
+            type_names = list(self.__column_types_as_list)
+            processed = self.__semi_processed_columns
+
+        skip_rows = self.__hidden_row_indexes()
+        floors = []
+        for user_i, (header, type_name) in enumerate(zip(headers, type_names)):
+            column = processed.get(header)
+            if type_name != TYPE_NAMES.float_ or column is None:
+                floor = MIN_COLUMN_SIZE
+            else:
+                extents = _float_extents(column['data'], skip_rows)
+                floor = max(MIN_COLUMN_SIZE, extents.left)
+            lo = self.__bound_for_column(
+                self.__column_min_width, header, user_i
+            )
+            if lo is not None:
+                floor = max(floor, int(lo))
+            floors.append(floor)
+        return floors
+
+    def __shrink_float_column(self,
+                              column_i: int,
+                              columns: List[list],
+                              new_width: int,
+                             ) -> Tuple[str, List[list]]:
+        """
+        Narrow a float column without breaking its decimal axis.
+
+        Decimals go first: a rounded number is still a number, and every
+        point stays on the one axis. Text in the column -- a missing value,
+        say -- is trimmed like any other string, since it has no decimals to
+        give up. The digits in front of the point are never touched.
+
+        The alternative, which is what this used to do, was to send the whole
+        column down the trimming path and overwrite its alignment with the
+        string default first. The numbers stopped lining up even when nothing
+        was long enough to be trimmed. That is issue #23.
+        """
+        column = columns[column_i]
+        extents = _float_extents(column)
+
+        if extents.point:
+            room_for_decimals = new_width - extents.left - extents.point
+            if room_for_decimals < extents.right:
+                decimals = max(0, room_for_decimals)
+                for row_i, cell in enumerate(column):
+                    column[row_i] = _round_float_cell(cell, decimals)
+
+        for row_i, cell in enumerate(column):
+            if _is_numeric_cell(cell):
+                continue
+            if is_some_instance(cell, tuple, list):
+                column[row_i] = tuple(
+                    self.__trim_with_sign(part, new_width)
+                    if visible_width(str(part)) > new_width else part
+                    for part in cell
+                )
+            elif visible_width(str(cell)) > new_width:
+                column[row_i] = self.__trim_with_sign(cell, new_width)
+
+        if self.show_index:
+            header = self.__headers_with_i[column_i]
+        else:
+            header = self.__headers[column_i]
+
+        # The header is words, so it wraps like words.
+        if self.__auto_wrap_table:
+            header = self.__apply_wrap(header, new_width)
+        elif visible_width(str(header)) > new_width:
+            header = self.__trim_with_sign(header, new_width)
+
+        return header, column
+
+    def __adjust_column_widths(self,
+                               difference: int,
+                               rows: List[list],
                                rows_with_i: List[list]
                               ) -> Tuple[list, List[list], List[list]]:
         """
         Reduces the difference provided to each column.
         """
+        # zip(*rows) is empty when the table has headers but no body rows.
+        # The shrink path still has to touch every header, so keep one empty
+        # column list per header rather than indexing into [].
         if self.__show_index:
-            columns_with_i = list(map(list, zip(*rows_with_i)))
+            if rows_with_i:
+                columns_with_i = list(map(list, zip(*rows_with_i)))
+            else:
+                columns_with_i = [[] for _ in self.__headers_with_i]
             columns = rows  # will remain untouched
         else:
             columns_with_i = rows_with_i  # will remain untouched
-            columns = list(map(list, zip(*rows)))
+            if rows:
+                columns = list(map(list, zip(*rows)))
+            else:
+                columns = [[] for _ in self.__headers]
         to_reduce_per_col = self.__get_amounts_to_reduce(difference)
         adjusted_headers = []
         adjusted_columns = []
@@ -2582,6 +3058,14 @@ class Table(object):
                 new_width=new_width,
                 index=True
             )
+        elif col_type_name == TYPE_NAMES.float_:
+            # A float column keeps its decimal axis; it gives up decimals
+            # rather than characters, and its alignment is left alone.
+            return self.__shrink_float_column(
+                column_i=column_i,
+                columns=columns,
+                new_width=new_width,
+            )
         else:
             if index:
                 self.__column_alignments_with_i[
@@ -2636,6 +3120,242 @@ class Table(object):
         )
             
     
+    @staticmethod
+    def __apply_format_spec(value, fmt):
+        """Turn a format string or callable into a printed cell."""
+        if callable(fmt):
+            return fmt(value)
+        if not isinstance(fmt, str):
+            return value
+        if '{' in fmt:
+            return fmt.format(value)
+        if '%' in fmt and fmt != '%':
+            try:
+                return fmt % value
+            except (TypeError, ValueError):
+                pass
+        try:
+            return format(value, fmt)
+        except (TypeError, ValueError):
+            return value
+
+    def __format_display_value(self, value, header, column_i):
+        """
+        Apply int/float/custom formatters to one cell for display.
+
+        Called after missing-value substitution and before wrapping, so the
+        measured text is what the caller asked to print. Raw storage is
+        untouched; ``__typify_table`` still reads ``self.__columns``.
+        """
+        if isinstance(value, bool):
+            # bool is a subclass of int; never zero-pad True/False.
+            formatted = value
+        elif isinstance(value, int):
+            if self.__int_format is not None:
+                formatted = self.__apply_format_spec(value, self.__int_format)
+            elif self.__leading_zeros:
+                digits = self.__leading_zeros
+                if value < 0:
+                    formatted = '-' + str(abs(value)).zfill(digits)
+                else:
+                    formatted = str(value).zfill(digits)
+            else:
+                formatted = value
+        elif isinstance(value, float):
+            if self.__float_format is not None:
+                formatted = self.__apply_format_spec(value, self.__float_format)
+            else:
+                formatted = value
+        else:
+            formatted = value
+
+        custom = self.__custom_format
+        if custom is None:
+            return formatted
+        if callable(custom) and not isinstance(custom, dict):
+            return custom(formatted)
+        if isinstance(custom, dict):
+            spec = custom.get(header)
+            if spec is None and column_i is not None:
+                # Allow integer keys for positional columns.
+                spec = custom.get(column_i)
+            if spec is not None:
+                return self.__apply_format_spec(formatted, spec)
+        return formatted
+
+    def __bound_for_column(self, bounds, header, column_i):
+        """Resolve a per-column min/max width for one column."""
+        if bounds is None:
+            return None
+        if isinstance(bounds, dict):
+            if header in bounds:
+                return bounds[header]
+            return bounds.get(column_i)
+        if is_some_instance(bounds, list, tuple):
+            if column_i is not None and column_i < len(bounds):
+                return bounds[column_i]
+            return None
+        return int(bounds)
+
+    def __clamp_column_widths(self):
+        """
+        Enforce column_min_width / column_max_width on the measured widths.
+
+        Returns True when any column was forced narrower than its content,
+        so the fit pass must wrap or trim.
+        """
+        forced_narrow = False
+        if self.__show_index:
+            headers = list(self.__headers_with_i)
+            widths = list(self.__column_widths_as_list_with_i)
+            store = self.__column_widths_with_i
+        else:
+            headers = list(self.__headers)
+            widths = list(self.__column_widths_as_list)
+            store = self.__column_widths
+
+        if not widths:
+            return False
+
+        for column_i, header in enumerate(headers):
+            # Index column (position 0 with show_index) is not user-facing.
+            user_i = None if (self.__show_index and column_i == 0) else (
+                column_i - 1 if self.__show_index else column_i
+            )
+            lo = self.__bound_for_column(
+                self.__column_min_width, header, user_i
+            )
+            hi = self.__bound_for_column(
+                self.__column_max_width, header, user_i
+            )
+            width = widths[column_i]
+            if lo is not None:
+                width = max(width, int(lo))
+            if hi is not None:
+                hi = int(hi)
+                if hi < 1:
+                    hi = 1
+                if width > hi:
+                    width = hi
+                    forced_narrow = True
+            if lo is not None and hi is not None and int(lo) > int(hi):
+                width = int(hi)
+                forced_narrow = True
+            widths[column_i] = width
+            store[header] = width
+
+        if self.__show_index:
+            self.__column_widths_as_list_with_i = widths
+        else:
+            self.__column_widths_as_list = widths
+        return forced_narrow
+
+    def __expand_columns_to_window(self, table_width):
+        """Distribute spare horizontal space across user columns."""
+        available = self.__available_width()
+        spare = available - table_width
+        if spare <= 0:
+            return False
+
+        if self.__show_index:
+            widths = list(self.__column_widths_as_list_with_i)
+            headers = list(self.__headers_with_i)
+            store = self.__column_widths_with_i
+            start = 1  # never grow the index column
+        else:
+            widths = list(self.__column_widths_as_list)
+            headers = list(self.__headers)
+            store = self.__column_widths
+            start = 0
+
+        growable = list(range(start, len(widths)))
+        if not growable:
+            return False
+
+        base, leftover = divmod(spare, len(growable))
+        for offset, column_i in enumerate(growable):
+            extra = base + (1 if offset < leftover else 0)
+            hi = self.__bound_for_column(
+                self.__column_max_width,
+                headers[column_i],
+                column_i - start if self.__show_index else column_i,
+            )
+            new_width = widths[column_i] + extra
+            if hi is not None:
+                new_width = min(new_width, int(hi))
+            widths[column_i] = new_width
+            store[headers[column_i]] = new_width
+
+        if self.__show_index:
+            self.__column_widths_as_list_with_i = widths
+        else:
+            self.__column_widths_as_list = widths
+        return True
+
+    def __display_row_order(self, rows):
+        """
+        Indices of rows to render, after filter and sort.
+
+        Operates on stored row identity; the display copies are reordered to
+        match. Filter receives the stored row, before formatters.
+        """
+        indices = list(range(len(rows)))
+        if self.__row_filter is not None:
+            indices = [
+                i for i in indices
+                if self.__row_filter(list(self.__rows[i]))
+            ]
+
+        if self.__sort_by is not None and indices:
+            key = self.__sort_by
+            if isinstance(key, int):
+                column_i = key
+            else:
+                try:
+                    column_i = list(self.__headers).index(key)
+                except ValueError:
+                    raise ValueError(
+                        'sort_by column {0!r} is not in the table headers'
+                        .format(key)
+                    )
+
+            def sort_key(row_i):
+                cell = self.__rows[row_i][column_i]
+                if isinstance(cell, ValuePlacer):
+                    # Missing sorts as empty string so it is stable and low.
+                    return (1, '')
+                return (0, cell)
+
+            indices.sort(key=sort_key, reverse=self.__sort_reverse)
+
+        return indices
+
+    def __header_alignments_list(self, body_alignments, headers):
+        """Body alignments overridden by header_align where set."""
+        if self.__header_align is None:
+            return list(body_alignments)
+
+        result = list(body_alignments)
+        for column_i, header in enumerate(headers):
+            user_i = None if (self.__show_index and column_i == 0) else (
+                column_i - 1 if self.__show_index else column_i
+            )
+            chosen = None
+            per = self.__header_align
+            if isinstance(per, dict):
+                chosen = per.get(header)
+                if chosen is None and user_i is not None:
+                    chosen = per.get(user_i)
+            elif is_some_instance(per, list, tuple):
+                if user_i is not None and user_i < len(per):
+                    chosen = per[user_i]
+            else:
+                if user_i is not None or not self.__show_index:
+                    chosen = per
+            if chosen is not None:
+                result[column_i] = chosen
+        return result
+
     def __call_table_objects(self):
         """
         This is to call the ``__call__`` method of the 
@@ -2688,18 +3408,115 @@ class Table(object):
                     rows[row_i][column_i] = column(
                         self.__missing_value
                     )
-        
+
+        # Filter and sort the display copies together so the index column
+        # stays aligned with its row.
+        order = self.__display_row_order(rows)
+        empty_stored = set(self.__empty_row_indexes)
+        self.__compose_empty_row_indexes = [
+            new_i for new_i, old_i in enumerate(order)
+            if old_i in empty_stored
+        ]
+        if order != list(range(len(rows))):
+            rows = [rows[i] for i in order]
+            rows_with_i = [rows_with_i[i] for i in order]
+            # Index was consumed in stored order; renumber visible rows so
+            # the column stays contiguous after a filter.
+            self.__index_counter.reset_count()
+            for row_i, row in enumerate(rows_with_i):
+                rows_with_i[row_i][0] = self.__index_counter(
+                    self.__i_start,
+                    self.__i_step,
+                )
+
+        headers = list(self.__headers)
+        for row_i, row in enumerate(rows):
+            for column_i, header in enumerate(headers):
+                if column_i >= len(row):
+                    continue
+                rows[row_i][column_i] = self.__format_display_value(
+                    row[column_i], header, column_i
+                )
+                # rows_with_i has the index at 0.
+                with_i_i = column_i + 1
+                if with_i_i < len(rows_with_i[row_i]):
+                    rows_with_i[row_i][with_i_i] = rows[row_i][column_i]
+
         return rows, rows_with_i
     
+    @staticmethod
+    def __checked_alignment(value, option_name):
+        """
+        Validate one alignment code.
+
+        A typo used to be stored happily and then silently ignored by the
+        aligner, which left the column where it was and gave no hint why.
+        """
+        if value is None:
+            return None
+        if value not in ALIGNMENT_CODES:
+            raise ValueError(
+                '{0} must be one of {1}, got {2!r}'.format(
+                    option_name, ', '.join(sorted(ALIGNMENT_CODES)), value
+                )
+            )
+        return value
+
+    def __alignment_for(self, header, column_i, column_type, default):
+        """
+        The alignment a column ends up with.
+
+        Three sources, most specific first: an entry in ``col_alignment`` for
+        this column, the override for the column's type, and the typographic
+        default the type carries. All three were being collected and none of
+        them read -- ``_typify_column``'s answer went straight into the
+        alignment tables, so setting ``str_align`` or ``col_alignment``
+        changed nothing at all. Issue #4 asked for exactly this.
+
+        ``column_i`` counts user-facing columns; the index column passes
+        ``None`` and so is never matched by a positional ``col_alignment``.
+        """
+        chosen = None
+
+        per_column = self.__column_align
+        if isinstance(per_column, dict):
+            chosen = per_column.get(header)
+        elif is_some_instance(per_column, list, tuple):
+            if column_i is not None and column_i < len(per_column):
+                chosen = per_column[column_i]
+        elif per_column is not None:
+            chosen = per_column
+
+        if chosen is None:
+            chosen = {
+                TYPE_NAMES.str_: self.__str_align,
+                TYPE_NAMES.int_: self.__int_align,
+                TYPE_NAMES.float_: self.__float_align,
+                TYPE_NAMES.bool_: self.__bool_align,
+            }.get(column_type)
+
+        if chosen is None:
+            return default
+
+        if chosen == COLUMN_ALIGNS.float and column_type != TYPE_NAMES.float_:
+            # Only a float column carries the two-sided measurement that
+            # aligning on the decimal point needs.
+            return default
+
+        return chosen
+
     def __typify_table(self):
         for column_i, column in enumerate(self.__columns.items()):
             self.__typify_single_column(column, column_i)
         for column_i, column in enumerate(self.__columns_with_i.items()):
             self.__typify_single_column_with_i(column, column_i)
-                
+
     def __typify_single_column(self, column, column_i):
         header, column_content = column
         cell_types, column_type, column_alignment = _typify_column(column_content)
+        column_alignment = self.__alignment_for(
+            header, column_i, column_type, column_alignment
+        )
         try:
             self.__column_i_per_type[column_type].append(column_i)
         except KeyError:
@@ -2724,6 +3541,12 @@ class Table(object):
         cell_types, column_type, column_alignment = _typify_column(
             column_content,
             index_column=is_index
+        )
+        column_alignment = self.__alignment_for(
+            header,
+            None if is_index else column_i - 1,
+            column_type,
+            column_alignment,
         )
         try:
             self.__column_i_per_type_with_i[column_type].append(column_i)
@@ -2772,7 +3595,9 @@ class Table(object):
         )
         
         if self.show_index:
-            columns_to_iterate = {I_COL_TIT: [], **self.__columns}.items()
+            columns_to_iterate = {
+                self.__index_title: [], **self.__columns
+            }.items()
         else:
             columns_to_iterate = self.__columns.items()
         for i, column in enumerate(columns_to_iterate):
@@ -2796,9 +3621,15 @@ class Table(object):
         Width measurement must skip these. An empty row still holds the
         missing value in every column, and counting it widened columns to fit
         text that is never displayed -- issue #22.
+
+        After filter/sort the display rows are a new sequence; the indexes
+        computed for that sequence (``__compose_empty_row_indexes``) win over
+        the stored-table ones.
         """
         if self.__show_empty_rows:
             return frozenset()
+        if self.__compose_empty_row_indexes is not None:
+            return frozenset(self.__compose_empty_row_indexes)
         return frozenset(self.__empty_row_indexes)
 
     def __get_column_widths(self, semi):
@@ -2866,11 +3697,14 @@ class Table(object):
             column_alignments_list = self.__column_alignments_as_list
             column_widths_list = self.__column_widths_as_list
             float_column_widths = self.__float_columns_widths
+        header_alignments_list = self.__header_alignments_list(
+            column_alignments_list, column_titles
+        )
         # Header and body rows get aligned
         aligned_header = _align_headers(
             self.__style_composition,
             unaligned_header,
-            column_alignments_list,
+            header_alignments_list,
             column_widths_list,
             self.__empty_column_indexes,
             self.__show_empty_columns,
@@ -2919,45 +3753,54 @@ class Table(object):
                 colorize(line, self.__border_color) if line is not None else None
                 for line in separators
             ])
+        empty_rows_for_render = (
+            self.__compose_empty_row_indexes
+            if self.__compose_empty_row_indexes is not None
+            else self.__empty_row_indexes
+        )
         data_rows: DataRows = _get_data_rows(
             self.__style_composition,
             aligned_header,
             aligned_columns,
             self.__show_headers,
-            self.__empty_row_indexes,
+            empty_rows_for_render,
             self.__show_empty_rows,
             self.__border_color if colors_on else None,
         )
 
         # Table string is formed
-        header_superior = ''.join([separators.superior_header_line, '\n']) if (
-                separators.superior_header_line is not None
-        ) else NONE_VALUE_REPLACEMENT
         no_header_superior = separators.superior_header_line_no_header
-        header_inferior = ''.join(['\n', separators.inferior_header_line]) if (
-                separators.inferior_header_line is not None
-        ) else NONE_VALUE_REPLACEMENT
         body_line = ''.join(['\n', separators.table_body_line]) if (
                 separators.table_body_line is not None
         ) else NONE_VALUE_REPLACEMENT
-        end_line = separators.table_end_line
 
+        end_line = separators.table_end_line
         header_row = data_rows.header_row
         body_rows = data_rows.body_rows
 
         if self.__show_headers:
-            superior_row = ''.join([header_superior, header_row, header_inferior])
+            superior_row = '\n'.join([
+                part for part in (
+                    separators.superior_header_line,
+                    header_row,
+                    separators.inferior_header_line,
+                ) if part
+            ])
         else:
             superior_row = no_header_superior
 
-        if superior_row is None and end_line is not None:
-            table_string = '\n'.join([f'{body_line}\n'.join(body_rows), end_line])
-        elif end_line is None and superior_row is not None:
-            table_string = '\n'.join([superior_row, f'{body_line}\n'.join(body_rows)])
-        elif superior_row is None and end_line is None:
-            table_string = f'{body_line}\n'.join(body_rows)
-        else:
-            table_string = '\n'.join([superior_row, f'{body_line}\n'.join(body_rows), end_line])
+        # A style may draw no top rule, no bottom rule, or neither, and a
+        # table may have no body at all -- headers describing a query that
+        # returned nothing. Whatever is missing is left out rather than
+        # joined in as an empty string, which is what used to put a blank
+        # line through the middle of a table with no rows.
+        body = self.__join_body_rows(
+            body_rows, body_line, separators.table_body_line
+        )
+        title_line = self.__title_line(column_widths_list, table_with_i)
+        table_string = '\n'.join([
+            part for part in (title_line, superior_row, body, end_line) if part
+        ])
 
         if self.__merged_regions:
             table_string = self.__apply_merges(
@@ -2965,7 +3808,68 @@ class Table(object):
                 column_widths_list, table_with_i
             )
 
-        return table_string
+        return self.__apply_table_align(table_string)
+
+    def __join_body_rows(self, body_rows, body_line, separator_line):
+        """
+        Join body rows, inserting extra divider rules where requested.
+
+        ``body_line`` already carries a leading newline when the style draws
+        a rule between every row. When the style has no inter-row rule,
+        ``add_divider`` inserts a dashed line after the chosen row index
+        (display order after filter/sort).
+        """
+        if not body_rows:
+            return ''
+        if not self.__dividers:
+            return f'{body_line}\n'.join(body_rows)
+
+        if separator_line is not None:
+            # Style already draws a rule between every row; the requested
+            # dividers are present. Keep the historic join.
+            return f'{body_line}\n'.join(body_rows)
+
+        width = visible_width(body_rows[0])
+        rule = '-' * max(width, 1)
+        parts = [body_rows[0]]
+        for display_i in range(1, len(body_rows)):
+            if (display_i - 1) in self.__dividers:
+                parts.append(rule)
+            parts.append(body_rows[display_i])
+        return '\n'.join(parts)
+
+    def __title_line(self, column_widths_list, table_with_i):
+        """Centre the title over the full table width, if any."""
+        if not self.__title:
+            return None
+        table_width = self.__get_string_table_width()
+        title = self.__title
+        title_width = visible_width(title)
+        if title_width >= table_width:
+            return title
+        left = (table_width - title_width) // 2
+        return (' ' * left) + title
+
+    def __apply_table_align(self, table_string):
+        """Pad every line so the table sits left, centre or right."""
+        if not table_string or not self.__table_align:
+            return table_string
+        align = self.__table_align
+        if align in (TABLE_ALIGNS.left, COLUMN_ALIGNS.left, 'l', 'left'):
+            return table_string
+        available = self.__available_width()
+        lines = table_string.splitlines()
+        width = max((visible_width(line) for line in lines), default=0)
+        spare = available - width
+        if spare <= 0:
+            return table_string
+        if align in (TABLE_ALIGNS.center, COLUMN_ALIGNS.center, 'c', 'center',
+                     'tc'):
+            left = spare // 2
+        else:
+            left = spare
+        pad = ' ' * left
+        return '\n'.join(pad + line for line in lines)
 
     def __apply_merges(self, table_string, superior_row, body_rows, body_line,
                        column_widths_list, table_with_i):
@@ -3147,6 +4051,17 @@ class Table(object):
         from .writers import to_html
         return to_html(self, target, title, paginate, include_index,
                        searchable, encoding)
+
+    def _repr_html_(self):
+        """
+        Compact HTML table for Jupyter and other rich frontends.
+
+        Unlike :meth:`to_html`, this is a bare ``<table>`` with no page chrome,
+        script, or pagination -- what a notebook cell expects from
+        ``_repr_html_``.
+        """
+        from .writers import to_simple_html
+        return to_simple_html(self)
 
     def to_excel(self, path, sheet_name='Sheet1', include_index=False,
                  autofit=True, freeze_header=True):

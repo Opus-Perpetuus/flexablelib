@@ -24,12 +24,33 @@ def expected(block):
 # +-------------------------------------------------------------------------+
 
 def test_an_empty_table_renders_the_strange_thing():
+    """
+    Three rules and nothing between them. There used to be a blank line
+    where the header row and the body would have gone; a line that is not
+    there is now left out of the join rather than joined in as ''.
+    """
     assert str(Table()) == expected("""
         ++
-
         ++
-
         ++
+    """)
+
+
+def test_a_table_with_headers_and_no_rows_shows_its_headers():
+    """
+    A query that returned nothing still has columns worth naming. This used
+    to raise ``IndexError`` -- transposing no rows gave no columns, and the
+    assembly then indexed past the end of them.
+    """
+    table = Table(style_name='thin_borderline')
+    table.add_column('name', [])
+    table.add_column('value', [])
+
+    assert str(table) == expected("""
+        ┌──────┬───────┐
+        │ name │ value │
+        ╞══════╪═══════╡
+        └──────┴───────┘
     """)
 
 

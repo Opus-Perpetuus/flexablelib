@@ -45,6 +45,10 @@ _ANSI_RE = re.compile(
 
 _RESET = '\x1b[0m'
 
+# U+FE0F asks for the emoji presentation of the character before it. It has no
+# width of its own; what it does is make that character two columns wide.
+VARIATION_SELECTOR_16 = '\ufe0f'
+
 # ASCII control characters, which are zero-width. Used to guard the fast path
 # in visible_width().
 _CONTROL_RE = re.compile(r'[\x00-\x1f\x7f]')
@@ -99,6 +103,40 @@ def has_ansi(text: str) -> bool:
     return _ANSI_RE.search(text) is not None
 
 
+def measured_clusters(text: str) -> Iterator[Tuple[str, int]]:
+    """
+    Walk an escape-free string as (cluster, width) pairs.
+
+    A cluster is one character, plus the emoji presentation selector that
+    follows it if there is one. U+FE0F has no width of its own, but it turns
+    the character before it into an emoji, and an emoji is two columns wide
+    even where the bare character is one: `⚠` measures 1, `⚠️` measures 2.
+    Summing per character therefore under-measures every status column
+    anyone actually writes, and cutting between a character and its selector
+    leaves the selector stranded on the next cell.
+
+    Emoji joined by ZWJ into a single glyph -- a family, a flag -- are not
+    handled. Terminals disagree on how wide those are, so there is no
+    measurement that is right everywhere.
+    """
+    pending = None
+    pending_width = 0
+
+    for char in text:
+        if char == VARIATION_SELECTOR_16 and pending is not None:
+            if pending_width == 1:
+                pending_width = 2
+            pending += char
+            continue
+        if pending is not None:
+            yield pending, pending_width
+        pending = char
+        pending_width = char_width(char)
+
+    if pending is not None:
+        yield pending, pending_width
+
+
 def visible_width(text: str) -> int:
     """
     Terminal columns occupied by a string.
@@ -116,7 +154,7 @@ def visible_width(text: str) -> int:
     # the C implementation.
     if text.isascii() and not _CONTROL_RE.search(text):
         return len(text)
-    return sum(char_width(char) for char in strip_ansi(text))
+    return sum(width for _, width in measured_clusters(strip_ansi(text)))
 
 
 def tokenize(text: str) -> Iterator[Tuple[str, str]]:
@@ -192,15 +230,14 @@ def truncate_to_width(text: str, width: int, suffix: str = '...') -> str:
             pieces.append(value)
             saw_ansi = True
             continue
-        for char in value:
-            char_w = char_width(char)
-            if used + char_w > budget:
+        for cluster, cluster_w in measured_clusters(value):
+            if used + cluster_w > budget:
                 pieces.append(suffix)
                 if saw_ansi:
                     pieces.append(_RESET)
                 return ''.join(pieces)
-            pieces.append(char)
-            used += char_w
+            pieces.append(cluster)
+            used += cluster_w
 
     pieces.append(suffix)
     if saw_ansi:
@@ -280,12 +317,16 @@ def _wrap_single_line(text: str, width: int) -> List[str]:
             continue
 
         # The word does not fit on a line of its own; break it by characters.
-        for char in word:
-            char_w = char_width(char)
-            if current_width + char_w > width:
+        # A cluster wider than the line (CJK at width 1) still has to go
+        # somewhere: put it alone on the next line. Flushing first when the
+        # line is still empty would invent a blank row and, worse, loop
+        # forever if the flush condition did not advance the input --
+        # tabulate #399.
+        for cluster, cluster_w in measured_clusters(word):
+            if current_width and current_width + cluster_w > width:
                 flush()
-            current.append(char)
-            current_width += char_w
+            current.append(cluster)
+            current_width += cluster_w
 
     if current_width or not lines:
         if active_codes:

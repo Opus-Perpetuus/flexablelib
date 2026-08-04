@@ -57,6 +57,8 @@ COLUMN_ALIGNS = ColumnAlignmentNames(
     float='f',
     bytes='b'
 )
+# Every alignment code a caller may set on a column.
+ALIGNMENT_CODES = frozenset(COLUMN_ALIGNS)
 # Names of the table alignments
 TABLE_ALIGNS = TableAlignmentNames(
     left='tl',
@@ -67,9 +69,20 @@ TABLE_ALIGNS = TableAlignmentNames(
 # +--------------------------+ REGEX +---------------------------+
 
 # To find integer numbers.
-INT_FILTER = re.compile(r'^[-]?[0-9]*$').match
-# TO find float numbers (not exponential ones)
-FLT_FILTER = re.compile(r'^[-]?[0-9]*[.][0-9]*$').match
+INT_FILTER = re.compile(r'^[-+]?[0-9]*$').match
+# To find float numbers: digits around a decimal point, an exponent, or both.
+#
+# Exponents used to be excluded, which is why "exponential numbers only align
+# incorrectly" was in the README's known issues: `1.5e-05` matched neither
+# filter, so it fell through to the text branch and was right-aligned while
+# the numbers beside it sat on the decimal axis. Python prints small and
+# large floats this way whether or not anyone asked it to.
+FLT_FILTER = re.compile(
+    r'^[-+]?(?:[0-9]*[.][0-9]*(?:[eE][-+]?[0-9]+)?|[0-9]+[eE][-+]?[0-9]+)$'
+).match
+# Whether a number is written with an exponent. Such a value cannot be
+# rounded to fewer decimals without changing what it says.
+EXP_FILTER = re.compile(r'^[-+]?[0-9.]+[eE][-+]?[0-9]+$').match
 
 
 # +--------------------------------------------------------------+

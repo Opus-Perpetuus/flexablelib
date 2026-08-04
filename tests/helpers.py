@@ -42,12 +42,19 @@ def table_width(rendered):
 
 def decimal_point_indexes(rendered):
     """
-    The index of the first decimal point on every line that has one.
+    The index of the decimal point on every line that shows a number.
+
+    A point only counts when it has a digit on each side, so the trimming
+    marker ``...`` in a neighbouring cell is not mistaken for one.
 
     A float column is aligned correctly when this set has a single element.
     """
-    return {
-        line.index('.')
-        for line in rendered.splitlines()
-        if '.' in line
-    }
+    indexes = set()
+    for line in rendered.splitlines():
+        for position, char in enumerate(line):
+            if char != '.' or position == 0 or position + 1 == len(line):
+                continue
+            if line[position - 1].isdigit() and line[position + 1].isdigit():
+                indexes.add(position)
+                break
+    return indexes

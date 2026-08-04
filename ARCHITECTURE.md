@@ -13,6 +13,7 @@ How `prettyTables` is put together, for anyone who wants to fix a bug or add a s
 - [Wrapping and terminal fitting](#wrapping-and-terminal-fitting)
 - [Release process](#release-process)
 - [Known gaps](#known-gaps)
+- [Issues](docs/ISSUES.md)
 
 ## Overview
 
@@ -181,8 +182,8 @@ Only the types in `CAN_WRAP_TYPES` (`columns.py:71`) are eligible for text wrapp
 wrapping a number would be meaningless.
 
 Note that type detection works on the **actual Python type** of each value. A column of
-`'123'` strings is a string column, not an int column. This is the first item in the README's
-Known Issues, and `__parse_data()` (`table.py:2362`) is the empty stub reserved for fixing it.
+`'123'` strings is a string column, not an int column. `__parse_data()` remains the empty
+stub reserved for optional string-to-number parsing if that ever becomes a product decision.
 
 ## Column widths
 
@@ -190,19 +191,21 @@ Most columns are measured trivially: the width is the longest cell, plus margins
 `MIN_COLUMN_SIZE`.
 
 **Float columns are the exception**, and they are where most of `columns.py` goes. A float
-column is not measured as a single width — it is measured as *two* widths, the digits to the
-left of the decimal point and the digits to the right:
+column is not measured as a single width -- it is measured as left / point / right extents
+via `FloatExtents` and `_float_extents`. Numbers and non-numeric cells (a missing value, a
+label) are measured separately and combined only at the end, so a wide text cell cannot
+inflate the integer side and make the column wider than any of its own numbers (issue #23).
 
 ```
-__get_float_widths()      split each cell on FLOAT_SEPARATOR ('.')
-__get_sides_widths()      measure left side and right side independently
-__compare_one_side()      find the max width of each side across the column
-__float_col_total_width() total = max_left + point + max_right
+__split_float_cell()       left / point / right for one cell
+__measure_float_cell()     accumulate extents for one cell
+__get_float_column_width() combine numeric and text measurements
 ```
 
 Each cell is then padded so its decimal point lands on the shared axis, which is what
 `fljust` / `_fljust_cell` in `cells.py` do (a "float justify", alongside the conventional
-`_ljust_cell`, `_rjust_cell`, and `_center_cell`).
+`_ljust_cell`, `_rjust_cell`, and `_center_cell`). Scientific notation is accepted by the
+float filter and aligned through the same path.
 
 This is why the README's example renders as:
 
@@ -221,7 +224,13 @@ are carried separately all the way through rendering, in `__float_columns_widths
 `utils.get_window_size()` reads the terminal dimensions. `__check_columns_size()` compares the
 measured table width against it and, when the table is too wide, shrinks columns and re-wraps.
 
-Wrapping itself happens in `cells.py`:
+Shrink reduces the widest columns first (issue #16), never below each column's floor
+(`MIN_COLUMN_SIZE` for text; the integer-part width for floats). A float column that must
+give up space drops decimals rather than chopping digits (`__shrink_float_column`). Display
+width -- including East Asian characters, emoji with variation selectors, and ANSI
+sequences -- is measured by `text_width` (C extension when built, pure Python otherwise).
+
+Wrapping itself happens in `cells.py` and `text_width.wrap_to_width`:
 
 - `_wrap_rows()` wraps each cell that exceeds its budget, turning a single-line cell into a
   list of lines.
@@ -232,11 +241,9 @@ Wrapping itself happens in `cells.py`:
 That transposition is what produces the multi-line cells in the README (`Piotr\nBaltimore`
 occupying two printed lines while `Age` and `Results` stay blank on the second).
 
-When `auto_wrap` is `False`, the fitting step is skipped and a table wider than the terminal
-will simply overflow — the second item in Known Issues.
-
-Trimming is the fallback when wrapping is not possible: `__trim_with_sign()` cuts the cell and
-appends `DEFAULT_TRIMMING_SIGN` (`'...'`).
+When `auto_wrap` is `False`, over-wide cells are trimmed instead of wrapped. Trimming is
+`truncate_to_width` via `__trim_with_sign`: the marker (`'...'` by default) counts inside
+the budget, so a cell never prints wider than it was allowed.
 
 ## Release process
 
@@ -334,30 +341,26 @@ character, since no line arrives from the left there any more.
 Things that are deliberately unfinished, so you do not mistake them for bugs:
 
 **Empty stubs.** `__parse_data()` is a placeholder, and `__parse_int_boolean()`,
-`__parse_exponentials()`, `__parse_bytes()` and `__parse_escape_codes()` are still commented
-out. `__expand_to_window` is flagged `TODO` in `__init__`.
+`__parse_bytes()` and `__parse_escape_codes()` are still commented out.
+`__parse_exponentials` is no longer needed: the float filter and `fljust` accept
+scientific notation. Optional string-to-number parsing remains a product
+decision, not a render bug.
 
-**Untested new modules.** `colors.py`, `readers.py`, `writers.py`, `fast.py`, `text_width.py`
-and `_speedups.c` arrived after the test suite was written. Only `text_width.py` and the
-`fast.py` backend selection are covered, by `tests/test_text_width.py`. Nothing exercises
-`colors.py`, the colour properties on `Table`, or the `from_*` / `to_*` methods.
+**Partial test coverage.** `colors.py` and most of `readers.py` still lack
+direct tests. Formatters, widths, title, dividers, sort/filter, `_repr_html_`,
+`shape`, markdown alignment, text width and the issue/upstream suites are
+covered.
 
-**`read_file()` decodes with the platform default encoding.** `utils.read_file` opens with
-`open(filename, 'r+')` and no `encoding=`, so reading `style_examples.md` — which is full of
-box-drawing characters — depends on the locale. This is why CI runs on Linux only.
+**Closed gaps (kept here so the history is obvious).**
 
-**The `style_name` setter reads from disk.** Setting `table.style_name = ...` calls
-`read_file('style_examples.md')` and discards the result, resolving the path against the
-*current working directory*. Setting a style from anywhere but the repository root raises
-`FileNotFoundError`. `Table(style_name=...)` does not have this problem.
+- `utils.read_file` opens with `encoding='utf-8'`.
+- The `style_name` setter no longer reads `style_examples.md` from disk.
+- Short columns added later are padded without shifting existing values.
+- `table_align`, `leading_zeros` and `expand_to_window` are wired into render.
+- Issue #23 (float shrink alignment) is fixed; see [docs/ISSUES.md](docs/ISSUES.md).
 
-**`__columns` can drift out of order from `__rows`.** When a column added later is taller than
-the existing ones, `__adjust_columns_to_row_count` pads the short columns with
-`insert(0, value_placer)`, which shifts their existing values down by one. Rendering is
-unaffected — it reads `__rows` — but the public `columns` property returns the shifted view.
-
-For behavioural bugs, see the [open issues](https://github.com/Opus-Perpetuus/prettyTables/issues)
-and the Known Issues section of the [README](README.md).
+For behavioural history, see [docs/ISSUES.md](docs/ISSUES.md) and the
+[open issues](https://github.com/Opus-Perpetuus/prettyTables/issues).
 
 ## Testing
 

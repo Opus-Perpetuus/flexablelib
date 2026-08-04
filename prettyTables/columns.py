@@ -14,8 +14,9 @@ from .utils import (
 )
 from .options import (
     DEFAULT_FILL_CHAR, 
-    FLT_FILTER, 
+    FLT_FILTER,
     INT_FILTER,
+    EXP_FILTER,
     COLUMN_ALIGNS
 )
 
@@ -57,6 +58,13 @@ TYPE_NAMES = TypeNames(
 
 
 FLOAT_SEPARATOR = '.'
+
+
+# Positions inside the ``(left, point, right)`` triple that describes how a
+# float column is laid out around its decimal axis.
+LEFT_SIDE_WIDTH = 0
+POINT_WIDTH = 1
+RIGHT_SIDE_WIDTH = 2
 
 
 ALIGNMENTS_PER_TYPE = {
@@ -304,216 +312,64 @@ def __get_single_column_width(column: dict,
             
     return head_size, body_max_size
 
-def __get_float_widths(cell: str, 
-                       is_float: bool,
-                       head_size: int,
-                       max_widths_of_sides: List[int],
-                      ) -> Tuple[Tuple[int, int, int], bool]:
+def __split_float_cell(cell: Any) -> Union[Tuple[int, int, int], None]:
     """
-    Will get the widths of the three sides of a 
-    cell in a float column and will determine wether the
-    left side should be reduced or not.
-    
-    Returns::
-    
-        (sides_widths: tuple, reduce: float)
-    
+    Measure one numeric cell of a float column, by side of the point.
+
+    Returns ``(left, point, right)`` for a float, ``(width, 0, 0)`` for an
+    integer, and ``None`` for anything that is not a number -- a missing
+    value, or text that landed in a numeric column.
+
     Examples::
-    
-        __get_float_widths(
-            cell="missing_value__",
-            is_float=None,
-            head_size=8,
-            max_widths_of_sides=[]
-        ) -> ((15, 0, 0), True)
-        
-        __get_float_widths(
-            cell="missing_value__",
-            is_float=None,
-            head_size=8,
-            max_widths_of_sides=[15, 0, 0]
-        ) -> ((), False)
-        
-        __get_float_widths(
-            cell="12.4325",
-            is_float=True,
-            head_size=8,
-            max_widths_of_sides=[15, 0, 0]
-        ) -> ((2, 1, 4), False)
-        
-        __get_float_widths(
-            cell="111.22",
-            is_float=True,
-            head_size=8,
-            max_widths_of_sides=[10, 1, 4]
-        ) -> ((3, 1, 2), False)
+
+        __split_float_cell('123.45')  -> (3, 1, 2)
+        __split_float_cell('321111')  -> (6, 0, 0)
+        __split_float_cell('missing') -> None
     """
-    sides_widths = []
-    row_len = visible_width(cell)
-    reduce = False
-    
-    # If there's was a previous float, max len of sides should
-    # have it's widths
-    biggest_float_yet = sum(max_widths_of_sides)
-    # so the biggest one yet is compared with the header
-    header_is_bigger = head_size > biggest_float_yet
-    
-    if header_is_bigger:
-        # If the header is bigger, the column width is the same.
-        current_column_size = head_size
-    else:
-        # In the other case, is the sum of the biggest float yet.
-        current_column_size = biggest_float_yet
-        
-    if is_float and is_float is not None:
-        # If it is a float number, split it by the point, get the
-        # widths of each side and the point
-        all_sides = cell.split(FLOAT_SEPARATOR)
-        sides_widths.append(visible_width(all_sides[0]))
-        sides_widths.append(len(FLOAT_SEPARATOR))  # Size of the dot
-        sides_widths.append(visible_width(all_sides[1]))
-    elif not is_float and is_float is not None:
-        # If it is an int just put the width of it at the left
-        # side.
-        sides_widths.append(row_len)
-        sides_widths.append(0)  # No dot
-        sides_widths.append(0) 
-    else:
-        # In any other case, check if the width of the data in the
-        # cell is bigger than the current column size.
-        if row_len > current_column_size:
-            # If it is . . .
-            sides_widths.append(row_len)
-            sides_widths.append(0)  # No dot
-            sides_widths.append(0)
-            
-            # Reducing the left space should be done.
-            reduce = True
+    text = str(cell)
 
-    sides_widths = tuple(sides_widths)
-
-    return sides_widths, reduce
-
-
-def __compare_one_side(side_i: int, 
-                       sides_len: list, 
-                       max_len_of_sides: list,
-                       head_size: int,
-                      ) -> None:
-    """
-    If the current cell side is bigger than the maximum,
-    the last will be replaced with the first.
-    """
-    current_side_len = sides_len[side_i]
-    if current_side_len > max_len_of_sides[side_i]:
-        max_len_of_sides[side_i] = current_side_len
-
-                
-def __float_col_total_width(max_len_of_sides: list,
-                            head_size: int,
-                           ) -> int:
-    """
-    will get the width of the column based on the header
-    and the som of the ``max_len_of_sides``.
-    """
-    sum_of_len_of_sides = sum(max_len_of_sides)
-    if sum_of_len_of_sides < head_size > 0:
-        max_len_of_sides[0] += head_size - sum_of_len_of_sides
-        sum_of_len_of_sides = sum(max_len_of_sides)
-        
-    return sum_of_len_of_sides
-
-
-def __get_sides_widths(cell: Any,
-                       max_len_of_sides: list,
-                       head_size: int,
-                       will_reduce: bool,
-                      ) -> bool:
-    """
-    Get the sides widths of a float cell.
-   
-    Example with float::
-
-        123.45
-        # left: 123  3
-        # dot:  .    1
-        # right: 45  2
-    
-    With string::
-
-        'missing_value__'
-        # left: missing_value__  15
-        # dot:                   0
-        # right:                 0
-    """
-    
-    # Convert the row to a string in case it's not, to process
-    # always the same way (could have used isinstance, but this
-    # way was choose to also process floats that comes as a string).
-    row_ = str(cell)
-    is_float = FLT_FILTER(row_) is not None
-    is_int = INT_FILTER(row_) is not None
-    amount_to_reduce = 0
-    
-    if is_float:
-        # Process as float (align by dot).
-        sides_len, reduce = __get_float_widths(
-            row_, 
-            is_float=True,
-            max_widths_of_sides=max_len_of_sides,
-            head_size=head_size
+    if FLT_FILTER(text) is not None:
+        left, point, right = text.partition(FLOAT_SEPARATOR)
+        return (
+            visible_width(left),
+            len(point),
+            visible_width(right),
         )
-    elif is_int:
-        # Process as int (align with the left 
-        # side of the floats).
-        sides_len, reduce = __get_float_widths(
-            row_, 
-            is_float=False,
-            max_widths_of_sides=max_len_of_sides,
-            head_size=head_size
-        )
-    else:
-        # Process as string (align to the right).
-        sides_len, reduce = __get_float_widths(
-            row_, 
-            is_float=None,
-            max_widths_of_sides=max_len_of_sides,
-            head_size=head_size
-        )
-        
-    # If there's somehow an element bigger than the float sides,
-    # the left side of the "max_len_of_sides" will be reduced.
-    if will_reduce is True:
-        # When this happens, the sum of the width of the float point
-        # and all the digits after (right side) is the amount to reduce, because
-        # if it isn't done, a blank space of this size is left.
-        try:
-            amount_to_reduce = sides_len[-1] + len(FLOAT_SEPARATOR)
-        except IndexError:
-            pass
-    if amount_to_reduce > 0:
-        # This is checked because if this "bigger element" appears first
-        # that any float, the right part is 0 (no digits  after the dot yet).
-        max_len_of_sides[0] -= amount_to_reduce
-        
-        # This is to indicate the "__get_float_col_widths" function that
-        # the "float_sides_will_reduce" must be set to False.
-        # This instead of False because reduce could already be False
-        # wen receiving value from "__get_float_widths".
-        reduce = None
-         
-    for side_i in range(len(sides_len)):
-        try:
-            __compare_one_side(
-                side_i=side_i,
-                sides_len=sides_len,
-                max_len_of_sides=max_len_of_sides,
-                head_size=head_size
-            )
-        except IndexError:
-            max_len_of_sides.append(sides_len[side_i])
-    
-    return reduce
+
+    if INT_FILTER(text) is not None:
+        # An integer aligns against the left side of the floats, so all of
+        # its width belongs there and it contributes no point and no
+        # decimals.
+        return visible_width(text), 0, 0
+
+    return None
+
+
+def __measure_float_cell(cell: Any,
+                         numeric_sides: List[int],
+                         text_widths: List[int],
+                        ) -> None:
+    """
+    Fold one cell into the running measurement of a float column.
+
+    Numbers widen ``numeric_sides``; anything else is recorded in
+    ``text_widths`` and measured whole. Wrapped cells (lists or tuples of
+    lines) are folded in line by line.
+    """
+    if is_some_instance(cell, tuple, list):
+        for sub_cell in cell:
+            __measure_float_cell(sub_cell, numeric_sides, text_widths)
+        return
+
+    sides = __split_float_cell(cell)
+    if sides is None:
+        text_widths.append(visible_width(str(cell)))
+        return
+
+    left, point, right = sides
+    numeric_sides[LEFT_SIDE_WIDTH] = max(numeric_sides[LEFT_SIDE_WIDTH], left)
+    numeric_sides[POINT_WIDTH] = max(numeric_sides[POINT_WIDTH], point)
+    numeric_sides[RIGHT_SIDE_WIDTH] = max(numeric_sides[RIGHT_SIDE_WIDTH], right)
 
 
 def __get_float_column_width(column: dict,
@@ -523,71 +379,153 @@ def __get_float_column_width(column: dict,
     """
     Will get the header size, body size and the max size of the sides
     of a float column.
-    
+
+    The numbers and the text are measured **separately** and only then
+    combined. A float column is as wide as the widest of three things: the
+    numbers laid out on their shared decimal axis, the widest non-numeric
+    cell, and the header. Whichever wins, the decimal axis is then pushed
+    right so the widest number's last decimal lands on the column's right
+    edge.
+
+    Measuring them together is what issue #23 was: a 15-character missing
+    value went into the left-hand slot, and the point and the decimals were
+    then added on top of it, making the column four characters wider than
+    anything in it. A correction existed but only fired for numbers that
+    came *after* the wide text, so the width depended on the row order.
+
     Returns::
-    
-        (head_size: int, sum_of_len_of_sides: int, max_len_of_sides: tuple)
-    
+
+        (head_size: int, total_width: int, sides: (left, point, right))
+
     Example::
-    
+
         __get_float_column_width(
             column={
-                'header': ('Test', 'Results'), 
+                'header': ('Test', 'Results'),
                 'data': (9.651, 3, 245.7, (3.5, ''), '?')
             },
             show_headers=False
         )
-    
+
     Results in::
-    
-        [0, 7, (3, 1, 3)]
-    
+
+        (0, 7, (3, 1, 3))
+
     """
-    
     head_size = 0
     if show_headers:
         # If headers will show, get them.
         header = column['header']
         head_size += __header_width(header)
-    
-    max_len_of_sides = []
-    float_sides_will_reduce = False
-    reduce = False
-    for row_i, row in enumerate(column['data']):
 
+    numeric_sides = [0, 0, 0]
+    text_widths = []
+
+    for row_i, row in enumerate(column['data']):
         # Hidden rows must not contribute to the decimal-side widths either.
         if row_i in skip_rows:
             continue
+        __measure_float_cell(row, numeric_sides, text_widths)
 
-        # Get the sides of row (cell) or sub-row.
-        if is_some_instance(row, tuple, list):
-            for sub_row in row:
-                reduce = __get_sides_widths(
-                    cell=sub_row,
-                    max_len_of_sides=max_len_of_sides,
-                    head_size=head_size,
-                    will_reduce=float_sides_will_reduce
-                    )
-        else:
-            reduce = __get_sides_widths(
-                cell=row,
-                max_len_of_sides=max_len_of_sides,
-                head_size=head_size,
-                will_reduce=float_sides_will_reduce
-                )
-        
-        if reduce:
-            float_sides_will_reduce = True
-        elif reduce is None:
-            float_sides_will_reduce = False
-            
-    sum_of_len_of_sides = __float_col_total_width(
-        max_len_of_sides=max_len_of_sides,
-        head_size=head_size
+    point = numeric_sides[POINT_WIDTH]
+    right = numeric_sides[RIGHT_SIDE_WIDTH]
+    numeric_width = numeric_sides[LEFT_SIDE_WIDTH] + point + right
+
+    total_width = max(
+        numeric_width,
+        max(text_widths) if text_widths else 0,
+        head_size,
     )
-    max_len_of_sides = tuple(max_len_of_sides)
-    
-    return head_size, sum_of_len_of_sides, max_len_of_sides
+
+    # Everything the numbers do not need goes to the left of the point, so
+    # the decimal axis sits as far right as the column allows and text cells
+    # right-align flush with the widest number.
+    sides = (total_width - point - right, point, right)
+
+    return head_size, total_width, sides
+
+
+FloatExtents = namedtuple(
+    'FloatExtents',
+    ['left', 'point', 'right', 'text']
+)
+
+
+def _is_numeric_cell(cell: Any) -> bool:
+    """
+    Whether a cell holds something that aligns on the decimal axis.
+
+    A wrapped cell never does: it is text that had to be broken over
+    several lines.
+    """
+    if is_some_instance(cell, tuple, list):
+        return False
+    return __split_float_cell(cell) is not None
+
+
+def _float_extents(cells: Union[list, tuple],
+                   skip_rows: frozenset = frozenset()
+                  ) -> FloatExtents:
+    """
+    The raw extents of a float column, before any padding is applied.
+
+    ``left``/``point``/``right`` are what the *numbers* need around the
+    decimal axis and ``text`` is the widest non-numeric cell. Unlike the
+    sides reported by ``__get_float_column_width``, none of these has been
+    stretched to fill the column, which is what makes them the right input
+    for deciding how far a column may be narrowed: the integer digits are
+    the one part that cannot be given up.
+
+    Example::
+
+        _float_extents([9.651, 3, 245.7, 'missing_value__'])
+        -> FloatExtents(left=3, point=1, right=3, text=15)
+    """
+    numeric_sides = [0, 0, 0]
+    text_widths = []
+
+    for row_i, cell in enumerate(cells):
+        if row_i in skip_rows:
+            continue
+        __measure_float_cell(cell, numeric_sides, text_widths)
+
+    return FloatExtents(
+        left=numeric_sides[LEFT_SIDE_WIDTH],
+        point=numeric_sides[POINT_WIDTH],
+        right=numeric_sides[RIGHT_SIDE_WIDTH],
+        text=max(text_widths) if text_widths else 0,
+    )
+
+
+def _round_float_cell(cell: Any, decimals: int) -> Any:
+    """
+    Re-render one numeric cell with ``decimals`` digits after the point.
+
+    Anything that is not a number is returned untouched -- a missing value
+    cannot be rounded, and neither can a wrapped cell. Integers are left
+    alone as well: they carry no decimals to give up, and padding them out
+    to some would only widen the column this is trying to narrow.
+
+    Examples::
+
+        _round_float_cell(9.651, 2)   -> '9.65'
+        _round_float_cell(245.7, 0)   -> '246'
+        _round_float_cell(3, 2)       -> 3
+        _round_float_cell('n/a', 2)   -> 'n/a'
+    """
+    text = str(cell)
+    if FLT_FILTER(text) is None or EXP_FILTER(text) is not None:
+        # An exponential says how big a number is, not how precise it is.
+        # Rounding 1.5e-05 to two decimals writes 0.00, which is a different
+        # claim entirely.
+        return cell
+
+    if decimals <= 0:
+        # No point either: a column with nothing after the point should not
+        # keep paying a character for one.
+        return format(float(text), '.0f')
+
+    return format(float(text), '.{0}f'.format(decimals))
 
 
 def _column_widths(processed_columns: Dict[str, tuple],

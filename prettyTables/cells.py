@@ -6,6 +6,10 @@ from .options import FLT_FILTER, INT_FILTER
 
 from typing import Any, List, Tuple, Union
 
+# Columns a tab advances to. Eight is what `str.expandtabs` and every
+# terminal default to.
+TAB_SIZE = 8
+
 LEFT_SIDE_WIDTH_I = 0
 POINT_WIDTH_I = 1
 RIGHT_SIDE_WIDTH_I = -1
@@ -162,23 +166,23 @@ def fljust(string: str,
         '--1.2----'
         '---.00321'
     """
-    # If the string is a float, it should have a point, 
-    # si it gets splitted by that point. 
-    splitted = string.split('.') #FIX add try/except
-    
-    # Take the left side and the right side, and its widths.
-    left_string = splitted[LEFT_SIDE_I]
-    right_string = splitted[RIGHT_SIDE_I]
+    # Split at the point. ``partition`` rather than ``split`` because a
+    # number may not have one at all -- 1e+16 is a float and has no point,
+    # and indexing the second half of a one-element list raised IndexError.
+    left_string, point, right_string = string.partition('.')
+
     left_width = sides_widths[LEFT_SIDE_WIDTH_I]
     right_width = sides_widths[RIGHT_SIDE_WIDTH_I]
-    
+
     # Align the left part to the right.
-    left = pad_to_width(left_string, left_width, 'r', fill_char) 
-    
+    left = pad_to_width(left_string, left_width, 'r', fill_char)
+
     # Align the right part to the left.
     right = pad_to_width(right_string, right_width, 'l', fill_char)
-    
-    return '.'.join([left, right])
+
+    # A number with no point leaves the point's own column blank, so it is
+    # still exactly as wide as the ones that have one.
+    return ''.join([left, point or fill_char, right])
 
 
 def __fljust_part(cell_part: Any, 
@@ -377,6 +381,13 @@ def _zip_wrapped_rows(wrapped_headers: Union[list, tuple],
     # of a wrapped header).
     zipped_headers = __zip_sub_rows(wrapped_headers)
 
+    if not zipped_rows:
+        # A table with columns but no rows at all still has to hand back one
+        # (empty) column per header. Transposing nothing yields nothing, and
+        # the caller then indexed past the end of it -- a table with headers
+        # and no data raised IndexError rather than rendering its headers.
+        zipped_rows = tuple(() for _ in zipped_headers)
+
     return zipped_rows, zipped_headers
 
 
@@ -475,22 +486,30 @@ def __wrap_single_row(row: Union[list, tuple]) -> list:
     return sub_rows
 
 
-def __wrap_cell(cell: Any) -> Union[List[str], Any]: 
+def __wrap_cell(cell: Any) -> Union[List[str], Any]:
     """
     Split in lines a cell if it has a new line character::
-    
+
         'a' -> ['a']
         'a\\nb' -> ['a', 'b']
+        'a\\tb' -> ['a       b']
         '' -> ['']
         123 -> [123]
         None -> [None]
+
+    Tabs are expanded here, because a tab has no width of its own -- it
+    means "advance to the next stop", and where that stop is depends on a
+    console this string may never reach. Left alone it measured as nothing
+    and then displaced the border by however far the terminal moved the
+    cursor. Expanding against the start of the cell gives a width that is
+    the same everywhere the table is read.
     """
     # Only if the cell is a string.
     if isinstance(cell, str):
         if cell != '':
             # If the cell is not empty,
             # apply the str method splitlines
-            return cell.splitlines()
+            return cell.expandtabs(TAB_SIZE).splitlines()
         else:
             # Return a list with empty string in case of empty cell.
             return ['']

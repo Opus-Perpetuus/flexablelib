@@ -25,6 +25,16 @@
 #define ESC 0x1B
 #define BEL 0x07
 
+/*
+ * U+FE0F, the emoji presentation selector. It has no width of its own; what
+ * it does is make the character in front of it render as an emoji, which is
+ * two columns wide even where the bare character is one. `⚠` is one column,
+ * `⚠️` is two. See measured_clusters() in text_width.py -- the two
+ * implementations must agree on this or a status column drifts by a column
+ * per emoji depending on whether the extension was built.
+ */
+#define VS16 0xFE0F
+
 /* Py_NewRef arrived in 3.10; the package supports 3.8 upward. */
 #if PY_VERSION_HEX < 0x030A0000
 static inline PyObject *
@@ -194,9 +204,15 @@ measure(int kind, const void *data, Py_ssize_t length)
 {
     Py_ssize_t total = 0;
     Py_ssize_t position = 0;
+    /* Width of the last printable codepoint, so an emoji presentation
+     * selector can promote it. Zero means there is nothing to promote --
+     * either nothing has been seen yet, or it was already two columns. */
+    int previous_width = 0;
 
     while (position < length) {
         Py_UCS4 codepoint = PyUnicode_READ(kind, data, position);
+        int width;
+
         if (codepoint == ESC) {
             Py_ssize_t skip = ansi_sequence_length(kind, data, length, position);
             if (skip > 0) {
@@ -204,7 +220,19 @@ measure(int kind, const void *data, Py_ssize_t length)
                 continue;
             }
         }
-        total += codepoint_width(codepoint);
+
+        if (codepoint == VS16) {
+            if (previous_width == 1) {
+                total += 1;
+                previous_width = 2;
+            }
+            position++;
+            continue;
+        }
+
+        width = codepoint_width(codepoint);
+        total += width;
+        previous_width = width;
         position++;
     }
     return total;

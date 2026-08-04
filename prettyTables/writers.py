@@ -25,6 +25,7 @@ import json
 from typing import Any, List, Optional, Sequence
 
 from .fast import strip_ansi
+from .options import FLT_FILTER, INT_FILTER
 
 
 def _plain(value: Any) -> str:
@@ -55,6 +56,39 @@ def to_records(table, include_index: bool = False) -> List[dict]:
     return [dict(zip(headers, row)) for row in rows]
 
 
+def to_simple_html(table, include_index: bool = False) -> str:
+    """
+    A bare HTML ``<table>`` for notebook ``_repr_html_`` hooks.
+
+    No document chrome, scripts or pagination -- just thead/tbody so Jupyter
+    and friends can embed the table in a cell output.
+    """
+    headers, rows = _table_data(table, include_index)
+    parts = ['<table>']
+    title = getattr(table, 'title', None)
+    if title:
+        parts.append(
+            '<caption>{0}</caption>'.format(_html.escape(str(title)))
+        )
+    if headers:
+        parts.append('<thead><tr>')
+        for header in headers:
+            parts.append(
+                '<th>{0}</th>'.format(_html.escape(_plain(header)))
+            )
+        parts.append('</tr></thead>')
+    parts.append('<tbody>')
+    for row in rows:
+        parts.append('<tr>')
+        for cell in row:
+            parts.append(
+                '<td>{0}</td>'.format(_html.escape(_plain(cell)))
+            )
+        parts.append('</tr>')
+    parts.append('</tbody></table>')
+    return ''.join(parts)
+
+
 def to_csv(table, target=None, include_index: bool = False,
            delimiter: str = ',', encoding: str = 'utf-8') -> Optional[str]:
     """
@@ -83,6 +117,57 @@ def to_csv(table, target=None, include_index: bool = False,
     return None
 
 
+def _markdown_alignment(table, header, column_i, values) -> str:
+    """
+    Which way a Markdown column should be aligned: ``l``, ``c`` or ``r``.
+
+    An explicit ``col_alignment`` wins. Otherwise a column whose every filled
+    cell is a number is right-aligned, as it is in the rendered table.
+    Markdown has no decimal alignment, so ``'f'`` becomes ``'r'``.
+    """
+    requested = getattr(table, 'col_alignment', None)
+    chosen = None
+    if isinstance(requested, dict):
+        chosen = requested.get(header)
+    elif isinstance(requested, (list, tuple)):
+        if column_i < len(requested):
+            chosen = requested[column_i]
+    elif requested is not None:
+        chosen = requested
+
+    if chosen is None:
+        filled = [
+            str(value) for value in values
+            if value is not None and str(value).strip() != ''
+        ]
+        numeric = [
+            text for text in filled
+            if FLT_FILTER(text) is not None or INT_FILTER(text) is not None
+        ]
+        chosen = 'r' if filled and len(numeric) == len(filled) else 'l'
+
+    if chosen in ('r', 'f'):
+        return 'r'
+    if chosen == 'c':
+        return 'c'
+    return 'l'
+
+
+def _markdown_rule(alignment: str, width: int) -> str:
+    """
+    The dashes under one column, marked with the colons Markdown reads.
+
+    ``:---`` left, ``---:`` right, ``:--:`` centred. Without them every
+    renderer left-aligns, so a column of numbers came out ragged in the
+    rendered document even though it was right-aligned in the terminal.
+    """
+    if alignment == 'r':
+        return '-' * (width - 1) + ':'
+    if alignment == 'c':
+        return ':' + '-' * (width - 2) + ':'
+    return ':' + '-' * (width - 1)
+
+
 def to_markdown(table, include_index: bool = False,
                 align: bool = True) -> str:
     """
@@ -90,6 +175,11 @@ def to_markdown(table, include_index: bool = False,
 
     Pipes inside cells are escaped, since an unescaped one would split the
     cell and shift every column after it.
+
+    With ``align`` the columns are padded to a common width and the rule
+    under the header carries the alignment colons, so the rendered document
+    lines its numbers up the way the terminal does. Without it the rule is
+    plain dashes and nothing is padded.
     """
     from .fast import visible_width, pad_to_width
 
@@ -110,17 +200,36 @@ def to_markdown(table, include_index: bool = False,
                 + [3])
             for i in range(len(header_texts))
         ]
+        alignments = [
+            _markdown_alignment(
+                table, header, i,
+                [row[i] for row in rows if i < len(row)],
+            )
+            for i, header in enumerate(headers)
+        ]
     else:
         widths = [max(3, visible_width(text)) for text in header_texts]
+        alignments = ['l'] * len(header_texts)
 
     def line(cells):
         padded = [
-            pad_to_width(text, widths[i]) if i < len(widths) else text
+            pad_to_width(
+                text,
+                widths[i],
+                alignments[i] if align else 'l',
+            ) if i < len(widths) else text
             for i, text in enumerate(cells)
         ]
         return '| ' + ' | '.join(padded) + ' |'
 
-    separator = '| ' + ' | '.join('-' * width for width in widths) + ' |'
+    if align:
+        rules = [
+            _markdown_rule(alignments[i], width)
+            for i, width in enumerate(widths)
+        ]
+    else:
+        rules = ['-' * width for width in widths]
+    separator = '| ' + ' | '.join(rules) + ' |'
     return '\n'.join([line(header_texts), separator]
                      + [line(row) for row in row_texts])
 

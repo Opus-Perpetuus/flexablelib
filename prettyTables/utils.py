@@ -1,5 +1,6 @@
 import os
 import json
+import shutil
 from typing import Iterable, Union
 
 
@@ -10,18 +11,25 @@ def float_format(number, decimal_spaces):
 def get_window_size():
     """
     Returns the size of the terminal window.
-    
+
     ```
     tuple(cols, lines)
     ```
+
+    Reading the console is the one piece of I/O in the whole package, and it
+    is the one thing that has to not raise: the very first bug reported
+    against prettyTables was a table that could not be printed at all because
+    this call blew up (issue #1). ``ValueError`` joins ``OSError`` in the
+    handler because a redirected or emulated console can report a size that
+    does not unpack, and ``shutil`` supplies a documented 80x24 fallback when
+    it cannot find out either.
     """
     try:
-        cols, lines =  os.get_terminal_size()
-    except OSError:
-        import shutil
-        cols, lines = shutil.get_terminal_size()
-        
-    return cols, lines
+        size = os.get_terminal_size()
+    except (OSError, ValueError):
+        size = shutil.get_terminal_size(fallback=(80, 24))
+
+    return size.columns, size.lines
 
 
 def is_list(piece):
@@ -61,6 +69,27 @@ def is_some_instance(piece, *instances):
     directness.
     """
     return isinstance(piece, instances)
+
+
+def is_empty_cell(cell, value_placer=None):
+    """
+    Whether a cell holds nothing at all.
+
+    ``show_empty_rows`` and ``show_empty_columns`` have to agree on what
+    empty means. A column is empty when every cell in it types as
+    ``NoneType``, which covers three things: the placeholder the table pads
+    short rows with, a real ``None``, and the empty string. Rows used to
+    count only the placeholder, so a row the caller filled with ``''``
+    stayed on screen while a column filled exactly the same way vanished.
+
+    The string test is by type and not by ``== ''`` so that a value with an
+    unusual ``__eq__`` -- an array, say -- cannot answer for the whole row.
+    """
+    if value_placer is not None and cell is value_placer:
+        return True
+    if cell is None:
+        return True
+    return isinstance(cell, str) and cell == ''
 
 
 def is_multi_row(row):
@@ -142,6 +171,32 @@ def delete_repetitions(iterable: Iterable,
             cleansed_list.append(element)
     
     return cleansed_list
+
+
+class IndexColumnTitle(str):
+    """
+    The header of the index column.
+
+    It prints as ``'i'`` like any other header, but it is equal only to
+    itself. Every one of the ``_with_i`` structures is a dict keyed by
+    header, so a data column the caller decides to call ``'i'`` used to land
+    on the same entry as the index column -- one of the two overwrote the
+    other and the columns after it disappeared from the render. Identity
+    equality keeps them apart without renaming anybody's column.
+
+    Naming a column 'i' is listed in the README as a known issue. This is
+    what closes it.
+    """
+    __slots__ = ()
+
+    def __eq__(self, other):
+        return self is other
+
+    def __ne__(self, other):
+        return self is not other
+
+    def __hash__(self):
+        return id(self)
 
 
 class IndexCounter(object):

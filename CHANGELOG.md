@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.4.0](https://github.com/Opus-Perpetuus/prettyTables/compare/v1.3.0...v1.4.0) (2026-08-03)
+
+
+### Features
+
+* cell formatters: `float_format`, `int_format`, `custom_format`, and `leading_zeros`
+* per-column `column_min_width` / `column_max_width`
+* `header_align` independent of body alignment
+* `add_divider()` / `clear_dividers()` for horizontal rules between rows
+* table `title` drawn above the frame
+* `sort_by` / `sort_reverse` and `row_filter` at render time (storage unchanged)
+* Jupyter `_repr_html_()` via a bare HTML table
+* `shape` property `(rows, columns)`
+* `table_align` and `expand_to_window` wired into render
+
+
+### Bug Fixes
+
+* float columns keep decimal alignment when the table is shrunk ([#23](https://github.com/Opus-Perpetuus/prettyTables/issues/23))
+* alignment options are actually applied; `bool_align` no longer wrote the float slot ([#4](https://github.com/Opus-Perpetuus/prettyTables/issues/4))
+* empty rows and columns share one emptiness criterion ([#9](https://github.com/Opus-Perpetuus/prettyTables/issues/9))
+* column named `"i"` no longer collides with the index column
+* exponential numbers align with the float column
+* tabs, emoji VS16, empty header-only tables, markdown alignment colons, and other upstream regressions
+* wide-character wrap at width 1 no longer invents a blank line
+* header-only tables survive a narrow `max_width` without `IndexError`
+
+
+### Documentation
+
+* `docs/ISSUES.md` maps every tracker issue to its fix and tests
+* README Known Issues and ARCHITECTURE Known gaps brought in line with current behaviour
+
 ## [1.3.0](https://github.com/Opus-Perpetuus/prettyTables/compare/v1.2.0...v1.3.0) (2026-08-03)
 
 
