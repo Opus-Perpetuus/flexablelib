@@ -166,3 +166,92 @@ def test_the_c_extension_pads_like_the_reference(text, align):
 
 def test_the_active_backend_is_reported():
     assert implementation() == ('C extension' if ACCELERATED else 'pure Python')
+
+
+# +-------------------------------------------------------------------------+
+# Cutting a string at visible-column offsets
+# +-------------------------------------------------------------------------+
+#
+# Every layout offset in this package is a count of terminal columns. Applying
+# one with a plain string slice is only correct while the string is
+# uncoloured ASCII, which is what made merged cells fail the moment anyone set
+# a column colour.
+
+COLOURED_CELL = '\x1b[1;35m John \x1b[0m'
+
+
+def test_the_three_parts_of_a_partition_reassemble_the_input():
+    for start, end in ((0, 0), (0, 3), (2, 4), (1, 6), (6, 6)):
+        parts = reference.partition_by_width(COLOURED_CELL, start, end)
+        assert ''.join(parts) == COLOURED_CELL
+
+
+def test_a_partition_splits_on_columns_not_on_characters():
+    before, inside, after = reference.partition_by_width(COLOURED_CELL, 1, 5)
+
+    assert reference.visible_width(before) == 1
+    assert reference.visible_width(inside) == 4
+    assert reference.strip_ansi(inside) == 'John'
+
+
+def test_a_slice_never_cuts_an_escape_sequence_in_half():
+    # The six columns of this cell are eighteen characters. A raw slice taken
+    # at the column offset lands inside '\x1b[1;35m', splitting the escape and
+    # leaving its remainder to print as literal text.
+    assert COLOURED_CELL[0:6].endswith('1;35')
+
+    piece = reference.slice_by_width(COLOURED_CELL, 0, 6)
+
+    assert reference.visible_width(piece) == 6
+    assert '\x1b[1;35m' in piece
+
+
+def test_a_slice_that_carries_colour_is_closed_with_a_reset():
+    piece = reference.slice_by_width('\x1b[31mabcd', 0, 2)
+
+    assert piece.endswith('\x1b[0m')
+    assert reference.visible_width(piece) == 2
+
+
+def test_splicing_replaces_exactly_the_columns_asked_for():
+    line = '| 0 |' + COLOURED_CELL + '|  20 |'
+    width = reference.visible_width(line)
+
+    # Six columns out, six columns in: the line keeps its width even though
+    # the piece removed was three times longer as a string.
+    spliced = reference.splice_by_width(line, 5, 11, 'MERGED')
+
+    assert reference.visible_width(spliced) == width
+    assert '\x1b[1;35m' not in spliced
+    assert 'MERGED' in spliced
+
+
+def test_stripping_reaches_whitespace_sitting_inside_escapes():
+    # str.strip() cannot: the string starts with '\x1b' and ends with 'm'.
+    assert COLOURED_CELL.strip() == COLOURED_CELL
+
+    stripped = reference.strip_by_width(COLOURED_CELL)
+
+    assert reference.visible_width(stripped) == 4
+    assert reference.strip_ansi(stripped) == 'John'
+    # The colour the text had is kept; only the padding goes.
+    assert stripped.startswith('\x1b[1;35m')
+    assert stripped.endswith('\x1b[0m')
+
+
+def test_stripping_keeps_interior_spaces():
+    assert reference.strip_by_width('  a b  ') == 'a b'
+
+
+def test_stripping_an_all_blank_cell_leaves_no_visible_width():
+    stripped = reference.strip_by_width('\x1b[31m   \x1b[0m')
+
+    assert reference.visible_width(stripped) == 0
+
+
+def test_cutting_a_wide_character_cell_counts_columns_not_characters():
+    # Four columns of text in two characters.
+    before, inside, after = reference.partition_by_width('|寿司|', 1, 5)
+
+    assert reference.visible_width(inside) == 4
+    assert inside == '寿司'

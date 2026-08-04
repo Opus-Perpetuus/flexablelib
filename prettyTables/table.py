@@ -3872,17 +3872,29 @@ class Table(object):
         # returned nothing. Whatever is missing is left out rather than
         # joined in as an empty string, which is what used to put a blank
         # line through the middle of a table with no rows.
-        body = self.__join_body_rows(
+        body, body_line_map = self.__join_body_rows(
             body_rows, body_line, separators.table_body_line
         )
         title_line = self.__title_line(column_widths_list, table_with_i)
-        table_string = '\n'.join([
-            part for part in (title_line, superior_row, body, end_line) if part
-        ])
+
+        # Where the body starts depends on which of the parts before it were
+        # drawn at all: a title, a top rule, a header. Counting them off the
+        # same list that gets joined keeps the merge line map in step with the
+        # string -- a title used to be left out of that count, which shifted
+        # every merge one line up, into the header.
+        parts = []
+        body_offset = 0
+        for part in (title_line, superior_row, body, end_line):
+            if not part:
+                continue
+            if part is body:
+                body_offset = sum(earlier.count('\n') + 1 for earlier in parts)
+            parts.append(part)
+        table_string = '\n'.join(parts)
 
         if self.__merged_regions:
             table_string = self.__apply_merges(
-                table_string, superior_row, body_rows, body_line,
+                table_string, body_line_map, body_offset,
                 column_widths_list, table_with_i
             )
 
@@ -3896,25 +3908,49 @@ class Table(object):
         a rule between every row. When the style has no inter-row rule,
         ``add_divider`` inserts a dashed line after the chosen row index
         (display order after filter/sort).
+
+        Returns the joined body and a map from display row index to the
+        physical lines that row occupies, numbered from the start of the body.
+        Building the map here rather than reconstructing it afterwards is what
+        keeps merges aligned with rows: only this function knows how many rule
+        lines it put between them, and wrapping has already turned some rows
+        into several lines.
         """
         if not body_rows:
-            return ''
-        if not self.__dividers:
-            return f'{body_line}\n'.join(body_rows)
+            return '', {}
 
-        if separator_line is not None:
-            # Style already draws a rule between every row; the requested
-            # dividers are present. Keep the historic join.
-            return f'{body_line}\n'.join(body_rows)
+        pieces = []
+        line_map = {}
+        cursor = 0
 
-        width = visible_width(body_rows[0])
-        rule = '-' * max(width, 1)
-        parts = [body_rows[0]]
-        for display_i in range(1, len(body_rows)):
-            if (display_i - 1) in self.__dividers:
-                parts.append(rule)
-            parts.append(body_rows[display_i])
-        return '\n'.join(parts)
+        # A style with no inter-row rule still gets the dividers ``add_divider``
+        # asked for, drawn as a dashed line. A style that rules between every
+        # row already shows them.
+        explicit_dividers = (
+            self.__dividers if (self.__dividers and separator_line is None)
+            else set()
+        )
+        rule = None
+        if explicit_dividers:
+            rule = '-' * max(visible_width(body_rows[0]), 1)
+
+        separator_lines = body_line.count('\n') if separator_line is not None else 0
+
+        for display_i, row in enumerate(body_rows):
+            if display_i:
+                if separator_line is not None:
+                    pieces.append(body_line[1:] if body_line.startswith('\n')
+                                  else body_line)
+                    cursor += separator_lines
+                elif (display_i - 1) in explicit_dividers:
+                    pieces.append(rule)
+                    cursor += 1
+            height = row.count('\n') + 1
+            line_map[display_i] = list(range(cursor, cursor + height))
+            cursor += height
+            pieces.append(row)
+
+        return '\n'.join(pieces), line_map
 
     def __title_line(self, column_widths_list, table_with_i):
         """Centre the title over the full table width, if any."""
@@ -3949,7 +3985,7 @@ class Table(object):
         pad = ' ' * left
         return '\n'.join(pad + line for line in lines)
 
-    def __apply_merges(self, table_string, superior_row, body_rows, body_line,
+    def __apply_merges(self, table_string, body_line_map, body_offset,
                        column_widths_list, table_with_i):
         """
         Rewrite the assembled table so each merged region reads as one cell.
@@ -3960,32 +3996,32 @@ class Table(object):
         work; letting a cell that belongs to several columns influence their
         widths would put a cycle in it.
 
-        The line map is rebuilt here by walking the same pieces the join above
-        consumed, so it stays in step with however those pieces were assembled.
+        ``body_line_map`` comes from the join that produced the body, and is
+        numbered from the body's first line; ``body_offset`` says where that
+        line sits in the whole table.
         """
         from .merges import apply as apply_merges
 
-        lines = table_string.split('\n')
-        separator_line_count = body_line.count('\n') if body_line else 0
+        row_line_map = {
+            row: [body_offset + line for line in line_indexes]
+            for row, line_indexes in body_line_map.items()
+        }
 
-        # Physical line where the body starts: everything the header occupies.
-        cursor = len(superior_row.split('\n')) if superior_row is not None else 0
-
-        row_line_map = {}
-        for position, row in enumerate(body_rows):
-            if position and separator_line_count:
-                cursor += separator_line_count
-            height = row.count('\n') + 1
-            row_line_map[position] = list(range(cursor, cursor + height))
-            cursor += height
+        # Columns the table is leaving out take up no room in a line, so the
+        # merge offsets must not count them either -- the same list the
+        # separators were built from.
+        hidden_columns = (
+            () if self.__show_empty_columns else self.__empty_column_indexes
+        )
 
         merged = apply_merges(
-            lines,
+            table_string.split('\n'),
             row_line_map,
             self.__merged_regions,
             column_widths_list,
             self.__style_composition,
             1 if table_with_i else 0,
+            hidden_columns,
         )
         return '\n'.join(merged)
 

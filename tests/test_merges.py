@@ -13,6 +13,7 @@ import pytest
 
 from helpers import table_width
 from prettyTables import Table
+from prettyTables.fast import strip_ansi, visible_width
 
 INTERSECTION = '┬'
 
@@ -234,3 +235,183 @@ def test_a_merge_works_across_styles(style):
 
     assert 'span' in rendered
     assert [len(line) for line in rendered.splitlines()] == before
+
+
+# +-------------------------------------------------------------------------+
+# Regressions
+# +-------------------------------------------------------------------------+
+#
+# Every test above passed while merges were, in practice, unusable: they all
+# supply `value=` and none of them colours anything. These cover what that
+# left uncovered.
+
+def visible_widths(rendered, skip_first=False):
+    """The set of visible widths of a rendered table's lines."""
+    lines = rendered.splitlines()
+    if skip_first:
+        lines = lines[1:]
+    return {visible_width(line) for line in lines}
+
+
+def test_a_merge_without_a_value_removes_the_rules_it_spans():
+    # The reported bug. Taking the replacement text from the whole span rather
+    # than from the top-left cell picked up the neighbouring columns *and* the
+    # rules between them; painting that back changed nothing, so the merge
+    # silently did not happen.
+    table = build_table()
+    table.merge_cells(0, 0, last_column=2)
+
+    merged_line = str(table).splitlines()[3]
+
+    assert 'Norte' in merged_line
+    assert merged_line.count('│') == 2
+    assert 'Jan' not in merged_line
+
+
+def test_a_merge_without_a_value_centres_the_cell_it_kept():
+    table = build_table()
+    table.merge_cells(0, 0, last_column=2)
+
+    merged_line = str(table).splitlines()[3]
+    before, after = merged_line.strip('│').split('Norte')
+
+    assert abs(len(before) - len(after)) <= 1
+
+
+def test_a_coloured_table_keeps_its_width_through_a_merge():
+    # Offsets are counted in terminal columns; applying them with a plain
+    # string slice put every one of them out by the length of the escape,
+    # which widened the merged row and left the table ragged.
+    plain = build_table()
+    plain.merge_cells(0, 0, last_column=1, value='Merged')
+
+    coloured = build_table()
+    coloured.column_colors = {'Region': 'bold magenta', 'Sales': 'green'}
+    coloured.merge_cells(0, 0, last_column=1, value='Merged')
+
+    assert len(visible_widths(str(coloured))) == 1
+    assert visible_widths(str(coloured)) == visible_widths(str(plain))
+
+
+def test_a_merge_spans_its_columns_on_a_coloured_table():
+    table = build_table()
+    table.column_colors = {'Region': 'bold magenta'}
+    table.merge_cells(0, 0, last_column=2)
+
+    merged_line = str(table).splitlines()[3]
+
+    assert 'Jan' not in merged_line
+    assert merged_line.count('│') == 2
+
+
+def test_a_merge_keeps_the_colour_of_the_cell_it_kept():
+    table = build_table()
+    table.column_colors = {'Region': 'bold magenta'}
+    table.merge_cells(0, 0, last_column=1)
+
+    merged_line = str(table).splitlines()[3]
+
+    assert '\x1b[1;35m' in merged_line
+    assert 'Norte' in strip_ansi(merged_line)
+
+
+def test_a_coloured_border_does_not_leak_through_a_merge():
+    table = build_table()
+    table.border_color = 'blue'
+    table.merge_cells(0, 0, last_row=1, value='Norte')
+
+    assert len(visible_widths(str(table))) == 1
+
+
+def test_a_title_does_not_shift_a_merge_into_the_header():
+    # The body's first line was counted from the header alone, so a title
+    # pushed every merge one line up.
+    table = build_table()
+    table.title = 'Sales report'
+    table.merge_cells(0, 0, last_column=2, value='Quarter summary')
+
+    lines = str(table).splitlines()
+    header_line = next(line for line in lines if 'Region' in line)
+
+    assert 'Quarter summary' not in header_line
+    assert 'Quarter summary' in lines[lines.index(header_line) + 2]
+    assert len(visible_widths(str(table), skip_first=True)) == 1
+
+
+def test_a_divider_above_a_merge_does_not_shift_it():
+    # add_divider inserts a physical line the old line map knew nothing about.
+    # A style that already rules between every row shows the divider anyway;
+    # the extra physical line only appears on a style that does not.
+    table = build_table('grid_eheader')
+    table.add_divider(0)
+    table.merge_cells(1, 0, last_row=2, value='Down')
+
+    lines = str(table).splitlines()
+    divider_index = next(i for i, line in enumerate(lines)
+                         if set(line) == {'-'})
+
+    assert 'Down' in lines[divider_index + 2]
+    assert 'Norte' in lines[divider_index - 1]
+
+
+def test_a_merge_over_wide_characters_keeps_the_table_square():
+    table = Table()
+    table.add_column('Producto', ['Café', '寿司テスト', 'Té'])
+    table.add_column('Precio', [10, 20, 30])
+    table.merge_cells(0, 0, last_column=1, value='Resumen')
+
+    assert len(visible_widths(str(table))) == 1
+
+
+def test_the_reported_case_renders_square():
+    # Straight from the bug report: ragged columns, a missing value, the index
+    # column and a colour, all at once.
+    table = Table()
+    table.add_column('Name', ['John', 'Jane'])
+    table.add_column('Age', [20])
+    table.add_column('Height', [1.75, 1.60, 1.75])
+    table.missing_value = '?'
+    table.show_index = True
+    table.column_colors = {'Name': 'bold magenta'}
+    table.merge_cells(0, 0, last_column=1)
+
+    rendered = str(table)
+    merged_line = rendered.splitlines()[3]
+
+    assert len(visible_widths(rendered)) == 1
+    assert 'John' in strip_ansi(merged_line)
+    # Name and Age are now one cell: the rule that used to sit between them is
+    # gone, and every other rule on the row survives.
+    unmerged_line = rendered.splitlines()[4]
+    assert merged_line.count('|') == unmerged_line.count('|') - 1
+
+
+def test_a_merge_reaches_across_a_column_the_table_is_hiding():
+    # An undrawn column occupies no room in the line. Counting it anyway put
+    # the merge past the end of every line, where it was silently dropped.
+    table = Table()
+    table.add_column('A', ['x', 'y'])
+    table.add_column('Empty', [None, None])
+    table.add_column('B', [1, 2])
+    table.show_empty_columns = False
+    table.merge_cells(0, 0, last_column=2, value='SPAN')
+
+    rendered = str(table)
+
+    assert 'SPAN' in rendered
+    assert len(visible_widths(rendered)) == 1
+
+
+def test_two_merges_in_one_table_both_land():
+    table = Table()
+    table.add_column('Alpha', ['1', '2', '3'])
+    table.add_column('Beta', ['4', '5', '6'])
+    table.add_column('Gamma', ['7', '8', '9'])
+    table.merge_cells(0, 0, last_column=1, value='TOP')
+    table.merge_cells(1, 1, last_row=2, value='DOWN')
+
+    rendered = str(table)
+
+    assert 'TOP' in rendered
+    assert 'DOWN' in rendered
+    assert len(visible_widths(rendered)) == 1

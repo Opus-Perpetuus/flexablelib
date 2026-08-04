@@ -27,6 +27,10 @@ from . import text_width as _reference
 from .text_width import (  # noqa: F401
     char_width,
     has_ansi,
+    partition_by_width,
+    slice_by_width,
+    splice_by_width,
+    strip_by_width,
     tokenize,
     truncate_to_width,
     wrap_to_width,
@@ -68,6 +72,10 @@ __all__ = [
     'char_width',
     'has_ansi',
     'tokenize',
+    'partition_by_width',
+    'slice_by_width',
+    'splice_by_width',
+    'strip_by_width',
     'ACCELERATED',
     'implementation',
 ]
