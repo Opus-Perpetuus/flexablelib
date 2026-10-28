@@ -36,7 +36,7 @@ def build_table(style_name):
 def test_the_catalogue_holds_43_styles():
     # A canary: adding a style is meant to be purely additive, and the README,
     # ARCHITECTURE.md and style_examples.md all quote this number.
-    assert len(ALL_STYLES) == 43
+    assert len(ALL_STYLES) == 44
 
 
 def test_style_names_are_unique():

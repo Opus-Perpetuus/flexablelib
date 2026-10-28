@@ -270,3 +270,49 @@ def test_html_export_preserves_merged_cells():
     assert 'VERT' in html and 'HORZ' in html
     bare = table._repr_html_()
     assert 'rowspan="2"' in bare and 'colspan="2"' in bare
+
+
+def test_merged_region_color_fills_ansi():
+    table = Table(style_name='flush')
+    table.use_colors = True
+    table.add_column('A', ['alpha-0', 'alpha-1', 'alpha-2'])
+    table.add_column('B', ['bravo-0', 'bravo-1', 'bravo-2'])
+    table.merge_cells(0, 0, last_row=1, value='MERGE', color='black on green')
+    rendered = str(table)
+    assert '\x1b[' in rendered
+    assert '42m' in rendered
+    assert 'MERGE' in rendered
+    # Background must cover more than the bare word (padding spaces painted).
+    assert rendered.count('42m') >= 1
+
+
+def test_merged_region_inherits_column_color():
+    table = Table(style_name='flush')
+    table.use_colors = True
+    # Wide unmerged content so the merge span can hold the label.
+    table.add_column('A', ['alpha-0', 'alpha-1'])
+    table.add_column('B', ['b0', 'b1'])
+    table.column_colors = {'A': 'black on yellow'}
+    table.merge_cells(0, 0, last_row=1, value='INHERIT')
+    rendered = str(table)
+    assert '43m' in rendered  # yellow bg
+    assert 'INHERIT' in rendered
+
+
+def test_flush_style_is_catalogued():
+    assert 'flush' in Table().possible_styles
+
+
+def test_html_and_excel_carry_merge_fill(tmp_path):
+    table = Table(style_name='flush')
+    table.use_colors = True
+    table.add_column('A', ['a0', 'a1'])
+    table.add_column('B', ['b0', 'b1'])
+    table.merge_cells(0, 0, last_column=1, value='BOX', color='black on cyan')
+    html = table.to_html(title='m')
+    assert 'background-color' in html
+    path = tmp_path / 'm.xlsx'
+    table.to_excel(path)
+    from openpyxl import load_workbook
+    ws = load_workbook(path).active
+    assert ws['A2'].fill.fgColor.rgb.endswith('0891B2') or '0891B2' in str(ws['A2'].fill.fgColor.rgb)

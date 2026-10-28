@@ -19,6 +19,7 @@ than the span it was given is truncated, not accommodated.
 import re
 from typing import List, NamedTuple, Optional
 
+from .colors import colorize
 from .fast import (
     has_ansi,
     pad_to_width,
@@ -51,6 +52,11 @@ class MergedRegion(NamedTuple):
 
     Coordinates are inclusive and zero-based, in the table's own row and
     column numbering -- the index column, when shown, is not counted.
+
+    ``color`` is an optional colour spec (same language as ``column_colors`` /
+    ``row_colors``). When set, the whole painted span -- text, padding and
+    blank continuation lines -- carries that background so a merge reads as
+    one solid fill rather than a dark hole.
     """
 
     first_row: int
@@ -59,6 +65,7 @@ class MergedRegion(NamedTuple):
     last_column: int
     value: Optional[str]
     align: str
+    color: Optional[str] = None
 
     @property
     def row_count(self) -> int:
@@ -82,7 +89,7 @@ class MergedRegion(NamedTuple):
 
 
 def normalise(first_row, first_column, last_row, last_column, value, align,
-              row_count, column_count, existing):
+              row_count, column_count, existing, color=None):
     """
     Validate a merge request and turn it into a MergedRegion.
 
@@ -115,7 +122,7 @@ def normalise(first_row, first_column, last_row, last_column, value, align,
         raise ValueError(f"align must be 'l', 'r' or 'c', not {align!r}")
 
     region = MergedRegion(first_row, first_column, last_row, last_column,
-                          value, align)
+                          value, align, color)
 
     for other in existing:
         if region.overlaps(other):
@@ -581,6 +588,13 @@ def apply(lines, row_line_map, regions, column_widths, composition,
                    + pad_to_width(text, span_width, region.align, filler)
                    + filler * margin)
         blank = filler * (end - start)
+        # Colour the entire span (text line + blank continuations) so a merge
+        # fill is flush across its rectangle -- same pad-then-paint contract
+        # as ordinary cells. Borders stay outside _repaint's range.
+        spec = getattr(region, 'color', None)
+        if spec:
+            painted = colorize(painted, spec)
+            blank = colorize(blank, spec)
 
         text_line = target_lines[len(target_lines) // 2]
         for line_index in target_lines:
