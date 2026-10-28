@@ -104,10 +104,12 @@ def test_vertical_merge_vertices_follow_bold_borderline_style():
     table = build_table('bold_borderline')
     table.merge_cells(0, 0, last_row=1, value='Norte')
 
-    sep = next(line for line in str(table).splitlines() if '╟───────┼────────╢' in line)
+    sep = next(line for line in str(table).splitlines() if '├───────┼────────╢' in line)
 
     assert sep.startswith('║')
-    assert '║        ╟───────┼────────╢' in sep
+    # Middle verticals are single │, so the tee opening the remaining columns
+    # is ├ — not the double-left ╟ reserved for the table's left border.
+    assert '║        ├───────┼────────╢' in sep
 
 
 def test_a_block_merge_covers_both_directions():
@@ -293,7 +295,11 @@ def test_a_merge_works_across_styles(style):
     rendered = str(table)
 
     assert 'span' in rendered
-    assert [len(line) for line in rendered.splitlines()] == before
+    # Column-only styles (pretty_columns, grid_eheader, …) grow by one synthetic
+    # row rule per multi-column merge; every line must still share the width.
+    after = [len(line) for line in rendered.splitlines()]
+    assert set(after) == set(before)
+    assert len(after) >= len(before)
 
 
 # +-------------------------------------------------------------------------+
@@ -440,13 +446,14 @@ def test_the_reported_case_renders_square():
     table.merge_cells(0, 0, last_column=1)
 
     rendered = str(table)
-    merged_line = rendered.splitlines()[3]
+    lines = rendered.splitlines()
+    merged_line = next(line for line in lines if 'John' in strip_ansi(line))
+    unmerged_line = next(line for line in lines if 'Jane' in strip_ansi(line))
 
     assert len(visible_widths(rendered)) == 1
     assert 'John' in strip_ansi(merged_line)
     # Name and Age are now one cell: the rule that used to sit between them is
     # gone, and every other rule on the row survives.
-    unmerged_line = rendered.splitlines()[4]
     assert merged_line.count('|') == unmerged_line.count('|') - 1
 
 
@@ -479,3 +486,105 @@ def test_two_merges_in_one_table_both_land():
     assert 'TOP' in rendered
     assert 'DOWN' in rendered
     assert len(visible_widths(rendered)) == 1
+
+
+# +-------------------------------------------------------------------------+
+# Junction repair: horizontal + vertical + column-only styles
+# +-------------------------------------------------------------------------+
+
+def _ops_report():
+    """Golden table from complex-merges/03_ops_report (H+V merges)."""
+    table = Table(style_name='bold_borderline')
+    table.title = 'Weekly Ops Report'
+    shifts, tickets, sla = [], [], []
+    n = 0
+    for _day in ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']:
+        for sh in ['AM', 'PM']:
+            shifts.append(sh)
+            tickets.append(40 + n * 3)
+            sla.append(round(0.92 + (n % 5) * 0.01, 2))
+            n += 1
+    table.add_column('Site', [''] * 14)
+    table.add_column('Day', [''] * 14)
+    table.add_column('Shift', shifts)
+    table.add_column('Tickets', tickets)
+    table.add_column('SLA', sla)
+    table.merge_cells(0, 0, last_row=13, value='MX-GDL')
+    for i, day in enumerate(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']):
+        table.merge_cells(i * 2, 1, last_row=i * 2 + 1, value=day)
+    table.merge_cells(10, 2, last_column=4, value='Weekend AM rollup')
+    table.merge_cells(11, 2, last_column=4, value='Weekend PM rollup')
+    return table
+
+
+def test_ops_report_adjacent_vertical_merges_use_middle_tees_not_border_glyphs():
+    """Adjacent vertical merges must not leave ╢/╟ on middle verticals."""
+    rendered = str(_ops_report())
+    # Internal AM/PM separators inside Site+Day merges.
+    internal = [
+        line for line in rendered.splitlines()
+        if line.startswith('║') and '├───────┼─────────┼──────╢' in line
+    ]
+    assert internal, rendered
+    for line in internal:
+        assert '╢     ╟' not in line
+        assert '╟───────┼─────────┼──────╢' not in line or not line.startswith('╟')
+        # Shared Site|Day junction is a bare vertical; Day|Shift opens with ├.
+        assert '│     ├' in line or '│           ├' in line or '├───────┼─────────┼──────╢' in line
+
+
+def test_ops_report_site_only_separator_uses_single_tee():
+    rendered = str(_ops_report())
+    between_days = [
+        line for line in rendered.splitlines()
+        if '├─────┼───────┼─────────┼──────╢' in line
+    ]
+    assert between_days, rendered
+    for line in between_days:
+        assert line.startswith('║')
+        assert not line.startswith('╟')
+        # Must not reuse the double-left border glyph on a middle vertical.
+        assert '║      ╟' not in line
+
+
+def test_horizontal_merge_caps_become_tees_above_and_below():
+    table = Table(style_name='pretty_grid')
+    table.add_column('A', ['a1', 'a2', 'a3'])
+    table.add_column('B', ['b1', 'b2', 'b3'])
+    table.add_column('C', ['c1', 'c2', 'c3'])
+    table.merge_cells(1, 0, last_column=1, value='AB')
+
+    lines = str(table).splitlines()
+    above = next(line for line in lines if '┴' in line)
+    below = next(line for line in lines if '┬' in line)
+    assert '├────┴────┼────┤' in above
+    assert '├────┬────┼────┤' in below
+
+
+def test_column_only_style_inserts_horizontal_break_under_multi_column_merge():
+    """pretty_columns has column lines but no row lines; a multi-column merge
+    must insert a row rule so the grid does not break oddly."""
+    table = Table(style_name='pretty_columns')
+    table.add_column('A', ['a1', 'a2', 'a3'])
+    table.add_column('B', ['b1', 'b2', 'b3'])
+    table.add_column('C', ['c1', 'c2', 'c3'])
+    table.merge_cells(1, 0, last_column=1, value='AB')
+
+    lines = str(table).splitlines()
+    assert any('┴' in line for line in lines)
+    assert any('┬' in line for line in lines)
+    assert any('AB' in line for line in lines)
+    # The synthetic rules keep the table square.
+    assert len({visible_width(line) for line in lines}) == 1
+
+
+def test_block_merge_header_and_footer_caps():
+    table = Table(style_name='pretty_grid')
+    table.add_column('A', ['a1', 'a2', 'a3'])
+    table.add_column('B', ['b1', 'b2', 'b3'])
+    table.add_column('C', ['c1', 'c2', 'c3'])
+    table.merge_cells(0, 0, 1, 1, value='BLOCK')
+
+    rendered = str(table)
+    assert '╧' in rendered  # header intersection loses south into the block
+    assert '┬' in rendered  # body rule below gains north-less tee
