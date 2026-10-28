@@ -286,6 +286,7 @@ def test_a_coloured_table_keeps_its_width_through_a_merge():
     plain.merge_cells(0, 0, last_column=1, value='Merged')
 
     coloured = build_table()
+    coloured.use_colors = True
     coloured.column_colors = {'Region': 'bold magenta', 'Sales': 'green'}
     coloured.merge_cells(0, 0, last_column=1, value='Merged')
 
@@ -295,6 +296,7 @@ def test_a_coloured_table_keeps_its_width_through_a_merge():
 
 def test_a_merge_spans_its_columns_on_a_coloured_table():
     table = build_table()
+    table.use_colors = True
     table.column_colors = {'Region': 'bold magenta'}
     table.merge_cells(0, 0, last_column=2)
 
@@ -306,6 +308,7 @@ def test_a_merge_spans_its_columns_on_a_coloured_table():
 
 def test_a_merge_keeps_the_colour_of_the_cell_it_kept():
     table = build_table()
+    table.use_colors = True
     table.column_colors = {'Region': 'bold magenta'}
     table.merge_cells(0, 0, last_column=1)
 
@@ -317,6 +320,7 @@ def test_a_merge_keeps_the_colour_of_the_cell_it_kept():
 
 def test_a_coloured_border_does_not_leak_through_a_merge():
     table = build_table()
+    table.use_colors = True
     table.border_color = 'blue'
     table.merge_cells(0, 0, last_row=1, value='Norte')
 
@@ -372,6 +376,7 @@ def test_the_reported_case_renders_square():
     table.add_column('Height', [1.75, 1.60, 1.75])
     table.missing_value = '?'
     table.show_index = True
+    table.use_colors = True
     table.column_colors = {'Name': 'bold magenta'}
     table.merge_cells(0, 0, last_column=1)
 
