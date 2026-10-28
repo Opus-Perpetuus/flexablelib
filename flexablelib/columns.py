@@ -725,6 +725,23 @@ def __align_single_cell(cell: Union[Any, List[Any], Tuple[Any]],
             float_column_sizes,
             DEFAULT_FILL_CHAR, 
         )
+    elif to_where == COLUMN_ALIGNS.bytes:
+        # Bytes alignment is left-justified (see INDICATOR_RELATIONS). Without
+        # this branch the raw cell reaches _add_cell_spacing and TypeErrors on
+        # non-str values when callers set *_align / col_alignment to 'b'.
+        new_cell = _ljust_cell(
+            cell,
+            col_width,
+            DEFAULT_FILL_CHAR,
+        )
+    else:
+        # Unknown alignment code: still stringify and left-pad so compose()
+        # never blows up on a typo or a future alignment name.
+        new_cell = _ljust_cell(
+            cell,
+            col_width,
+            DEFAULT_FILL_CHAR,
+        )
     # Add the margin (if any) to the cell.
     new_cell = _add_cell_spacing(new_cell, margin, margin, 0)
     

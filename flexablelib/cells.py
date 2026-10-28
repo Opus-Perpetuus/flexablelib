@@ -44,7 +44,7 @@ def _add_cell_spacing(cell: Union[str, Union[List[str], Tuple[str]]],
     if is_some_instance(cell, tuple, list):
         # If it is, add the spacing to each part of the cell.
         spaced = list(map(str, cell))  # Convert to strings to prevent errors.
-        for part_i, cell_part in enumerate(cell):
+        for part_i, cell_part in enumerate(spaced):
             # Add the spacing to the cell part.
             # FIX should consider the cell_part length
             if placeholder_size != 0 and part_i != 0: 
@@ -54,10 +54,11 @@ def _add_cell_spacing(cell: Union[str, Union[List[str], Tuple[str]]],
     else:
         # If it is not, add the spacing to the cell.
         # FIX should consider the cell length
+        cell_text = str(cell)
         if placeholder_size != 0:
             spaced = ''.join([left, diff, right])
         else:
-            spaced = ''.join([left, cell, right])
+            spaced = ''.join([left, cell_text, right])
 
     return spaced
 
