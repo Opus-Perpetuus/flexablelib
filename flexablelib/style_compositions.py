@@ -894,8 +894,9 @@ __style_compositions = Compositions(
     ),
     # Flush cell fills: full unicode grid whose cell backgrounds (pad-then-paint)
     # meet the border glyphs with no interior gap and never paint over them.
-    # Recommended style for coloured cells and coloured merges. Same box as
-    # pretty_grid; the name encodes the fill contract used by demos/docs.
+    # Horizontal rules also inherit the cell-above background on their dash
+    # runs so fills meet ─/═ without a dark band. Recommended for coloured
+    # cells and coloured merges. Same box as pretty_grid.
     flush=TableComposition(
         superior_header_line=SeparatorLine('╒', '═', '╤', '╕'),
         inferior_header_line=SeparatorLine('╞', '═', '╪', '╡'),
