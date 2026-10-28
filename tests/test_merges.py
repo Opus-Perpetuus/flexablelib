@@ -782,3 +782,53 @@ def test_crossing_vertical_merge_keeps_edge_when_cap_inserted():
         # Body synthetic rule: starts with │ (edge through ALL) not ├.
         if '┬' in line or '┴' in line:
             assert line.startswith('│'), line
+
+def test_synthetic_cap_h_stays_inside_merge_column_span():
+    """Synthetic caps must not draw H into columns outside the merge span."""
+    table = Table(style_name='grid_eheader')
+    for c in range(4):
+        table.add_column(f'C{c}', [f'r{r}c{c}' for r in range(4)])
+    table.merge_cells(0, 0, last_row=2, value='V')
+    table.merge_cells(0, 1, last_column=2, value='HSPAN')
+
+    lines = str(table).splitlines()
+    hspan_i = next(i for i, line in enumerate(lines) if 'HSPAN' in line)
+    cap = lines[hspan_i + 1]
+    assert _looks_like_rule_line(cap), cap
+    # Bleed looked like: |      +------+------+------+
+    # Clamped looks like: |      +------+------+      |
+    assert not (cap.rstrip().endswith('+') or cap.endswith('------+')), cap
+    assert '+      |' in cap or cap.endswith('      |'), cap
+
+
+def test_synthetic_cap_does_not_bleed_through_unrelated_column():
+    """Item column next to a V|N merge must not carry a horizontal run."""
+    table = Table(style_name='round_edges')
+    table.add_column('Cat', [''] * 6)
+    table.add_column('Item', [f'i{r}' for r in range(6)])
+    table.add_column('V', list(range(6)))
+    table.add_column('N', [f'n{r}' for r in range(6)])
+    table.merge_cells(0, 0, last_row=5, value='ALL')
+    table.merge_cells(1, 2, last_row=3, last_column=3, value='BOX')
+
+    lines = str(table).splitlines()
+    for line in lines:
+        if not _looks_like_rule_line(line):
+            continue
+        if '═' in line or line.startswith('╭') or line.startswith('╰'):
+            continue
+        if '┬' in line or '┴' in line:
+            assert '├──────┼' not in line, line
+            # Desired shape: │     │      ├───┴────┤
+            assert '│      ├' in line or '│     │' in line, line
+
+
+def test_invisible_vertical_style_keeps_plain_dash_rules():
+    """Styles with spacer verticals (simple) must not gain ┴/┼ from merges."""
+    table = Table(style_name='simple')
+    for c in range(6):
+        table.add_column(f'C{c}', [f'r{r}c{c}' for r in range(4)])
+    table.merge_cells(0, 0, last_row=1, last_column=1, value='#0,0')
+    table.merge_cells(0, 4, last_row=1, last_column=5, value='#0,4')
+    rendered = str(table)
+    assert '┴' not in rendered and '┼' not in rendered and '┬' not in rendered, rendered
