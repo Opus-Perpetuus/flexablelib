@@ -244,3 +244,15 @@ def test_bytes_alignment_code_renders_without_typeerror():
     ints.add_column('n', [1, 2, 3])
     ints.int_align = 'b'
     assert '1' in str(ints)
+
+
+def test_missing_val_alias_matches_missing_value():
+    table = Table()
+    table.add_column('a', ['x'])
+    table.add_row([])
+    table.missing_val = 'n/a'
+    assert table.missing_value == 'n/a'
+    assert 'n/a' in str(table)
+    table.missing_value = '?'
+    assert table.missing_val == '?'
+    assert '?' in str(table)
