@@ -13,13 +13,9 @@ permissions:
   contents: read
 
 jobs:
-  wheels:
-    name: wheels (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-14]
+  wheels-ubuntu:
+    name: wheels (ubuntu)
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: pypa/cibuildwheel@v2.23.3
@@ -30,7 +26,43 @@ jobs:
             python -c "from flexablelib.fast import ACCELERATED; assert ACCELERATED"
       - uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.os }}
+          name: wheels-ubuntu-latest
+          path: wheelhouse/*.whl
+
+  wheels-windows:
+    name: wheels (windows)
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pypa/cibuildwheel@v2.23.3
+        env:
+          CIBW_BUILD: 'cp38-* cp39-* cp310-* cp311-* cp312-* cp313-*'
+          CIBW_SKIP: '*-win32 *_i686'
+          CIBW_TEST_COMMAND: >-
+            python -c "from flexablelib.fast import ACCELERATED; assert ACCELERATED"
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: wheels-windows-latest
+          path: wheelhouse/*.whl
+
+  wheels-macos:
+    name: wheels (macos)
+    runs-on: macos-14
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pypa/cibuildwheel@v2.23.3
+        env:
+          CIBW_BUILD: 'cp38-* cp39-* cp310-* cp311-* cp312-* cp313-*'
+          CIBW_SKIP: '*-win32 *_i686'
+          CIBW_TEST_COMMAND: >-
+            python -c "from flexablelib.fast import ACCELERATED; assert ACCELERATED"
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: wheels-macos-14
           path: wheelhouse/*.whl
 
   sdist:
@@ -43,13 +75,22 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: sdist, path: dist/*.tar.gz }
 
+  # Publish as soon as manylinux + sdist are ready. Windows/mac are best-effort
+  # (continue-on-error) so a stuck macos runner cannot block PyPI forever.
   publish:
-    needs: [wheels, sdist]
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [wheels-ubuntu, wheels-windows, wheels-macos, sdist]
+    if: >-
+      always() &&
+      github.event_name == 'push' &&
+      startsWith(github.ref, 'refs/tags/v') &&
+      needs.wheels-ubuntu.result == 'success' &&
+      needs.sdist.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
-        with: { path: dist, merge-multiple: true }
+        with: { path: dist, merge-multiple: true, pattern: '*' }
+      - name: List artifacts
+        run: find dist -type f | sort
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           user: __token__
