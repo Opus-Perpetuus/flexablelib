@@ -368,12 +368,16 @@ def _looks_like_rule(line: str, h_glyph: str) -> bool:
     return any(ch in plain for ch in _H_CHARS)
 
 
-def _repair_rule_junctions(line, layout, composition, h_glyph, missing_south=None, missing_north=None):
+def _repair_rule_junctions(line, layout, composition, h_glyph, missing_south=None, missing_north=None,
+                          no_south=False, no_north=False):
     """
     Rebuild every junction on a horizontal rule from the arms that remain.
 
     ``missing_south`` / ``missing_north`` are sets of visible x positions where
     a vertical arm was removed by a horizontal (or 2D) merge on that side.
+
+    ``no_south`` / ``no_north`` force every junction to drop that arm — used for
+    the table's outer end/start rules, which never continue past the border.
     """
     missing_south = missing_south or set()
     missing_north = missing_north or set()
@@ -393,8 +397,8 @@ def _repair_rule_junctions(line, layout, composition, h_glyph, missing_south=Non
         right = _char_at(rewritten, x + 1)
         west = _is_h(left)
         east = _is_h(right)
-        north = x not in missing_north
-        south = x not in missing_south
+        north = (not no_north) and (x not in missing_north)
+        south = (not no_south) and (x not in missing_south)
         # A junction with no arms at all becomes the bare vertical.
         glyph = _pick_junction(v_glyph, h_glyph, north, south, east, west)
         rewritten = _repaint(rewritten, x, x + 1, glyph)
@@ -560,10 +564,13 @@ def apply(lines, row_line_map, regions, column_widths, composition,
             continue
         # Guess h glyph from the line itself.
         line_h = next((ch for ch in line if _is_h(ch)), h_glyph or '─')
+        # Outer borders never grow an arm past the table.
         lines[line_index] = _repair_rule_junctions(
             line, layout, composition, line_h,
             missing_south=missing_south_by_line.get(line_index),
             missing_north=missing_north_by_line.get(line_index),
+            no_south=(line_index >= len(lines) - 1),
+            no_north=(line_index == 0),
         )
 
     # --- Pass 4: insert synthetic row rules for column-only styles ----------
