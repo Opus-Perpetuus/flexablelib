@@ -2,6 +2,6 @@ include README.md
 include LICENSE
 include CHANGELOG.md
 include package.json
-include prettyTables/_speedups.c
-include prettyTables/_width_tables.h
+include flexablelib/_speedups.c
+include flexablelib/_width_tables.h
 recursive-include tools *.py

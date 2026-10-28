@@ -12,9 +12,9 @@ import os
 import pytest
 
 from helpers import REPO_ROOT
-from prettyTables import Table
-from prettyTables.options import DEFAULT_STYLE
-from prettyTables.style_compositions import SeparatorLine, TableComposition
+from flexablelib import Table
+from flexablelib.options import DEFAULT_STYLE
+from flexablelib.style_compositions import SeparatorLine, TableComposition
 
 ALL_STYLES = Table().possible_styles
 

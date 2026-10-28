@@ -1,25 +1,25 @@
 {
-  "name": "prettytables",
-  "version": "1.4.1",
-  "description": "Format tabular data with pretty styles.",
+  "name": "flexablelib",
+  "version": "2.0.0",
+  "description": "Flexible Table Library \u2014 format tabular data for the console.",
   "main": "__init__.py",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "getversion": "npm -s run env echo '$npm_package_version'",
-    "install-local-linux": "pip3 uninstall prettyTables -y && python3 setup.py bdist_wheel && VERSION=`npm -s run env echo '$npm_package_version'` && pip3 install dist/prettyTables-$VERSION-py3-none-any.whl",
+    "install-local-linux": "pip3 uninstall flexablelib -y && python3 setup.py bdist_wheel && VERSION=`npm -s run env echo '$npm_package_version'` && pip3 install dist/flexablelib-$VERSION-py3-none-any.whl",
     "install-local-windows": "",
     "release": "standard-version"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Kyostenas/prettyTables.git"
+    "url": "git+https://github.com/Opus-Perpetuus/prettyTables.git"
   },
   "author": "Kyostenas",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/Kyostenas/prettyTables/issues"
+    "url": "https://github.com/Opus-Perpetuus/prettyTables/issues"
   },
-  "homepage": "https://github.com/Kyostenas/prettyTables#readme",
+  "homepage": "https://github.com/Opus-Perpetuus/prettyTables#readme",
   "config": {
     "commitzen": {
       "path": "cz-conventional-changelog"

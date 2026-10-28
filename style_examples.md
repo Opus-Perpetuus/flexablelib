@@ -2,7 +2,7 @@
 ===================
 ### PLAIN
 ```
->>> from prettyTables import Table
+>>> from flexablelib import Table
 >>> new_table = Table()
 >>> new_table.missing_val = 'n/a'
 >>> new_table.add_row(data=[1])
