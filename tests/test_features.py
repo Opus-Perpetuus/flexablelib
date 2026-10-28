@@ -256,3 +256,17 @@ def test_missing_val_alias_matches_missing_value():
     table.missing_value = '?'
     assert table.missing_val == '?'
     assert '?' in str(table)
+
+
+def test_html_export_preserves_merged_cells():
+    table = Table()
+    table.add_column('A', ['a0', 'a1', 'a2'])
+    table.add_column('B', ['b0', 'b1', 'b2'])
+    table.merge_cells(0, 0, last_row=1, value='VERT')
+    table.merge_cells(2, 0, last_column=1, value='HORZ')
+    html = table.to_html(title='merged')
+    assert 'rowspan="2"' in html
+    assert 'colspan="2"' in html
+    assert 'VERT' in html and 'HORZ' in html
+    bare = table._repr_html_()
+    assert 'rowspan="2"' in bare and 'colspan="2"' in bare

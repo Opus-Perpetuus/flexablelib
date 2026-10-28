@@ -49,6 +49,61 @@ def _table_data(table, include_index: bool):
         rows = table.rows
     return headers, [[cell for cell in row] for row in rows]
 
+def _align_style(align: str) -> str:
+    return {'l': 'left', 'r': 'right', 'c': 'center'}.get(align, 'center')
+
+
+def _html_body_with_merges(table, include_index: bool = False) -> str:
+    """
+    Build ``<tr>…</tr>`` rows that honour ``merged_regions`` via rowspan/colspan.
+
+    Covered cells are omitted so the browser paints one merged cell. Merge
+    coordinates address data columns; an optional index column shifts them by 1.
+    """
+    headers, rows = _table_data(table, include_index)
+    col_offset = 1 if include_index else 0
+    regions = list(getattr(table, 'merged_regions', []) or [])
+
+    # Map every covered (row, col-in-output) cell -> owning region (or None for top-left).
+    covered = {}
+    origin = {}
+    for region in regions:
+        r0, r1 = region.first_row, region.last_row
+        c0, c1 = region.first_column + col_offset, region.last_column + col_offset
+        origin[(r0, c0)] = region
+        for r in range(r0, r1 + 1):
+            for c in range(c0, c1 + 1):
+                if (r, c) != (r0, c0):
+                    covered[(r, c)] = region
+
+    parts = []
+    n_cols = len(headers)
+    for r_i, row in enumerate(rows):
+        parts.append('<tr>')
+        for c_i in range(n_cols):
+            if (r_i, c_i) in covered:
+                continue
+            region = origin.get((r_i, c_i))
+            if region is not None:
+                rowspan = region.last_row - region.first_row + 1
+                colspan = region.last_column - region.first_column + 1
+                text = _plain(region.value if region.value is not None else row[c_i])
+                attrs = []
+                if rowspan > 1:
+                    attrs.append(f'rowspan="{rowspan}"')
+                if colspan > 1:
+                    attrs.append(f'colspan="{colspan}"')
+                style = f'text-align:{_align_style(region.align)};vertical-align:middle'
+                attrs.append(f'style="{style}"')
+                attr_s = (' ' + ' '.join(attrs)) if attrs else ''
+                parts.append(f'<td{attr_s}>{_html.escape(text)}</td>')
+            else:
+                cell = row[c_i] if c_i < len(row) else ''
+                parts.append(f'<td>{_html.escape(_plain(cell))}</td>')
+        parts.append('</tr>')
+    return ''.join(parts)
+
+
 
 def to_records(table, include_index: bool = False) -> List[dict]:
     """The table as a list of dicts, one per row."""
@@ -61,9 +116,10 @@ def to_simple_html(table, include_index: bool = False) -> str:
     A bare HTML ``<table>`` for notebook ``_repr_html_`` hooks.
 
     No document chrome, scripts or pagination -- just thead/tbody so Jupyter
-    and friends can embed the table in a cell output.
+    and friends can embed the table in a cell output. Merged regions become
+    ``rowspan`` / ``colspan`` attributes.
     """
-    headers, rows = _table_data(table, include_index)
+    headers, _rows = _table_data(table, include_index)
     parts = ['<table>']
     title = getattr(table, 'title', None)
     if title:
@@ -78,13 +134,7 @@ def to_simple_html(table, include_index: bool = False) -> str:
             )
         parts.append('</tr></thead>')
     parts.append('<tbody>')
-    for row in rows:
-        parts.append('<tr>')
-        for cell in row:
-            parts.append(
-                '<td>{0}</td>'.format(_html.escape(_plain(cell)))
-            )
-        parts.append('</tr>')
+    parts.append(_html_body_with_merges(table, include_index))
     parts.append('</tbody></table>')
     return ''.join(parts)
 
@@ -388,6 +438,47 @@ _HTML_SCRIPT = """
 """
 
 
+
+def _to_html_merged(table, target, title: str, include_index: bool,
+                    encoding: str) -> Optional[str]:
+    """Static self-contained HTML page that preserves merged cells."""
+    headers, _rows = _table_data(table, include_index)
+    head_cells = ''.join(
+        f'<th>{_html.escape(_plain(h))}</th>' for h in headers
+    )
+    body = _html_body_with_merges(table, include_index)
+    markup = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{_html.escape(title)}</title>
+<style>{_HTML_STYLE}</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>{_html.escape(title)}</h1>
+  <p class="count">Merged cells preserved (static view).</p>
+  <div class="scroll">
+    <table>
+      <thead><tr>{head_cells}</tr></thead>
+      <tbody>{body}</tbody>
+    </table>
+  </div>
+</div>
+</body>
+</html>
+"""
+    if target is None:
+        return markup
+    if hasattr(target, 'write'):
+        target.write(markup)
+        return None
+    with open(target, 'w', encoding=encoding) as handle:
+        handle.write(markup)
+    return None
+
+
 def to_html(table, target=None, title: str = 'Table', paginate: int = 25,
             include_index: bool = False, searchable: bool = True,
             encoding: str = 'utf-8') -> Optional[str]:
@@ -404,7 +495,14 @@ def to_html(table, target=None, title: str = 'Table', paginate: int = 25,
     Values are passed to the page as JSON data and written into the DOM as
     text, never as markup, so a cell containing HTML is displayed rather than
     interpreted.
+
+    When the table has merged regions, a static ``rowspan``/``colspan`` table
+    is written instead of the interactive grid (sort/filter would break merges).
     """
+    regions = list(getattr(table, 'merged_regions', []) or [])
+    if regions:
+        return _to_html_merged(table, target, title, include_index, encoding)
+
     headers, rows = _table_data(table, include_index)
     header_texts = [_plain(header) for header in headers]
     row_texts = [[_plain(cell) for cell in row] for row in rows]
