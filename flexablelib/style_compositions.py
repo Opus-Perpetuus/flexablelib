@@ -130,6 +130,9 @@ Compositions = namedtuple(
 
         # Other
         'dashes',
+
+        # Fill-only (background colours, no border glyphs)
+        'blocks',
     ]
 )
 
@@ -860,6 +863,25 @@ __style_compositions = Compositions(
         table_end_line=SeparatorLine('└', '┄', '┴', '┘'),
         vertical_header_lines=SeparatorLine('┊', '┊', None, '┊'),
         vertical_table_body_lines=SeparatorLine('┊', '┊', None, '┊'),
+        margin=CELL_MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
+    ),
+    # Background-colour blocks only: no outer/inner border glyphs, no junctions.
+    # Columns are separated by a single space (invisible spacer), not a rule.
+    blocks=TableComposition(
+        superior_header_line=None,
+        inferior_header_line=None,
+        superior_header_line_no_header=None,
+        table_body_line=None,
+        table_end_line=None,
+        vertical_header_lines=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
+        vertical_table_body_lines=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
