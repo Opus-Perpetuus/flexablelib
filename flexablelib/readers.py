@@ -399,3 +399,84 @@ def from_excel(table_class, path, sheet=None, has_header: bool = True,
             # Overlaps or single cells from odd sheets: skip rather than fail.
             continue
     return table
+
+
+def from_markdown(table_class, source, parse_numbers: bool = True, **options):
+    """
+    Parse a GitHub-flavoured Markdown pipe table into a Table.
+
+    Accepts a string, a path, or a readable. The separator row
+    (``| --- | :---: | ---: |``) sets ``col_alignment`` when present and is
+    not stored as data. Round-trips with ``Table.to_markdown()``.
+    """
+    import os
+    if hasattr(source, 'read'):
+        text = source.read()
+        if isinstance(text, bytes):
+            text = text.decode('utf-8')
+    elif isinstance(source, (str, bytes, os.PathLike)) and not (
+        isinstance(source, str) and '\n' in source
+    ) and os.path.isfile(str(source)):
+        with open(source, encoding='utf-8') as fh:
+            text = fh.read()
+    else:
+        text = source.decode('utf-8') if isinstance(source, bytes) else str(source)
+
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    rows_raw = []
+    for ln in lines:
+        if '|' not in ln:
+            continue
+        body = ln[1:] if ln.startswith('|') else ln
+        if body.endswith('|'):
+            body = body[:-1]
+        rows_raw.append([c.strip() for c in body.split('|')])
+
+    if not rows_raw:
+        return _new_table(table_class, [], [], parse_numbers, **options)
+
+    def _is_sep_row(cells):
+        if not cells:
+            return False
+        for token in cells:
+            token = token.strip()
+            if not token or '-' not in token:
+                return False
+            if token.replace(':', '').replace('-', '').strip():
+                return False
+        return True
+
+    headers = rows_raw[0]
+    align_from_sep = None
+    data_start = 1
+    if len(rows_raw) > 1 and _is_sep_row(rows_raw[1]):
+        align_from_sep = []
+        for cell in rows_raw[1]:
+            token = cell.strip()
+            left = token.startswith(':')
+            right = token.endswith(':')
+            if left and right:
+                align_from_sep.append('c')
+            elif right:
+                align_from_sep.append('r')
+            else:
+                align_from_sep.append('l')
+        data_start = 2
+
+    width = len(headers)
+    normalized = []
+    for row in rows_raw[data_start:]:
+        row = list(row)
+        if len(row) < width:
+            row = row + [''] * (width - len(row))
+        elif len(row) > width:
+            row = row[:width]
+        normalized.append(row)
+
+    table = _new_table(table_class, headers, normalized, parse_numbers, **options)
+    if align_from_sep is not None:
+        try:
+            table.col_alignment = align_from_sep
+        except Exception:
+            pass
+    return table
