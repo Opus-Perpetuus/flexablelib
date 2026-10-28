@@ -318,3 +318,24 @@ def test_html_and_excel_carry_merge_fill(tmp_path):
     table.to_excel(path)
     ws = openpyxl.load_workbook(path).active
     assert ws['A2'].fill.fgColor.rgb.endswith('0891B2') or '0891B2' in str(ws['A2'].fill.fgColor.rgb)
+
+def test_flush_horizontal_rules_carry_cell_bg():
+    """H-rule dash runs inherit the cell-above background (no dark band)."""
+    import re
+    table = Table(style_name='flush')
+    table.use_colors = True
+    table.add_column('A', ['a0', 'a1'])
+    table.add_column('B', ['b0', 'b1'])
+    table.column_colors = {'A': 'black on cyan', 'B': 'black on yellow'}
+    rendered = str(table)
+    found_cyan_on_rule = False
+    found_yellow_on_rule = False
+    for line in rendered.splitlines():
+        plain = re.sub('\x1b' r'\[[0-9;]*m', '', line)
+        if '─' not in plain and '═' not in plain:
+            continue
+        if '46m' in line:
+            found_cyan_on_rule = True
+        if '43m' in line:
+            found_yellow_on_rule = True
+    assert found_cyan_on_rule and found_yellow_on_rule

@@ -19,12 +19,13 @@ than the span it was given is truncated, not accommodated.
 import re
 from typing import List, NamedTuple, Optional
 
-from .colors import colorize
+from .colors import background_hex, colorize
 from .fast import (
     has_ansi,
     pad_to_width,
     partition_by_width,
     slice_by_width,
+    strip_ansi,
     strip_by_width,
     truncate_to_width,
     visible_width,
@@ -274,13 +275,22 @@ _ASCII = {
 }
 
 
+def _glyph(ch: str) -> str:
+    """Visible character from a slice that may still carry SGR wraps."""
+    if not ch:
+        return ''
+    plain = strip_ansi(ch)
+    return plain[:1] if plain else ''
+
+
 def _is_h(ch: str) -> bool:
-    return ch in _H_CHARS
+    return _glyph(ch) in _H_CHARS
 
 
 def _visible_vertical(ch: str) -> bool:
     """True when a style's vertical glyph is a real column rule, not a spacer."""
-    return bool(ch) and not ch.isspace()
+    g = _glyph(ch)
+    return bool(g) and not g.isspace()
 
 
 def _char_at(line: str, index: int) -> str:
@@ -487,7 +497,7 @@ def _repair_rule_junctions(line, layout, composition, h_glyph, missing_south=Non
             continue
         here = _char_at(rewritten, x)
         # Interior of a multi-column vertical blank: junction was wiped to space.
-        if here == ' ' or here == '':
+        if _glyph(here) in ('', ' '):
             continue
         left = _char_at(rewritten, x - 1)
         right = _char_at(rewritten, x + 1)
@@ -500,6 +510,45 @@ def _repair_rule_junctions(line, layout, composition, h_glyph, missing_south=Non
             round_corners=round_corners,
         )
         rewritten = _repaint(rewritten, x, x + 1, glyph)
+    return rewritten
+
+
+
+def paint_rule_cell_backgrounds(line, layout, column_specs, border_color=None):
+    """
+    Paint each column's dash run on a horizontal rule with that column's cell
+    background.
+
+    Terminal grid tables put H-rules on their own row. Without a background,
+    that row is a dark band between coloured cells (the ─ glyph is only a thin
+    stroke). Colouring the dash run with the cell above makes the fill meet the
+    rule. Junctions and outer corners stay outside the cell fill (same contract
+    as vertical borders in ``flush``).
+
+    ``column_specs`` is aligned with ``layout.spans`` (drawn columns). Specs
+    without a background are skipped. Paint right-to-left so ANSI insertion
+    does not shift later visible offsets.
+    """
+    if not line:
+        return line
+    if not column_specs or not any(
+            spec and background_hex(spec) is not None for spec in column_specs):
+        return colorize(line, border_color) if border_color else line
+
+    rewritten = line
+    for (start, end), spec in reversed(list(zip(layout.spans, column_specs))):
+        if end <= start:
+            continue
+        if not spec or background_hex(spec) is None:
+            continue
+        before, chunk, after = partition_by_width(rewritten, start, end)
+        plain = strip_ansi(chunk) if has_ansi(chunk) else chunk
+        if not plain:
+            continue
+        painted = colorize(plain, spec)
+        if has_ansi(chunk) and not painted.startswith(_RESET):
+            painted = _RESET + painted
+        rewritten = before + painted + after
     return rewritten
 
 

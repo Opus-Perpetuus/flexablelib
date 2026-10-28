@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.0.11] - 2026-10-28
+
+### Added
+- Horizontal rule cell backgrounds: dash runs on H-separators inherit the cell-above fill so coloured cells meet ─/═ without a dark band (generic; recommended with `flush`).
+- `paint_rule_cell_backgrounds` helper; ANSI-aware junction glyph detection for painted rules.
+
 ## [2.0.10] - 2026-10-28
 
 ### Added
