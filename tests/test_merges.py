@@ -51,6 +51,65 @@ def test_a_vertical_merge_removes_the_rules_between_its_rows():
     assert rendered.count('Norte') == 1
 
 
+
+def test_vertical_merge_turns_left_border_into_an_edge():
+    """Vertices on a body rule inside a vertical merge must become edges.
+
+    The horizontal arms into the merged cell are gone, so a left-border
+    '├' becomes the vertical edge '│', and the right junction keeps the
+    three-way '├' that opens the remaining columns.
+    """
+    table = build_table()
+    table.merge_cells(0, 0, last_row=1, value='Norte')
+
+    sep = next(
+        line for line in str(table).splitlines()
+        if '├───────┼────────┤' in line or line.startswith('│        ├')
+    )
+
+    assert sep.startswith('│')
+    assert '├───────┼────────┤' in sep
+    assert not sep.startswith('├')
+
+
+def test_vertical_merge_in_middle_column_uses_left_and_right_tees():
+    table = build_table()
+    table.merge_cells(0, 1, last_row=1, value='M')
+
+    sep = next(line for line in str(table).splitlines() if '       ' in line and '┤' in line and line.count('├') >= 1)
+
+    assert '├────────┤       ├────────┤' in sep
+
+
+def test_vertical_merge_on_last_column_turns_right_border_into_an_edge():
+    table = build_table()
+    table.merge_cells(0, 2, last_row=1, value='S')
+
+    sep = next(line for line in str(table).splitlines() if line.endswith('│') and '┤        │' in line)
+
+    assert sep.endswith('│')
+    assert '├────────┼───────┤        │' in sep
+
+
+def test_vertical_merge_vertices_follow_grid_ascii_style():
+    table = build_table('grid')
+    table.merge_cells(0, 0, last_row=1, value='Norte')
+
+    sep = next(line for line in str(table).splitlines() if '+-------+' in line and line.startswith('|'))
+
+    assert sep.startswith('|        +')
+
+
+def test_vertical_merge_vertices_follow_bold_borderline_style():
+    table = build_table('bold_borderline')
+    table.merge_cells(0, 0, last_row=1, value='Norte')
+
+    sep = next(line for line in str(table).splitlines() if '╟───────┼────────╢' in line)
+
+    assert sep.startswith('║')
+    assert '║        ╟───────┼────────╢' in sep
+
+
 def test_a_block_merge_covers_both_directions():
     table = build_table()
     table.merge_cells(0, 0, 1, 1, value='Block')
