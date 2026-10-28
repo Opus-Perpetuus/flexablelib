@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.0.14] - 2026-10-28
+
+### Added
+- ``Table.valign`` / ``col_valign`` / ``cell_valign``: vertical cell alignment
+  ``t`` / ``m`` / ``b`` inside multi-line rows (texttable-style).
+- ``Table.panel`` + ``Table.shadow``: outer frame (rounded/sharp/ascii/double/heavy)
+  and optional drop-shadow (tabled Panel / Spectre style).
+- Export writers: ``to_rst()``, ``to_asciidoc()``, ``to_latex()``.
+- ``Table.transpose()`` / ``rotate()``: swap rows and columns for display.
+- ``Table.paginate(page_length=...)``: list of composed page strings with
+  headers repeated (PrettyTable / go-pretty).
+- Nested subtables: a cell whose value is a ``Table`` is composed into a
+  multiline cell (minimal useful nesting).
+
+### Notes
+- Column percent-width constraints (F10) remain covered by existing
+  ``column_min_width`` / ``column_max_width``; no API change.
+- Streaming / incremental print (F13) deferred.
+
 ## [2.0.13] - 2026-10-28
 
 ### Added
