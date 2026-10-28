@@ -133,7 +133,21 @@ Compositions = namedtuple(
 
         # Fill-only (background colours, no border glyphs)
         'blocks',
-        'flush',
+
+        # tabled-compatible names (https://github.com/zhiburt/tabled)
+        'ascii',
+        'modern',
+        'sharp',
+        'rounded',
+        'modern_rounded',
+        'extended',
+        'psql',
+        'markdown',
+        're_structured_text',
+        'dots',
+        'ascii_rounded',
+        'blank',
+        'empty',
     ]
 )
 
@@ -892,20 +906,237 @@ __style_compositions = Compositions(
         align_indicator_margin=0,
         always_center_indicator=False
     ),
-    # Flush cell fills: full unicode grid whose cell backgrounds (pad-then-paint)
-    # meet the border glyphs with no interior gap and never paint over them.
-    # Horizontal rules also inherit the cell-above background on their dash
-    # runs so fills meet ─/═ without a dark band. Recommended for coloured
-    # cells and coloured merges. Same box as pretty_grid.
-    flush=TableComposition(
-        superior_header_line=SeparatorLine('╒', '═', '╤', '╕'),
-        inferior_header_line=SeparatorLine('╞', '═', '╪', '╡'),
-        superior_header_line_no_header=SeparatorLine('╒', '═', '╤', '╕'),
+
+    ############################################
+    ####  tabled-compatible style names     ####
+    ####  https://github.com/zhiburt/tabled ####
+    ############################################
+    # ascii: full ASCII grid; all rules use '-' (unlike grid which uses '=' under the header).
+    ascii=TableComposition(
+        superior_header_line=SeparatorLine('+', '-', '+', '+'),
+        inferior_header_line=SeparatorLine('+', '-', '+', '+'),
+        superior_header_line_no_header=SeparatorLine('+', '-', '+', '+'),
+        table_body_line=SeparatorLine('+', '-', '+', '+'),
+        table_end_line=SeparatorLine('+', '-', '+', '+'),
+        vertical_header_lines=SeparatorLine('|', '|', None, '|'),
+        vertical_table_body_lines=SeparatorLine('|', '|', None, '|'),
+        margin=CELL_MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
+    ),
+    # modern: UTF-8 thin box with body horizontals; header rule is also ─ (not ═).
+    modern=TableComposition(
+        superior_header_line=SeparatorLine('┌', '─', '┬', '┐'),
+        inferior_header_line=SeparatorLine('├', '─', '┼', '┤'),
+        superior_header_line_no_header=SeparatorLine('┌', '─', '┬', '┐'),
         table_body_line=SeparatorLine('├', '─', '┼', '┤'),
-        table_end_line=SeparatorLine('╘', '═', '╧', '╛'),
+        table_end_line=SeparatorLine('└', '─', '┴', '┘'),
         vertical_header_lines=SeparatorLine('│', '│', None, '│'),
         vertical_table_body_lines=SeparatorLine('│', '│', None, '│'),
         margin=CELL_MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
+    ),
+    # sharp: modern frame without body horizontals.
+    sharp=TableComposition(
+        superior_header_line=SeparatorLine('┌', '─', '┬', '┐'),
+        inferior_header_line=SeparatorLine('├', '─', '┼', '┤'),
+        superior_header_line_no_header=SeparatorLine('┌', '─', '┬', '┐'),
+        table_body_line=None,
+        table_end_line=SeparatorLine('└', '─', '┴', '┘'),
+        vertical_header_lines=SeparatorLine('│', '│', None, '│'),
+        vertical_table_body_lines=SeparatorLine('│', '│', None, '│'),
+        margin=CELL_MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
+    ),
+    # rounded: sharp with rounded corners.
+    rounded=TableComposition(
+        superior_header_line=SeparatorLine('╭', '─', '┬', '╮'),
+        inferior_header_line=SeparatorLine('├', '─', '┼', '┤'),
+        superior_header_line_no_header=SeparatorLine('╭', '─', '┬', '╮'),
+        table_body_line=None,
+        table_end_line=SeparatorLine('╰', '─', '┴', '╯'),
+        vertical_header_lines=SeparatorLine('│', '│', None, '│'),
+        vertical_table_body_lines=SeparatorLine('│', '│', None, '│'),
+        margin=CELL_MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
+    ),
+    # modern_rounded: rounded corners with body horizontals.
+    modern_rounded=TableComposition(
+        superior_header_line=SeparatorLine('╭', '─', '┬', '╮'),
+        inferior_header_line=SeparatorLine('├', '─', '┼', '┤'),
+        superior_header_line_no_header=SeparatorLine('╭', '─', '┬', '╮'),
+        table_body_line=SeparatorLine('├', '─', '┼', '┤'),
+        table_end_line=SeparatorLine('╰', '─', '┴', '╯'),
+        vertical_header_lines=SeparatorLine('│', '│', None, '│'),
+        vertical_table_body_lines=SeparatorLine('│', '│', None, '│'),
+        margin=CELL_MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
+    ),
+    # extended: double-line box (all ═/║ junctions).
+    extended=TableComposition(
+        superior_header_line=SeparatorLine('╔', '═', '╦', '╗'),
+        inferior_header_line=SeparatorLine('╠', '═', '╬', '╣'),
+        superior_header_line_no_header=SeparatorLine('╔', '═', '╦', '╗'),
+        table_body_line=SeparatorLine('╠', '═', '╬', '╣'),
+        table_end_line=SeparatorLine('╚', '═', '╩', '╝'),
+        vertical_header_lines=SeparatorLine('║', '║', None, '║'),
+        vertical_table_body_lines=SeparatorLine('║', '║', None, '║'),
+        margin=CELL_MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
+    ),
+    # psql: PostgreSQL-like; header rule only, no outer frame.
+    psql=TableComposition(
+        superior_header_line=None,
+        inferior_header_line=SeparatorLine(None, '-', '+', None),
+        superior_header_line_no_header=None,
+        table_body_line=None,
+        table_end_line=None,
+        vertical_header_lines=SeparatorLine(None, '|', None, None),
+        vertical_table_body_lines=SeparatorLine(None, '|', None, None),
+        margin=CELL_MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
+    ),
+    # markdown: GitHub-flavoured markdown pipe table.
+    markdown=TableComposition(
+        superior_header_line=None,
+        inferior_header_line=SeparatorLine('|', '-', '|', '|'),
+        superior_header_line_no_header=SeparatorLine('|', '-', '|', '|'),
+        table_body_line=None,
+        table_end_line=None,
+        vertical_header_lines=SeparatorLine('|', '|', None, '|'),
+        vertical_table_body_lines=SeparatorLine('|', '|', None, '|'),
+        margin=CELL_MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
+    ),
+    # re_structured_text: RST simple table (== rules, space gutters).
+    re_structured_text=TableComposition(
+        superior_header_line=SeparatorLine(None, '=', ' ', None),
+        inferior_header_line=SeparatorLine(None, '=', ' ', None),
+        superior_header_line_no_header=SeparatorLine(None, '=', ' ', None),
+        table_body_line=None,
+        table_end_line=SeparatorLine(None, '=', ' ', None),
+        vertical_header_lines=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
+        vertical_table_body_lines=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
+        margin=CELL_MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
+    ),
+    # dots: '.' frame / horizontals and ':' verticals (tabled Style::dots).
+    dots=TableComposition(
+        superior_header_line=SeparatorLine('.', '.', '.', '.'),
+        inferior_header_line=SeparatorLine(':', '.', ':', ':'),
+        superior_header_line_no_header=SeparatorLine('.', '.', '.', '.'),
+        table_body_line=SeparatorLine(':', '.', ':', ':'),
+        table_end_line=SeparatorLine(':', '.', ':', ':'),
+        vertical_header_lines=SeparatorLine(':', ':', None, ':'),
+        vertical_table_body_lines=SeparatorLine(':', ':', None, ':'),
+        margin=CELL_MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
+    ),
+    # ascii_rounded: '.' / "'" corners, no header or body horizontals.
+    ascii_rounded=TableComposition(
+        superior_header_line=SeparatorLine('.', '-', '-', '.'),
+        inferior_header_line=None,
+        superior_header_line_no_header=SeparatorLine('.', '-', '-', '.'),
+        table_body_line=None,
+        table_end_line=SeparatorLine("'", '-', '-', "'"),
+        vertical_header_lines=SeparatorLine('|', '|', None, '|'),
+        vertical_table_body_lines=SeparatorLine('|', '|', None, '|'),
+        margin=CELL_MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
+    ),
+    # blank: no rules; columns separated by a space (with cell margin).
+    blank=TableComposition(
+        superior_header_line=None,
+        inferior_header_line=None,
+        superior_header_line_no_header=None,
+        table_body_line=None,
+        table_end_line=None,
+        vertical_header_lines=SeparatorLine(None, ' ', None, None),
+        vertical_table_body_lines=SeparatorLine(None, ' ', None, None),
+        margin=CELL_MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
+    ),
+    # empty: no chrome and no margin (tabled Style::empty base).
+    empty=TableComposition(
+        superior_header_line=None,
+        inferior_header_line=None,
+        superior_header_line_no_header=None,
+        table_body_line=None,
+        table_end_line=None,
+        vertical_header_lines=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
+        vertical_table_body_lines=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
+        margin=0,
         align_sensitive=False,
         align_indicator=None,
         centered_indicator_on_sides=False,
