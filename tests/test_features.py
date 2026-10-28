@@ -4,6 +4,8 @@ Public API coverage for the high-demand features.
 Each test drives the shipped Table entry point and asserts concrete output.
 """
 
+import pytest
+
 from helpers import table_width
 from flexablelib import Table
 
@@ -311,8 +313,8 @@ def test_html_and_excel_carry_merge_fill(tmp_path):
     table.merge_cells(0, 0, last_column=1, value='BOX', color='black on cyan')
     html = table.to_html(title='m')
     assert 'background-color' in html
+    openpyxl = pytest.importorskip('openpyxl')
     path = tmp_path / 'm.xlsx'
     table.to_excel(path)
-    from openpyxl import load_workbook
-    ws = load_workbook(path).active
+    ws = openpyxl.load_workbook(path).active
     assert ws['A2'].fill.fgColor.rgb.endswith('0891B2') or '0891B2' in str(ws['A2'].fill.fgColor.rgb)
