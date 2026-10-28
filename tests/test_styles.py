@@ -1,7 +1,7 @@
 """
 The style catalogue (``style_compositions.py``).
 
-Styles are data, not code: 42 ``TableComposition`` namedtuples. Nothing in the
+Styles are data, not code: 43 ``TableComposition`` namedtuples. Nothing in the
 package validates them, so a malformed entry only shows up when a table is
 rendered with it. The smoke test below renders the same table in every style
 and checks the data survived.
@@ -33,10 +33,10 @@ def build_table(style_name):
 # The catalogue itself
 # +-------------------------------------------------------------------------+
 
-def test_the_catalogue_holds_42_styles():
+def test_the_catalogue_holds_43_styles():
     # A canary: adding a style is meant to be purely additive, and the README,
     # ARCHITECTURE.md and style_examples.md all quote this number.
-    assert len(ALL_STYLES) == 42
+    assert len(ALL_STYLES) == 43
 
 
 def test_style_names_are_unique():
@@ -187,3 +187,28 @@ def test_the_style_name_setter_works_from_any_directory(monkeypatch, tmp_path):
 def test_style_examples_is_present_at_the_repository_root():
     # Guards the fixture that makes the setter above usable in the suite.
     assert os.path.isfile(os.path.join(REPO_ROOT, 'style_examples.md'))
+
+
+def test_blocks_style_is_in_the_catalogue():
+    assert 'blocks' in ALL_STYLES
+
+
+def test_blocks_style_has_no_border_glyphs():
+    """blocks is fill-only: no box-drawing / ascii rule characters."""
+    table = build_table('blocks')
+    rendered = str(table)
+    for glyph in '┌┐└┘├┤┬┴┼│─═╪╧╤╞╡╒╘╛║╔╗╚╝┊┄╍+|':
+        assert glyph not in rendered, (glyph, rendered)
+
+
+def test_blocks_style_keeps_cell_padding_for_background_fills():
+    import os
+    os.environ['FORCE_COLOR'] = '1'
+    os.environ.pop('NO_COLOR', None)
+    table = build_table('blocks')
+    table.use_colors = True
+    table.header_color = 'bold white on blue'
+    table.column_colors = {'Name': 'black on green'}
+    rendered = str(table)
+    assert '\x1b[' in rendered or '\033[' in rendered or '[' in rendered
+    assert '42m' in rendered or '44m' in rendered  # green or blue bg
