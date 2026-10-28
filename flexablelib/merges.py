@@ -16,6 +16,7 @@ The consequence is that a merged region never widens the table. Content longer
 than the span it was given is truncated, not accommodated.
 """
 
+import re
 from typing import List, NamedTuple, Optional
 
 from .fast import (
@@ -212,17 +213,28 @@ def _region_bounds(region, layout, index_offset):
     )
 
 
-# Replacement for apply() and helpers — pasted into merges.py below Layout helpers.
+# Junction / rule helpers for merge painting.
 
 # Horizontal dash characters used by the shipped styles (and ASCII grids).
 _H_CHARS = set('─━═┄┅┈┉╌╍▬−' '-~=')
+# A real rule has a *run* of dashes. A lone '-' inside "Beta-1" is not a rule.
+_H_RUN = re.compile(r'[─━═┄┅┈┉╌╍▬−\-~=]{2,}')
+_PURE_H = {(0, 0, 1, 1), (0, 0, 1, 0), (0, 0, 0, 1)}
+_ROUND_CORNERS = set('╭╮╰╯')
 
-# Light / heavy / double / ascii junction tables keyed by (N, S, E, W) booleans.
+# Light / heavy / double / ascii / round junction tables keyed by (N, S, E, W).
 _LIGHT = {
     (1, 1, 1, 1): '┼', (1, 1, 1, 0): '├', (1, 1, 0, 1): '┤',
     (1, 0, 1, 1): '┴', (0, 1, 1, 1): '┬', (1, 1, 0, 0): '│',
     (0, 0, 1, 1): '─', (1, 0, 1, 0): '└', (1, 0, 0, 1): '┘',
     (0, 1, 1, 0): '┌', (0, 1, 0, 1): '┐', (1, 0, 0, 0): '│',
+    (0, 1, 0, 0): '│', (0, 0, 1, 0): '─', (0, 0, 0, 1): '─',
+}
+_ROUND = {
+    (1, 1, 1, 1): '┼', (1, 1, 1, 0): '├', (1, 1, 0, 1): '┤',
+    (1, 0, 1, 1): '┴', (0, 1, 1, 1): '┬', (1, 1, 0, 0): '│',
+    (0, 0, 1, 1): '─', (1, 0, 1, 0): '╰', (1, 0, 0, 1): '╯',
+    (0, 1, 1, 0): '╭', (0, 1, 0, 1): '╮', (1, 0, 0, 0): '│',
     (0, 1, 0, 0): '│', (0, 0, 1, 0): '─', (0, 0, 0, 1): '─',
 }
 _DOUBLE_V_SINGLE_H = {
@@ -265,7 +277,6 @@ def _char_at(line: str, index: int) -> str:
     return slice_by_width(line, index, index + 1)
 
 
-
 def _junction_positions(layout, composition):
     """(x, vertical_glyph) for every vertical rule that can host a junction."""
     v = composition.vertical_table_body_lines
@@ -282,25 +293,36 @@ def _junction_positions(layout, composition):
     return out
 
 
-def _pick_junction(v_glyph: str, h_glyph: str, n: bool, s: bool, e: bool, w: bool) -> str:
+def _pick_junction(v_glyph: str, h_glyph: str, n: bool, s: bool, e: bool, w: bool,
+                   round_corners: bool = False) -> str:
     key = (1 if n else 0, 1 if s else 0, 1 if e else 0, 1 if w else 0)
     if key == (0, 0, 0, 0):
         return ' '
-    if v_glyph in '|+' or h_glyph in '-=':
-        # ASCII grid / pipes family
-        if v_glyph in '|+' and h_glyph in '-=+':
+    # Pure horizontal: keep THIS rule's dash (┄/═/─/-), never a foreign glyph.
+    if key in _PURE_H:
+        if v_glyph in '|+' or (h_glyph and h_glyph in '-=~'):
+            return h_glyph if h_glyph in '-=~' else '-'
+        return h_glyph or '─'
+    if v_glyph in '|+' or (h_glyph and h_glyph in '-=') :
+        if v_glyph in '|+' and (h_glyph in '-=+' or not h_glyph):
             return _ASCII.get(key, '+')
     if v_glyph == '║' and h_glyph == '═':
         return _DOUBLE.get(key, '║')
     if v_glyph == '║':
         return _DOUBLE_V_SINGLE_H.get(key, '║')
-    if h_glyph == '═' and v_glyph in ('│', '┃'):
+    if h_glyph == '═' and v_glyph in ('│', '┃', '┊'):
         return _SINGLE_V_DOUBLE_H.get(key, '│')
+    if round_corners:
+        return _ROUND.get(key, v_glyph or '│')
     return _LIGHT.get(key, v_glyph or '│')
 
 
 def _synthesize_body_rule(composition):
-    """Body SeparatorLine for styles that draw column lines but no row lines."""
+    """Body SeparatorLine for styles that draw column lines but no row lines.
+
+    Uses the table's outer (end/header) horizontal glyph so synthetic caps
+    match the top/bottom border style.
+    """
     from .style_compositions import SeparatorLine
     existing = composition.table_body_line
     if existing is not None and existing.middle:
@@ -308,21 +330,40 @@ def _synthesize_body_rule(composition):
     v = composition.vertical_table_body_lines
     if v is None or not v.middle or v.middle == ' ':
         return None
+    end = composition.table_end_line
+    header = composition.inferior_header_line
+    h = None
+    if end is not None and end.middle:
+        h = end.middle
+    elif header is not None and header.middle:
+        h = header.middle
     if v.middle in '|+':
         return SeparatorLine(
             left='+' if v.left else None,
-            middle='-',
+            middle=h if h in '-=~' else '-',
             intersection='+',
             right='+' if v.right else None,
         )
-    # Unicode column style (pretty_columns, round_edges, …)
+    if h == '═':
+        return SeparatorLine(
+            left='╞' if v.left else None,
+            middle='═',
+            intersection='╪',
+            right='╡' if v.right else None,
+        )
+    # Light / dotted / round outer borders → matching light body rule.
     left = '├' if v.left else None
     right = '┤' if v.right else None
     if v.left == '║':
         left = '╟'
     if v.right == '║':
         right = '╢'
-    return SeparatorLine(left=left, middle='─', intersection='┼', right=right)
+    return SeparatorLine(
+        left=left,
+        middle=h or '─',
+        intersection='┼',
+        right=right,
+    )
 
 
 def _build_rule_line(layout, composition, column_widths, hidden, rule=None):
@@ -359,13 +400,13 @@ def _build_rule_line(layout, composition, column_widths, hidden, rule=None):
     return left + center + right
 
 
-def _looks_like_rule(line: str, h_glyph: str) -> bool:
+def _looks_like_rule(line: str, h_glyph: str = None) -> bool:
+    """True only for real separator lines, not cell text that contains '-'."""
     if not line:
         return False
-    plain = line
-    if h_glyph and h_glyph in plain:
+    if h_glyph and len(h_glyph) >= 1 and (h_glyph * 2) in line:
         return True
-    return any(ch in plain for ch in _H_CHARS)
+    return _H_RUN.search(line) is not None
 
 
 def _repair_rule_junctions(line, layout, composition, h_glyph, missing_south=None, missing_north=None,
@@ -385,6 +426,7 @@ def _repair_rule_junctions(line, layout, composition, h_glyph, missing_south=Non
     if v is None:
         return line
     h_glyph = h_glyph or '─'
+    round_corners = any(ch in line for ch in _ROUND_CORNERS)
     rewritten = line
     for x, v_glyph in _junction_positions(layout, composition):
         if visible_width(rewritten) <= x:
@@ -399,8 +441,10 @@ def _repair_rule_junctions(line, layout, composition, h_glyph, missing_south=Non
         east = _is_h(right)
         north = (not no_north) and (x not in missing_north)
         south = (not no_south) and (x not in missing_south)
-        # A junction with no arms at all becomes the bare vertical.
-        glyph = _pick_junction(v_glyph, h_glyph, north, south, east, west)
+        glyph = _pick_junction(
+            v_glyph, h_glyph, north, south, east, west,
+            round_corners=round_corners,
+        )
         rewritten = _repaint(rewritten, x, x + 1, glyph)
     return rewritten
 
@@ -434,9 +478,11 @@ def apply(lines, row_line_map, regions, column_widths, composition,
     touched_seps = set()
     # Horizontal (or 2D) merges: verticals removed between their columns on
     # their data lines; caps above/below need ┴/┬ repair.
-    horiz_caps = []  # (above_line, below_line, inner_separator_xs)
-    # Column-only styles: insert a synthetic row rule around multi-column merges.
-    col_only_inserts = []  # (after_index, rule_line)  insert AT after_index+1
+    # (above_line, below_line, inner_separator_xs, first_row, last_row)
+    horiz_caps = []
+    # Column-only gaps keyed by logical row *after which* a rule sits
+    # (gap after row G = between G and G+1). Values: miss_s, miss_n, insert_at.
+    gap_plans = {}
 
     synthesized = _synthesize_body_rule(composition)
     col_only = (
@@ -445,6 +491,21 @@ def apply(lines, row_line_map, regions, column_widths, composition,
         and composition.vertical_table_body_lines is not None
         and composition.vertical_table_body_lines.middle not in (None, '', ' ')
     )
+    syn_h = synthesized.middle if synthesized is not None else None
+
+    def _blank_crossings(rule_line, gap_after_row):
+        """Erase horizontal through merges that continue across this gap."""
+        for region in regions:
+            if region.first_row <= gap_after_row and region.last_row >= gap_after_row + 1:
+                bounds = _region_bounds(region, layout, index_offset)
+                if bounds is None:
+                    continue
+                (start, end), _, _, _ = bounds
+                if end > start:
+                    rule_line = _repaint(
+                        rule_line, start, end, filler * (end - start)
+                    )
+        return rule_line
 
     for region in regions:
         bounds = _region_bounds(region, layout, index_offset)
@@ -504,37 +565,30 @@ def apply(lines, row_line_map, regions, column_widths, composition,
         if region.column_count >= 2 and inner_seps:
             above = min(target_lines) - 1
             below = max(target_lines) + 1
-            # Existing rules (body / header / end) get ┴/┬ via horiz_caps.
-            horiz_caps.append((above, below, set(inner_seps)))
+            horiz_caps.append(
+                (above, below, set(inner_seps), region.first_row, region.last_row)
+            )
 
-            if col_only:
-                rule_line = _build_rule_line(
-                    layout, composition, column_widths, hidden_columns, synthesized
-                )
-                if rule_line is not None:
-                    # Only insert a synthetic row rule where the style has no
-                    # rule already. Duplicating a header/end rule looks broken;
-                    # those are repaired in pass 3 instead.
-                    above_is_rule = (
-                        above >= 0 and any(_is_h(ch) for ch in lines[above])
+            if col_only and synthesized is not None:
+                # Cap above: gap after first_row-1 (if any).
+                if region.first_row > 0:
+                    g = region.first_row - 1
+                    plan = gap_plans.setdefault(
+                        g, {'s': set(), 'n': set(), 'at': min(target_lines)}
                     )
-                    below_is_rule = (
-                        below < len(lines) and any(_is_h(ch) for ch in lines[below])
+                    plan['s'] |= set(inner_seps)
+                    plan['at'] = min(plan['at'], min(target_lines))
+                # Cap below: gap after last_row (unless last table row — end
+                # line is repaired in pass 3).
+                max_row = max(row_line_map) if row_line_map else region.last_row
+                if region.last_row < max_row:
+                    g = region.last_row
+                    plan = gap_plans.setdefault(
+                        g, {'s': set(), 'n': set(), 'at': max(target_lines) + 1}
                     )
-                    if not above_is_rule:
-                        capped = _repair_rule_junctions(
-                            rule_line, layout, composition,
-                            synthesized.middle,
-                            missing_south=set(inner_seps),
-                        )
-                        col_only_inserts.append((min(target_lines), capped))
-                    if not below_is_rule:
-                        capped_below = _repair_rule_junctions(
-                            rule_line, layout, composition,
-                            synthesized.middle,
-                            missing_north=set(inner_seps),
-                        )
-                        col_only_inserts.append((max(target_lines) + 1, capped_below))
+                    plan['n'] |= set(inner_seps)
+                    plan['at'] = min(plan.get('at', max(target_lines) + 1),
+                                     max(target_lines) + 1)
 
     # --- Pass 2: repair junctions on body rules touched by vertical blanks ---
     if h_glyph:
@@ -546,11 +600,10 @@ def apply(lines, row_line_map, regions, column_widths, composition,
                 line, layout, composition, h_glyph
             )
 
-    # --- Pass 3: ┴ / ┬ on rules above and below horizontal / 2D merges -----
-    # Combine missing arms when several merges share a cap line.
+    # --- Pass 3: ┴ / ┬ on existing rules above and below H / 2D merges -------
     missing_south_by_line = {}
     missing_north_by_line = {}
-    for above, below, xs in horiz_caps:
+    for above, below, xs, _fr, _lr in horiz_caps:
         if above >= 0:
             missing_south_by_line.setdefault(above, set()).update(xs)
         if below < len(lines):
@@ -559,12 +612,9 @@ def apply(lines, row_line_map, regions, column_widths, composition,
     cap_lines = set(missing_south_by_line) | set(missing_north_by_line)
     for line_index in cap_lines:
         line = lines[line_index]
-        # Header / body / end rules all use horizontal glyphs.
-        if not any(_is_h(ch) for ch in line):
+        if not _looks_like_rule(line, h_glyph):
             continue
-        # Guess h glyph from the line itself.
         line_h = next((ch for ch in line if _is_h(ch)), h_glyph or '─')
-        # Outer borders never grow an arm past the table.
         lines[line_index] = _repair_rule_junctions(
             line, layout, composition, line_h,
             missing_south=missing_south_by_line.get(line_index),
@@ -573,30 +623,46 @@ def apply(lines, row_line_map, regions, column_widths, composition,
             no_north=(line_index == 0),
         )
 
-    # --- Pass 4: insert synthetic row rules for column-only styles ----------
-    # Adjacent multi-column merges on neighbouring rows both want a rule in
-    # the same gap; coalesce those into one line with every missing arm.
-    if col_only_inserts and synthesized is not None:
-        # Map insert index → (missing_south xs, missing_north xs)
-        gap_arms = {}
-        for above, below, xs in horiz_caps:
-            # insert above merge lands at above+1 (== min target_lines)
-            if above + 1 >= 0:
-                arms = gap_arms.setdefault(above + 1, [set(), set()])
-                arms[0] |= set(xs)  # missing south into the merge below
-            arms = gap_arms.setdefault(below, [set(), set()])
-            arms[1] |= set(xs)  # missing north into the merge above
-        # Only keep gaps we actually planned to insert (skip header/end).
-        planned = {at for at, _ in col_only_inserts}
-        for at in sorted(planned, reverse=True):
-            miss_s, miss_n = gap_arms.get(at, [set(), set()])
+    # --- Pass 4: synthetic caps for column-only styles ----------------------
+    # Insert a rule in each planned gap that does not already hold a real
+    # separator. Blank any merge that continues across the gap so taller
+    # vertical/2D merges are not crossed by ghost edges.
+    if col_only and gap_plans and synthesized is not None:
+        for g in sorted(gap_plans.keys(), reverse=True):
+            plan = gap_plans[g]
+            at = plan['at']
+            # If the line already at `at` (or just above the lower row) is a
+            # real rule, repair it in place instead of inserting.
+            existing = None
+            if 0 <= at < len(lines) and _looks_like_rule(lines[at], syn_h):
+                existing = at
+            elif 0 <= at - 1 < len(lines) and _looks_like_rule(lines[at - 1], syn_h):
+                # Header/end sitting where we wanted a gap.
+                existing = at - 1
+
+            if existing is not None:
+                line = lines[existing]
+                line = _blank_crossings(line, g)
+                line_h = next((ch for ch in line if _is_h(ch)), syn_h or '─')
+                lines[existing] = _repair_rule_junctions(
+                    line, layout, composition, line_h,
+                    missing_south=plan['s'] or None,
+                    missing_north=plan['n'] or None,
+                    no_south=(existing >= len(lines) - 1),
+                    no_north=(existing == 0),
+                )
+                continue
+
             rule = _build_rule_line(
                 layout, composition, column_widths, hidden_columns, synthesized
             )
+            if rule is None:
+                continue
+            rule = _blank_crossings(rule, g)
             rule = _repair_rule_junctions(
-                rule, layout, composition, synthesized.middle,
-                missing_south=miss_s or None,
-                missing_north=miss_n or None,
+                rule, layout, composition, syn_h,
+                missing_south=plan['s'] or None,
+                missing_north=plan['n'] or None,
             )
             lines.insert(max(0, min(at, len(lines))), rule)
 
