@@ -4127,6 +4127,7 @@ class Table(object):
         """
         Build a table from a worksheet in an .xlsx file.
 
+        Excel merged ranges are restored as ``merge_cells`` regions.
         Requires openpyxl: pip install flexablelib[excel]
         """
         from .readers import from_excel
@@ -4195,7 +4196,8 @@ class Table(object):
         Write an .xlsx workbook.
 
         Numbers are written as numbers so the spreadsheet can compute with
-        them. Requires openpyxl: pip install flexablelib[excel]
+        them. ``merged_regions`` become real Excel merges. Requires openpyxl:
+        pip install flexablelib[excel]
         """
         from .writers import to_excel
         return to_excel(self, path, sheet_name, include_index, autofit,
