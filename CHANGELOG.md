@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.0.7] - 2026-10-28
+
+### Fixed
+- Generic merge junction algorithm: rule detection no longer treats a lone
+  hyphen inside cell text (e.g. `Beta-1`) as a separator line, so column-only
+  styles still get synthetic caps around multi-column merges.
+- Pure-horizontal junctions keep the rule's own dash glyph (`┄`/`═`/`─`/`-`)
+  instead of substituting a foreign `─`.
+- Synthetic caps blank through taller vertical/2D merges that cross the gap
+  (no ghost `┼` inside a continuing merge).
+- Synthetic caps use the table's outer horizontal style so they match top/bottom.
+- Round-edge end corners (`╰`/`╯`) survive last-row horizontal merge repair.
+
 ## [2.0.4](https://github.com/Opus-Perpetuus/flexablelib/compare/v2.0.3...v2.0.4) (2026-10-28)
 
 ### Bug Fixes
