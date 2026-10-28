@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.0.8] - 2026-10-28
+
+### Fixed
+- Synthetic caps for multi-column merges clamp their horizontal run to the
+  merge's column span (no H bleeding into neighbour columns). Covers
+  column-only styles such as `grid_eheader` / `round_edges` / `pretty_columns`.
+- Junction repair skips invisible/spacer vertical glyphs, so styles like
+  `simple` no longer pick up stray `┴`/`┼` on header and end rules.
+
 ## [2.0.7] - 2026-10-28
 
 ### Fixed
