@@ -1,5 +1,5 @@
 /*
- * Unicode width tables for the prettyTables C extension.
+ * Unicode width tables for the flexablelib C extension.
  *
  * GENERATED FILE -- do not edit by hand.
  * Regenerate with: python3 tools/generate_width_tables.py
@@ -10,8 +10,8 @@
  * Codepoints absent from both tables are one column wide.
  */
 
-#ifndef PRETTYTABLES_WIDTH_TABLES_H
-#define PRETTYTABLES_WIDTH_TABLES_H
+#ifndef FLEXABLELIB_WIDTH_TABLES_H
+#define FLEXABLELIB_WIDTH_TABLES_H
 
 struct width_range {
     unsigned int start;
@@ -521,4 +521,4 @@ static const struct width_range wide_ranges[] = {
 };
 #define WIDE_RANGES_COUNT (sizeof(wide_ranges) / sizeof(wide_ranges[0]))
 
-#endif /* PRETTYTABLES_WIDTH_TABLES_H */
+#endif /* FLEXABLELIB_WIDTH_TABLES_H */

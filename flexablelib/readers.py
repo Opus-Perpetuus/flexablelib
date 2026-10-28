@@ -295,7 +295,7 @@ def from_pandas(table_class, dataframe, include_index: bool = False, **options):
     except ImportError:  # pragma: no cover - depends on the environment
         raise ImportError(
             'reading a DataFrame requires pandas. '
-            'Install it with: pip install prettyTables[pandas]'
+            'Install it with: pip install flexablelib[pandas]'
         )
 
     if isinstance(dataframe, pandas.Series):
@@ -341,7 +341,7 @@ def from_excel(table_class, path, sheet=None, has_header: bool = True,
     except ImportError:  # pragma: no cover - depends on the environment
         raise ImportError(
             'reading Excel requires openpyxl. '
-            'Install it with: pip install prettyTables[excel]'
+            'Install it with: pip install flexablelib[excel]'
         )
 
     workbook = load_workbook(filename=path, read_only=True, data_only=True)

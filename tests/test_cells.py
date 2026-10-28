@@ -9,8 +9,8 @@ what turns ``'Piotr\\nBaltimore'`` into two physical rows in the README.
 
 import pytest
 
-from prettyTables import cells
-from prettyTables.cells import (
+from flexablelib import cells
+from flexablelib.cells import (
     _add_cell_spacing,
     _center_cell,
     _fljust_cell,

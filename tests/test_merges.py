@@ -4,7 +4,7 @@ Merged cells.
 A merge renders a rectangular block as a single cell. It is applied to the
 assembled string rather than threaded through the measuring pipeline, so the
 columns keep being sized by their own unmerged content -- see the module
-docstring in ``prettyTables/merges.py`` for why.
+docstring in ``flexablelib/merges.py`` for why.
 
 The consequence worth testing: a merge never changes the table's width.
 """
@@ -12,8 +12,8 @@ The consequence worth testing: a merge never changes the table's width.
 import pytest
 
 from helpers import table_width
-from prettyTables import Table
-from prettyTables.fast import strip_ansi, visible_width
+from flexablelib import Table
+from flexablelib.fast import strip_ansi, visible_width
 
 INTERSECTION = '┬'
 

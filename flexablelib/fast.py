@@ -6,7 +6,7 @@ available and falls back to pure Python when it is not.
 
 The extension is optional on purpose. A source install on a machine with no
 compiler, an unusual platform with no published wheel, or a restricted build
-environment must still end up with a working package -- prettyTables has been
+environment must still end up with a working package -- flexablelib has been
 installable with zero dependencies and no build step since 2021, and that must
 not regress for the sake of speed.
 

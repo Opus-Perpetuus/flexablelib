@@ -1,5 +1,5 @@
 from setuptools import setup, Extension
-from prettyTables.utils import read_json, read_file
+from flexablelib.utils import read_json, read_file
 import os
 
 
@@ -7,29 +7,29 @@ import os
 # or a platform with no published wheel, still gets a working install -- the
 # package falls back to the pure-Python implementation in text_width.py.
 speedups = Extension(
-  'prettyTables._speedups',
-  sources=['prettyTables/_speedups.c'],
+  'flexablelib._speedups',
+  sources=['flexablelib/_speedups.c'],
   optional=True,
 )
 
 
 setup(
   ext_modules=[speedups],
-  name = 'prettyTables',         
-  packages = ['prettyTables'],   
+  name = 'flexablelib',         
+  packages = ['flexablelib'],   
   version = read_json(f'.{os.sep}package.json')['version'],      
-  description = 'Tables to print in console',   
+  description = 'Flexible Table Library — console tables',   
   long_description=read_file('README.md'),
   long_description_content_type='text/markdown',
   author = 'Benjamin Ramirez',                   
   author_email = 'chilerito12@gmail.com',      
-  url = 'https://github.com/Kyostenas/prettyTables',   
+  url = 'https://github.com/Opus-Perpetuus/prettyTables',   
   license='MIT',        
   download_url = '',    
   keywords = ['console', 'graphics'],   
   install_requires=[],
   # The base install stays dependency-free. Readers and writers that need a
-  # third-party library are opt-in: pip install prettyTables[pandas,excel]
+  # third-party library are opt-in: pip install flexablelib[pandas,excel]
   extras_require={
     'pandas': ['pandas>=1.0'],
     'excel': ['openpyxl>=3.0'],

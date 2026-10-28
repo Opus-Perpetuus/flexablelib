@@ -6,7 +6,7 @@ are a map of where this one is likely to be wrong too. These tests come from
 reading roughly nine hundred issues across `jazzband/prettytable`,
 `astanin/python-tabulate`, `foutaise/texttable`, `Textualize/rich`,
 `thombashi/pytablewriter` and `matthewdeanmartin/terminaltables`, reproducing
-each recurring failure here, and keeping the ones prettyTables also had.
+each recurring failure here, and keeping the ones flexablelib also had.
 
 Each test names the upstream report it came from. They are not our issue
 numbers -- ours live in `test_issues.py` -- and none of them is a claim about
@@ -14,14 +14,14 @@ the state of the other project. They are a record of where the reproduction
 came from.
 
 `docs/ISSUES.md` has the triage: which themes recur across the trackers, which
-of them prettyTables already handled, and which of them it did not.
+of them flexablelib already handled, and which of them it did not.
 """
 
 import pytest
 
 from helpers import table_width
-from prettyTables import Table
-from prettyTables.fast import visible_width
+from flexablelib import Table
+from flexablelib.fast import visible_width
 
 INTERSECTION = '┬'
 
@@ -117,7 +117,7 @@ def test_wrapping_at_a_width_of_one_terminates():
     width 1. A double-width character can never fit a single column, and the
     loop that placed it never advanced.
     """
-    from prettyTables.fast import wrap_to_width
+    from flexablelib.fast import wrap_to_width
 
     assert wrap_to_width('日本', 1) == ['日', '本']
     assert wrap_to_width('abc', 0) == ['a', 'b', 'c']
@@ -130,7 +130,7 @@ def test_colour_survives_a_line_break_intact():
     Breaking inside a sequence leaks raw bytes into the terminal; breaking
     after one leaves the colour running into the next cell.
     """
-    from prettyTables.fast import wrap_to_width
+    from flexablelib.fast import wrap_to_width
 
     lines = wrap_to_width('\x1b[31mred text here\x1b[0m', 8)
 
@@ -144,7 +144,7 @@ def test_truncation_does_not_cut_through_an_escape_sequence():
     """
     tabulate #307, second half. The same rule for the trimming path.
     """
-    from prettyTables.fast import truncate_to_width
+    from flexablelib.fast import truncate_to_width
 
     cut = truncate_to_width('\x1b[31mred text here\x1b[0m', 8)
 

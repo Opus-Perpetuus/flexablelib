@@ -12,7 +12,7 @@ is wrapped or trimmed by the fitting step.
 
 from textwrap import dedent
 
-from prettyTables import Table
+from flexablelib import Table
 
 
 def expected(block):

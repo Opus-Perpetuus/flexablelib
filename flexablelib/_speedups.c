@@ -1,5 +1,5 @@
 /*
- * C implementations of the hot paths in prettyTables.
+ * C implementations of the hot paths in flexablelib.
  *
  * Rendering a table measures every cell several times: once per pass of the
  * two-pass width computation, again while aligning, and again for each wrapped
@@ -11,7 +11,7 @@
  * no per-character allocation and a binary search over baked-in Unicode range
  * tables instead of unicodedata lookups.
  *
- * The behaviour must match prettyTables/text_width.py exactly. That module is
+ * The behaviour must match flexablelib/text_width.py exactly. That module is
  * the reference and the fallback when this extension is unavailable; the two
  * are exercised against each other by the test suite.
  */
@@ -455,13 +455,13 @@ static PyMethodDef module_methods[] = {
 };
 
 PyDoc_STRVAR(module_doc,
-"Accelerated text measurement for prettyTables.\n\n"
-"Import prettyTables.fast rather than this module directly; it falls back to\n"
+"Accelerated text measurement for flexablelib.\n\n"
+"Import flexablelib.fast rather than this module directly; it falls back to\n"
 "the pure-Python implementation when the extension is not built.");
 
 static struct PyModuleDef speedups_module = {
     PyModuleDef_HEAD_INIT,
-    "prettyTables._speedups",
+    "flexablelib._speedups",
     module_doc,
     -1,
     module_methods,

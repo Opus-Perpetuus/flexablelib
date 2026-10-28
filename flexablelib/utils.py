@@ -18,7 +18,7 @@ def get_window_size():
 
     Reading the console is the one piece of I/O in the whole package, and it
     is the one thing that has to not raise: the very first bug reported
-    against prettyTables was a table that could not be printed at all because
+    against flexablelib was a table that could not be printed at all because
     this call blew up (issue #1). ``ValueError`` joins ``OSError`` in the
     handler because a redirected or emulated console can report a size that
     does not unpack, and ``shutil`` supplies a documented 80x24 fallback when
