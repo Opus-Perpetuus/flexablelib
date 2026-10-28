@@ -3,7 +3,7 @@
 What every issue filed against flexablelib asked for, how it was answered,
 where the answer lives, and which test holds it in place.
 
-Tracker: https://github.com/Opus-Perpetuus/prettyTables/issues
+Tracker: https://github.com/Opus-Perpetuus/flexablelib/issues
 
 The executable companion is `tests/test_issues.py`. Defects found by reading
 other table libraries' trackers live in `tests/test_upstream_issues.py` and
@@ -15,28 +15,28 @@ are summarised at the end of this file.
 
 | Issue | Title (short) | Status | Held by |
 | --- | --- | --- | --- |
-| [#1](https://github.com/Opus-Perpetuus/prettyTables/issues/1) | ValueError when measuring the console | Closed | `test_issue_1_*` |
-| [#2](https://github.com/Opus-Perpetuus/prettyTables/issues/2) | Show the row index | Closed | `test_issue_2_*` |
-| [#3](https://github.com/Opus-Perpetuus/prettyTables/issues/3) | Hide empty rows and columns | Closed | `test_issue_3_*` |
-| [#4](https://github.com/Opus-Perpetuus/prettyTables/issues/4) | Alignment per type and per column | Closed | `test_issue_4_*` |
-| [#5](https://github.com/Opus-Perpetuus/prettyTables/issues/5) | Fit the table to the console | Closed | `test_issue_5_*` |
-| [#6](https://github.com/Opus-Perpetuus/prettyTables/issues/6) | Missing value set after the data | Closed | `test_issue_6_*` |
-| [#7](https://github.com/Opus-Perpetuus/prettyTables/issues/7) | Hide columns while the index shows | Closed | `test_issue_7_*` |
-| [#8](https://github.com/Opus-Perpetuus/prettyTables/issues/8) | Index stays contiguous when rows hide | Closed | `test_issue_8_*` |
-| [#9](https://github.com/Opus-Perpetuus/prettyTables/issues/9) | Empty row/column criteria mismatched | Closed | `test_issue_9_*` |
-| [#10](https://github.com/Opus-Perpetuus/prettyTables/issues/10) | Formatting and documentation | Partial | `test_issue_10_*` |
-| [#11](https://github.com/Opus-Perpetuus/prettyTables/issues/11) | Trimming with a marker | Closed | `test_issue_11_*` |
-| [#12](https://github.com/Opus-Perpetuus/prettyTables/issues/12) | Trimmed number columns align left | Closed | `test_issue_12_*` |
-| [#13](https://github.com/Opus-Perpetuus/prettyTables/issues/13) | Auto-wrap depends on `auto_wrap` | Closed | `test_issue_13_*` |
-| [#14](https://github.com/Opus-Perpetuus/prettyTables/issues/14) | Message when the table cannot fit | Closed | `test_issue_14_*` |
-| [#15](https://github.com/Opus-Perpetuus/prettyTables/issues/15) | Constructor rows/headers/columns | Closed | `test_issue_15_*` |
-| [#16](https://github.com/Opus-Perpetuus/prettyTables/issues/16) | Shrink the widest columns first | Closed | `test_issue_16_*` |
-| [#17](https://github.com/Opus-Perpetuus/prettyTables/issues/17) | Auto-wrapping raised | Closed | `test_issue_17_*` |
-| [#18](https://github.com/Opus-Perpetuus/prettyTables/issues/18) | Trimming mutated stored data | Closed | `test_issue_18_*` |
-| [#19](https://github.com/Opus-Perpetuus/prettyTables/issues/19) | Constructor headers still auto-named | Closed | `test_issue_19_*` |
-| [#22](https://github.com/Opus-Perpetuus/prettyTables/issues/22) | Hidden rows still widened columns | Closed | `test_issue_22_*` |
-| [#23](https://github.com/Opus-Perpetuus/prettyTables/issues/23) | Float columns lose alignment on shrink | Fixed here; close when released | `test_issue_23_*` |
-| [#24](https://github.com/Opus-Perpetuus/prettyTables/issues/24) | Wide rows without prior columns | Closed | `test_issue_24_*` |
+| [#1](https://github.com/Opus-Perpetuus/flexablelib/issues/1) | ValueError when measuring the console | Closed | `test_issue_1_*` |
+| [#2](https://github.com/Opus-Perpetuus/flexablelib/issues/2) | Show the row index | Closed | `test_issue_2_*` |
+| [#3](https://github.com/Opus-Perpetuus/flexablelib/issues/3) | Hide empty rows and columns | Closed | `test_issue_3_*` |
+| [#4](https://github.com/Opus-Perpetuus/flexablelib/issues/4) | Alignment per type and per column | Closed | `test_issue_4_*` |
+| [#5](https://github.com/Opus-Perpetuus/flexablelib/issues/5) | Fit the table to the console | Closed | `test_issue_5_*` |
+| [#6](https://github.com/Opus-Perpetuus/flexablelib/issues/6) | Missing value set after the data | Closed | `test_issue_6_*` |
+| [#7](https://github.com/Opus-Perpetuus/flexablelib/issues/7) | Hide columns while the index shows | Closed | `test_issue_7_*` |
+| [#8](https://github.com/Opus-Perpetuus/flexablelib/issues/8) | Index stays contiguous when rows hide | Closed | `test_issue_8_*` |
+| [#9](https://github.com/Opus-Perpetuus/flexablelib/issues/9) | Empty row/column criteria mismatched | Closed | `test_issue_9_*` |
+| [#10](https://github.com/Opus-Perpetuus/flexablelib/issues/10) | Formatting and documentation | Partial | `test_issue_10_*` |
+| [#11](https://github.com/Opus-Perpetuus/flexablelib/issues/11) | Trimming with a marker | Closed | `test_issue_11_*` |
+| [#12](https://github.com/Opus-Perpetuus/flexablelib/issues/12) | Trimmed number columns align left | Closed | `test_issue_12_*` |
+| [#13](https://github.com/Opus-Perpetuus/flexablelib/issues/13) | Auto-wrap depends on `auto_wrap` | Closed | `test_issue_13_*` |
+| [#14](https://github.com/Opus-Perpetuus/flexablelib/issues/14) | Message when the table cannot fit | Closed | `test_issue_14_*` |
+| [#15](https://github.com/Opus-Perpetuus/flexablelib/issues/15) | Constructor rows/headers/columns | Closed | `test_issue_15_*` |
+| [#16](https://github.com/Opus-Perpetuus/flexablelib/issues/16) | Shrink the widest columns first | Closed | `test_issue_16_*` |
+| [#17](https://github.com/Opus-Perpetuus/flexablelib/issues/17) | Auto-wrapping raised | Closed | `test_issue_17_*` |
+| [#18](https://github.com/Opus-Perpetuus/flexablelib/issues/18) | Trimming mutated stored data | Closed | `test_issue_18_*` |
+| [#19](https://github.com/Opus-Perpetuus/flexablelib/issues/19) | Constructor headers still auto-named | Closed | `test_issue_19_*` |
+| [#22](https://github.com/Opus-Perpetuus/flexablelib/issues/22) | Hidden rows still widened columns | Closed | `test_issue_22_*` |
+| [#23](https://github.com/Opus-Perpetuus/flexablelib/issues/23) | Float columns lose alignment on shrink | Fixed here; close when released | `test_issue_23_*` |
+| [#24](https://github.com/Opus-Perpetuus/flexablelib/issues/24) | Wide rows without prior columns | Closed | `test_issue_24_*` |
 
 Issues #20 and #21 never existed on the tracker (or were removed); the suite
 jumps from #19 to #22 for that reason.

@@ -376,7 +376,7 @@ covered.
 - Issue #23 (float shrink alignment) is fixed; see [docs/ISSUES.md](docs/ISSUES.md).
 
 For behavioural history, see [docs/ISSUES.md](docs/ISSUES.md) and the
-[open issues](https://github.com/Opus-Perpetuus/prettyTables/issues).
+[open issues](https://github.com/Opus-Perpetuus/flexablelib/issues).
 
 ## Testing
 

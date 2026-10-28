@@ -1,7 +1,7 @@
 {
   "name": "flexablelib",
   "version": "2.0.0",
-  "description": "Flexible Table Library \u2014 format tabular data for the console.",
+  "description": "Flexible console and HTML tables for Python: styles, merges, colors, widths, decimal alignment.",
   "main": "__init__.py",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -12,14 +12,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Opus-Perpetuus/prettyTables.git"
+    "url": "git+https://github.com/Opus-Perpetuus/flexablelib.git"
   },
   "author": "Kyostenas",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/Opus-Perpetuus/prettyTables/issues"
+    "url": "https://github.com/Opus-Perpetuus/flexablelib/issues"
   },
-  "homepage": "https://github.com/Opus-Perpetuus/prettyTables#readme",
+  "homepage": "https://github.com/Opus-Perpetuus/flexablelib#readme",
   "config": {
     "commitzen": {
       "path": "cz-conventional-changelog"
