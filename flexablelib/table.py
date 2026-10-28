@@ -819,6 +819,13 @@ class Table(object):
         self.__cell_padding = None
         # 'wrap' | 'truncate' | None (None defers to auto_wrap bool).
         self.__overflow = None
+        # Vertical cell align: 't'/'m'/'b' default, plus per-column / per-cell maps.
+        self.__valign = 't'
+        self.__col_valign = None
+        self.__cell_valign = {}
+        # Outer panel frame (tabled/Spectre style) + optional shadow.
+        self.__panel = False
+        self.__shadow = False
         # Row indexes after which a horizontal rule is forced.
         self.__dividers = set()
         # Sort / filter applied to the display copy, not to stored data.
@@ -1456,6 +1463,47 @@ class Table(object):
         return self.__overflow
 
     @property
+    def valign(self):
+        """
+        Default vertical cell alignment inside a multi-line row: ``'t'``,
+        ``'m'``, or ``'b'`` (texttable-style). Overridden by
+        :attr:`col_valign` and :attr:`cell_valign`.
+        """
+        return self.__valign
+
+    @property
+    def col_valign(self):
+        """
+        Per-column vertical alignment: a code, list/tuple of codes, or
+        ``{header_or_index: code}``.
+        """
+        return self.__col_valign
+
+    @property
+    def cell_valign(self):
+        """
+        Per-cell vertical alignment map ``{(row, col): 't'|'m'|'b'}``.
+        ``col`` may be a header name or 0-based index.
+        """
+        return self.__cell_valign
+
+    @property
+    def panel(self):
+        """
+        When true (or a box style name), wrap the composed table in an outer
+        frame. Inspired by tabled Panel / Spectre Panel.
+        """
+        return self.__panel
+
+    @property
+    def shadow(self):
+        """
+        When true (or a character), draw a drop-shadow on the right and
+        bottom of the composed table (or of the panel, when both are set).
+        """
+        return self.__shadow
+
+    @property
     def sort_by(self):
         """
         Column header or 0-based index used to order rows at render time.
@@ -1798,6 +1846,60 @@ class Table(object):
         # ellipsis is truncate with the default trimming sign
         self.__overflow = 'truncate' if value == 'ellipsis' else value
         self.__auto_wrap_table = self.__overflow == 'wrap'
+
+    @valign.setter
+    def valign(self, value):
+        from .cells import _normalize_valign
+        self.__valign = _normalize_valign(value)
+
+    @col_valign.setter
+    def col_valign(self, value):
+        if value is None:
+            self.__col_valign = None
+            return
+        from .cells import _normalize_valign
+        if isinstance(value, dict):
+            self.__col_valign = {
+                key: _normalize_valign(code) for key, code in value.items()
+            }
+        elif is_some_instance(value, list, tuple):
+            self.__col_valign = [_normalize_valign(code) for code in value]
+        else:
+            self.__col_valign = _normalize_valign(value)
+
+    @cell_valign.setter
+    def cell_valign(self, value):
+        if value is None:
+            self.__cell_valign = {}
+            return
+        if not isinstance(value, dict):
+            raise TypeError('cell_valign must be a dict of (row, col) -> code')
+        from .cells import _normalize_valign
+        self.__cell_valign = {
+            key: _normalize_valign(code) for key, code in value.items()
+        }
+
+    @panel.setter
+    def panel(self, value):
+        if value is None or value is False:
+            self.__panel = False
+            return
+        if value is True:
+            self.__panel = True
+            return
+        # Named box style: store the string so the renderer can pick glyphs.
+        self.__panel = str(value)
+
+    @shadow.setter
+    def shadow(self, value):
+        if value is None or value is False:
+            self.__shadow = False
+            return
+        if value is True:
+            self.__shadow = True
+            return
+        # Custom shadow glyph (one visible character preferred).
+        self.__shadow = str(value) if str(value) else True
 
     @sort_by.setter
     def sort_by(self, value):
@@ -3472,6 +3574,10 @@ class Table(object):
                 formatted = self.__apply_format_spec(value, self.__float_format)
             else:
                 formatted = value
+        elif isinstance(value, Table):
+            # Minimal nested subtable: compose the child into a multiline cell.
+            # Child panel/shadow still apply; avoid cycles by not wrapping self.
+            formatted = value.compose()
         else:
             formatted = value
 
@@ -3962,9 +4068,17 @@ class Table(object):
             semi_processed_columns = self.__semi_processed_columns
             processed_columns = self.__processed_columns
             
+        # Fitting can hand back a one-shot zip(); materialise before any
+        # pass that walks the rows (valign resolution would otherwise empty it).
+        rows = list(rows) if rows is not None else []
+        header_valigns, row_valigns = self.__valigns_for_wrap(
+            headers, rows
+        )
         wrapped_headers, wrapped_rows = _wrap_rows(
-            headers, 
-            rows
+            headers,
+            rows,
+            header_valigns=header_valigns,
+            row_valigns=row_valigns,
         )
         transformed_columns, transformed_headers = _zip_wrapped_rows(
             wrapped_headers, 
@@ -4224,6 +4338,7 @@ class Table(object):
         if self.__border_texts:
             table_string = self.__apply_vertical_border_texts(table_string)
 
+        table_string = self.__apply_panel_and_shadow(table_string)
         return self.__apply_table_align(table_string)
 
     def __join_body_rows(self, body_rows, body_line, separator_line,
@@ -4297,6 +4412,132 @@ class Table(object):
             return title
         left = (table_width - title_width) // 2
         return (' ' * left) + title
+
+
+    def __valign_for_cell(self, row_index, header, column_i):
+        """Resolve t/m/b for one body cell (cell > column > default)."""
+        from .cells import _normalize_valign
+        cell_map = self.__cell_valign or {}
+        if cell_map:
+            for key in ((row_index, header), (row_index, column_i)):
+                if key in cell_map:
+                    return _normalize_valign(cell_map[key])
+        per = self.__col_valign
+        if per is not None:
+            if isinstance(per, dict):
+                if header in per:
+                    return _normalize_valign(per[header])
+                if column_i in per:
+                    return _normalize_valign(per[column_i])
+            elif is_some_instance(per, list, tuple):
+                if column_i is not None and column_i < len(per):
+                    return _normalize_valign(per[column_i])
+            else:
+                return _normalize_valign(per)
+        return _normalize_valign(self.__valign)
+
+    def __valigns_for_wrap(self, headers, rows):
+        """Build header_valigns and per-row body valign lists for ``_wrap_rows``."""
+        from .cells import _normalize_valign
+        default = _normalize_valign(self.__valign)
+        n = len(headers) if headers is not None else 0
+        # Headers follow column valign (no per-cell header map).
+        header_valigns = []
+        for column_i, header in enumerate(headers or []):
+            user_i = None if (self.__show_index and column_i == 0) else (
+                column_i - 1 if self.__show_index else column_i
+            )
+            if self.__show_index and column_i == 0:
+                header_valigns.append(default)
+                continue
+            header_valigns.append(
+                self.__valign_for_cell(-1, header, user_i)
+                if user_i is not None else default
+            )
+        # Force header-only resolution without cell_valign row hits:
+        # __valign_for_cell with row -1 won't match normal cell keys.
+        row_valigns = []
+        for row_i, row in enumerate(rows or []):
+            codes = []
+            for column_i in range(len(row)):
+                if self.__show_index:
+                    if column_i == 0:
+                        codes.append(default)
+                        continue
+                    header = headers[column_i] if column_i < n else ''
+                    user_i = column_i - 1
+                else:
+                    header = headers[column_i] if column_i < n else ''
+                    user_i = column_i
+                codes.append(self.__valign_for_cell(row_i, header, user_i))
+            row_valigns.append(codes)
+        # Only pay the cost when something is not top.
+        needs = (
+            default != 't'
+            or self.__col_valign is not None
+            or bool(self.__cell_valign)
+        )
+        if not needs:
+            return None, None
+        return header_valigns, row_valigns
+
+    def __apply_panel_and_shadow(self, table_string):
+        """Wrap the finished table in an optional outer panel and/or shadow."""
+        if not table_string:
+            return table_string
+        out = table_string
+        if self.__panel:
+            out = self.__wrap_panel(out)
+        if self.__shadow:
+            out = self.__apply_shadow(out)
+        return out
+
+    def __panel_glyphs(self):
+        """Box-drawing glyphs for the outer panel frame."""
+        name = 'rounded'
+        if isinstance(self.__panel, str) and self.__panel not in ('True', 'true', '1'):
+            name = self.__panel.lower()
+        presets = {
+            'rounded': ('╭', '─', '╮', '│', '╰', '╯'),
+            'sharp':   ('┌', '─', '┐', '│', '└', '┘'),
+            'ascii':   ('+', '-', '+', '|', '+', '+'),
+            'double':  ('╔', '═', '╗', '║', '╚', '╝'),
+            'heavy':   ('┏', '━', '┓', '┃', '┗', '┛'),
+        }
+        return presets.get(name, presets['rounded'])
+
+    def __wrap_panel(self, table_string):
+        tl, hz, tr, vt, bl, br = self.__panel_glyphs()
+        lines = table_string.splitlines()
+        width = max((visible_width(line) for line in lines), default=0)
+        padded = []
+        for line in lines:
+            pad = width - visible_width(line)
+            padded.append(line + (' ' * pad))
+        top = tl + (hz * width) + tr
+        bottom = bl + (hz * width) + br
+        body = [vt + line + vt for line in padded]
+        return chr(10).join([top] + body + [bottom])
+
+    def __apply_shadow(self, table_string):
+        glyph = '░'
+        if isinstance(self.__shadow, str) and self.__shadow not in ('True', 'true', '1'):
+            glyph = self.__shadow[:1] or '░'
+        lines = table_string.splitlines()
+        width = max((visible_width(line) for line in lines), default=0)
+        out = []
+        for i, line in enumerate(lines):
+            pad = width - visible_width(line)
+            body = line + (' ' * pad)
+            # First line: no right-edge shadow (Spectre-style); later lines get it,
+            # plus a bottom shadow row.
+            if i == 0:
+                out.append(body + ' ')
+            else:
+                out.append(body + glyph)
+        out.append(' ' + (glyph * width))
+        return chr(10).join(out)
+
 
     def __caption_line(self, column_widths_list, table_with_i):
         """Centre the caption under the full table width, if any."""
@@ -4838,6 +5079,94 @@ class Table(object):
     # +-----------------------------------------------------------------------------+
     # start +------------------------+ DATA WRITING +------------------------+ start
 
+    def transpose(self, **options):
+        """
+        Return a new table with rows and columns swapped (display rotate).
+
+        The first column of the result is the original header names; remaining
+        columns are ``row0`` … ``rowN`` holding the original cells. Style and
+        most display options are copied when not overridden in ``options``.
+        """
+        headers = list(self.headers)
+        # Pull raw stored rows (not the composed display copy).
+        rows = []
+        n = self.row_count
+        for row_i in range(n):
+            row = []
+            for header in headers:
+                col = self.__columns.get(header, [])
+                row.append(col[row_i] if row_i < len(col) else self.__missing_value)
+            rows.append(row)
+        new_headers = ['field'] + ['row{}'.format(i) for i in range(len(rows))]
+        new_rows = []
+        for col_i, header in enumerate(headers):
+            new_rows.append(
+                [header] + [rows[r][col_i] if col_i < len(rows[r]) else ''
+                            for r in range(len(rows))]
+            )
+        style = options.pop('style_name', self.style_name)
+        out = type(self).from_records(
+            new_rows, headers=new_headers, style_name=style, **options
+        )
+        return out
+
+    def rotate(self, **options):
+        """Alias of :meth:`transpose` (tabled naming)."""
+        return self.transpose(**options)
+
+    def paginate(self, page_length=20):
+        """
+        Split the table into composed string pages of ``page_length`` body rows.
+
+        Each page is a full table (headers/title/caption/panel repeated).
+        Returns a list of strings. ``page_length`` must be >= 1.
+        Inspired by PrettyTable ``paginate`` / go-pretty.
+        """
+        page_length = int(page_length)
+        if page_length < 1:
+            raise ValueError('page_length must be >= 1')
+        headers = list(self.headers)
+        n = self.row_count
+        if n == 0:
+            return [self.compose()]
+        pages = []
+        for start in range(0, n, page_length):
+            end = min(start + page_length, n)
+            slice_rows = []
+            for row_i in range(start, end):
+                row = []
+                for header in headers:
+                    col = self.__columns.get(header, [])
+                    row.append(col[row_i] if row_i < len(col) else self.__missing_value)
+                slice_rows.append(row)
+            page = type(self).from_records(
+                slice_rows, headers=headers, style_name=self.style_name,
+                missing_val=self.__missing_value,
+            )
+            # Copy common display settings so pages look like the parent.
+            for attr in (
+                'title', 'caption', 'show_headers', 'show_index', 'header_color',
+                'border_color', 'use_colors', 'zebra', 'footer_rows', 'footer_color',
+                'cell_padding', 'overflow', 'auto_wrap', 'valign', 'col_valign',
+                'panel', 'shadow', 'col_alignment', 'header_align', 'max_width',
+                'column_min_width', 'column_max_width', 'table_align',
+            ):
+                try:
+                    setattr(page, attr, getattr(self, attr))
+                except Exception:
+                    pass
+            if self.__cell_colors:
+                # Remap absolute row indexes into the page's local indexes.
+                remapped = {}
+                for (r, c), spec in self.__cell_colors.items():
+                    if isinstance(r, int) and start <= r < end:
+                        remapped[(r - start, c)] = spec
+                if remapped:
+                    page.cell_colors = remapped
+            pages.append(page.compose())
+        return pages
+
+
     @classmethod
     def from_markdown(cls, source, parse_numbers=True, **options):
         """
@@ -4874,6 +5203,21 @@ class Table(object):
         """
         from .writers import to_markdown
         return to_markdown(self, include_index, align)
+
+    def to_rst(self, include_index=False):
+        """Render as a reStructuredText grid table."""
+        from .writers import to_rst
+        return to_rst(self, include_index)
+
+    def to_asciidoc(self, include_index=False):
+        """Render as an AsciiDoc table (``|===`` style)."""
+        from .writers import to_asciidoc
+        return to_asciidoc(self, include_index)
+
+    def to_latex(self, include_index=False):
+        """Render as a LaTeX ``tabular`` environment."""
+        from .writers import to_latex
+        return to_latex(self, include_index)
 
     def to_html(self, target=None, title='Table', paginate=25,
                 include_index=False, searchable=True, encoding='utf-8'):

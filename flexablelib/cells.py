@@ -408,81 +408,81 @@ def __zip_sub_rows(row: Union[list, tuple]) -> tuple:
         only_sub_row = row[0]
         return only_sub_row
 
-def _wrap_rows(headers: Union[list, tuple], 
-               data: Union[List[Union[list, tuple]], Tuple[Union[list, tuple]]]
+
+def _normalize_valign(code) -> str:
+    """Map caller codes to ``t`` / ``m`` / ``b`` (default top)."""
+    if code is None:
+        return 't'
+    key = str(code).strip().lower()
+    if key in ('t', 'top'):
+        return 't'
+    if key in ('m', 'middle', 'c', 'center', 'centre'):
+        return 'm'
+    if key in ('b', 'bottom'):
+        return 'b'
+    raise ValueError(
+        "valign must be one of 't'/'m'/'b' (or top/middle/bottom), got {!r}"
+        .format(code)
+    )
+
+
+def _wrap_rows(headers: Union[list, tuple],
+               data: Union[List[Union[list, tuple]], Tuple[Union[list, tuple]]],
+               header_valigns=None,
+               row_valigns=None,
               ) -> Tuple[list, list]:
     """
     Wraps the rows and headers of the table if
-    any new line characters are present::
+    any new line characters are present.
 
-        _wrap_rows(headers=['a', 'b\\nc'], data=[['a', 'b\\nc'], ['c', 'd']])
-    
-    Results in:
-
-    >>> ([['a', 'b'], ['', 'c']], [[['a', 'b'], ['', 'c']], [['c', 'd']]])
-    >>>  |    ^          ^     |  |    ^          ^     |  |          |
-    >>> #  sub-row    sub-row       sub-row    sub-row      no sub-rows
-    >>> #<-------wrapped------->  <-------wrapped------->  <not wrapped>
+    ``header_valigns`` / ``row_valigns`` optionally shift short cells inside
+    the tallest cell of that row (``t`` / ``m`` / ``b``). ``row_valigns`` is
+    a sequence parallel to ``data``; each entry is a sequence of codes, one
+    per cell (or ``None`` for top).
     """
-    # If no headers are provided, return None.
     wrapped_headers = None
-    
+
     there_are_headers = headers is not None and is_some_instance(headers, list, tuple)
     if there_are_headers:
-        # If there are headers, wrap them.
-        wrapped_headers = __wrap_single_row(headers)
-        
-    # Wrap each row.
-    # If no new line characters are present, data is returned as it is.
-    wrapped_data = list(map(__wrap_single_row, data))
+        wrapped_headers = __wrap_single_row(headers, header_valigns)
+
+    if row_valigns is None:
+        wrapped_data = [__wrap_single_row(row) for row in data]
+    else:
+        wrapped_data = []
+        for row_i, row in enumerate(data):
+            valigns = row_valigns[row_i] if row_i < len(row_valigns) else None
+            wrapped_data.append(__wrap_single_row(row, valigns))
 
     return wrapped_headers, wrapped_data
 
 
-def __wrap_single_row(row: Union[list, tuple]) -> list:
+def __wrap_single_row(row: Union[list, tuple], valigns=None) -> list:
     """
-    Will split every cell that has an new line character.
-    The splitted cell generates a new sub-row, and every other
-    cell that doesn't have a new line character will be adjusted::
+    Split cells on newlines and pad short cells vertically.
 
-        __wrap_single_row(['a', 'b\\nc'])
-    
-    Results in:
-    
-    >>> [['a', 'b'], ['', 'c']]
-    >>>                ^
-    >>> # Blank space to adjust the cell.
+    Default valign is top (blank lines under the content). Pass ``valigns``
+    as a parallel list of ``t`` / ``m`` / ``b`` to middle- or bottom-align.
     """
-    # Split in lines if any new line characters are present.
     splitted_cells = list(map(__wrap_cell, row))
-    
-    # Get the quantity of sub-rows calculating the max length of 
-    # all of the splitted (or not) cells.
     quantity_of_sub_rows = max([len(x) for x in splitted_cells])
-    
-    # Create blank sub-rows each one having the same quantity of 
-    # cells as the original row.
-    sub_rows = [['' for x in range(len(row))] 
+    sub_rows = [['' for x in range(len(row))]
                 for _ in range(quantity_of_sub_rows)]
-    
-    # Fill the sub-rows with the splitted cells.
-    # 
-    # [['a'], ['b', 'c']]       <-- splitted_cells
-    #    ^      ^    ^
-    #  sbr0   sbr0  sbr1
-    # <cell0> <--cell1-->
-    #  
-    # [['a', 'b'], ['', 'c']]   <-- sub_rows (being filled)
-    #    ^    ^     ^    ^
-    # [0][0] [0][1] ^  [1][1]   <-- sub_rows[sub_row][cell]
-    # [0][0] [1][0] ^  [1][1]   <-- splitted_cells[cell][sub-row]  
-    #               ^
-    #   There's no second sub-row in the first cell,
-    #   so it's just left empty
-    # 
+
     for cell in range(len(splitted_cells)):
-        for sub_row in range(len(splitted_cells[cell])):
-            sub_rows[sub_row][cell] = splitted_cells[cell][sub_row]
+        parts = splitted_cells[cell]
+        height = len(parts)
+        code = 't'
+        if valigns is not None and cell < len(valigns) and valigns[cell] is not None:
+            code = _normalize_valign(valigns[cell])
+        if code == 'b':
+            start = quantity_of_sub_rows - height
+        elif code == 'm':
+            start = (quantity_of_sub_rows - height) // 2
+        else:
+            start = 0
+        for sub_row in range(height):
+            sub_rows[start + sub_row][cell] = parts[sub_row]
 
     return sub_rows
 
@@ -492,8 +492,8 @@ def __wrap_cell(cell: Any) -> Union[List[str], Any]:
     Split in lines a cell if it has a new line character::
 
         'a' -> ['a']
-        'a\\nb' -> ['a', 'b']
-        'a\\tb' -> ['a       b']
+        'a\nb' -> ['a', 'b']
+        'a\tb' -> ['a       b']
         '' -> ['']
         123 -> [123]
         None -> [None]

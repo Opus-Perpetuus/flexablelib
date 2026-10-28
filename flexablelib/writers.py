@@ -715,3 +715,134 @@ def to_excel(table, path, sheet_name: str = 'Sheet1',
                 top_left.font = _Font(color=fg, bold='bold' in str(spec).lower())
 
     workbook.save(path)
+
+
+def to_rst(table, include_index: bool = False) -> str:
+    """
+    Write a reStructuredText grid table.
+
+    Uses ``+---+`` / ``|`` grid syntax so column alignment survives docutils.
+    Newlines inside cells become spaces (RST grid cells are single-line).
+    """
+    from .fast import visible_width, pad_to_width
+
+    headers, rows = _table_data(table, include_index)
+    if not headers:
+        return ''
+
+    def cell(value):
+        return _plain(value).replace('\n', ' ')
+
+    header_texts = [cell(h) for h in headers]
+    row_texts = [[cell(v) for v in row] for row in rows]
+    widths = [
+        max(
+            [visible_width(header_texts[i])]
+            + [visible_width(row[i]) for row in row_texts if i < len(row)]
+            + [1]
+        )
+        for i in range(len(header_texts))
+    ]
+
+    def rule(char='-'):
+        return '+' + '+'.join(char * (w + 2) for w in widths) + '+'
+
+    def line(cells):
+        parts = [
+            ' ' + pad_to_width(text, widths[i], 'l') + ' '
+            for i, text in enumerate(cells)
+        ]
+        return '|' + '|'.join(parts) + '|'
+
+    out = [rule('-'), line(header_texts), rule('=')]
+    for row in row_texts:
+        out.append(line(row))
+        out.append(rule('-'))
+    return '\n'.join(out)
+
+
+def to_asciidoc(table, include_index: bool = False) -> str:
+    """
+    Write an AsciiDoc table (``|===`` delimited).
+
+    Column widths are left to the AsciiDoc processor; cells with newlines are
+    flattened to spaces so a single logical row stays one source line.
+    """
+    headers, rows = _table_data(table, include_index)
+    if not headers:
+        return ''
+
+    def cell(value):
+        return _plain(value).replace('|', '\\|').replace('\n', ' ')
+
+    lines = ['|===', '| ' + ' | '.join(cell(h) for h in headers)]
+    for row in rows:
+        lines.append('| ' + ' | '.join(cell(v) for v in row))
+    lines.append('|===')
+    return '\n'.join(lines)
+
+
+def to_latex(table, include_index: bool = False) -> str:
+    """
+    Write a LaTeX ``tabular`` environment.
+
+    Alignment letters follow the table's column alignments when available
+    (``l`` / ``c`` / ``r``); otherwise every column is left-aligned. Special
+    TeX characters in cells are escaped.
+    """
+    headers, rows = _table_data(table, include_index)
+    if not headers:
+        return ''
+
+    def escape_tex(value):
+        text = _plain(value).replace('\n', ' ')
+        out = []
+        for ch in text:
+            if ch == '\\':
+                out.append(r'\textbackslash{}')
+            elif ch == '&':
+                out.append(r'\&')
+            elif ch == '%':
+                out.append(r'\%')
+            elif ch == '$':
+                out.append(r'\$')
+            elif ch == '#':
+                out.append(r'\#')
+            elif ch == '_':
+                out.append(r'\_')
+            elif ch == '{':
+                out.append(r'\{')
+            elif ch == '}':
+                out.append(r'\}')
+            elif ch == '~':
+                out.append(r'\textasciitilde{}')
+            elif ch == '^':
+                out.append(r'\textasciicircum{}')
+            else:
+                out.append(ch)
+        return ''.join(out)
+
+    aligns = []
+    for i, header in enumerate(headers):
+        code = 'l'
+        try:
+            values = [row[i] for row in rows if i < len(row)]
+            code = _markdown_alignment(table, header, i, values)
+        except Exception:
+            code = 'l'
+        if code not in ('l', 'c', 'r'):
+            code = 'l'
+        aligns.append(code)
+
+    colspec = ''.join(aligns)
+    lines = [
+        r'\begin{tabular}{' + colspec + '}',
+        r'\hline',
+        ' & '.join(escape_tex(h) for h in headers) + r' \\',
+        r'\hline',
+    ]
+    for row in rows:
+        lines.append(' & '.join(escape_tex(v) for v in row) + r' \\')
+    lines.append(r'\hline')
+    lines.append(r'\end{tabular}')
+    return '\n'.join(lines)
