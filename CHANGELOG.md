@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.0.1](https://github.com/Opus-Perpetuus/flexablelib/compare/v2.0.0...v2.0.1) (2026-10-28)
+
+
+### Bug Fixes
+
+* `missing_val` is now an alias of `missing_value` (docs and constructor kwarg name no longer silently no-op)
+
 ## [2.0.0](https://github.com/Opus-Perpetuus/flexablelib/compare/v1.4.1...v2.0.0) (2026-10-28)
 
 
