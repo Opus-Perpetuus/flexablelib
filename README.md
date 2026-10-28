@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <em>Flexible Table Library — format tabular data with pretty styles.</em>
+  <em>Flexible Table Library — console and HTML tables for Python.</em>
 </p>
 
 <p align="center">
@@ -20,15 +20,7 @@
 
 Flexible Table Library
 
-This is a python package that aims to provide a simple and pretty way of printing tables to the console making use of a class.
-
-The idea started as an attempt to reproduce the behavior of the [PM2](https://pm2.keymetrics.io) package when it displays tables to show data. Later, heavy inspiration came
-of two other python packages:
-
-- [Jazzband's](https://github.com/jazzband) [prettytable](https://github.com/jazzband/prettytable) (The names are similar by accident). Uses a class too.
-- [Astanin's](https://github.com/astanin) [tabulate](https://github.com/astanin/python-tabulate). A very simple to use and efficient package.
-
-A big part of the behavior of this package was replicated from these.
+Python package for formatting tabular data as console and HTML tables: border styles, cell merges, ANSI colors, per-type and decimal alignment, width fitting, I/O helpers, and optional C-accelerated text measurement.
 
 # Installation
 ``pip install flexablelib`` on Windows.
@@ -277,23 +269,18 @@ from flexablelib.fast import implementation
 print(implementation())   # 'C extension' or 'pure Python'
 ```
 
-# Known Issues
+# Notes
 
-None of the three historical known issues remain:
+- A column named ``"i"`` does not collide with the index column (`utils.IndexColumnTitle`).
+- Exponential numbers align on the decimal / exponent axis with the rest of the float column.
+- Shrinking a float column drops decimals instead of chopping characters, so decimal alignment survives a terminal fit ([#23](https://github.com/Opus-Perpetuus/flexablelib/issues/23)).
 
-- A column named ``"i"`` no longer collides with the index column
-  (`utils.IndexColumnTitle`).
-- Exponential numbers align on the decimal / exponent axis with the rest of
-  the float column.
-- Shrinking a float column drops decimals instead of chopping characters, so
-  decimal alignment survives a terminal fit ([#23](https://github.com/Opus-Perpetuus/prettyTables/issues/23)).
-
-Open work and the full issue map live in [docs/ISSUES.md](docs/ISSUES.md).
+Open work and the issue map: [docs/ISSUES.md](docs/ISSUES.md).
 
 # Project Layout
 
 ```
-prettyTables/                 # GitHub repository (name unchanged)
+flexablelib/                 # GitHub repository
 ├── flexablelib/            the Python package (no runtime dependencies)
 │   ├── __init__.py          public API: Table, TableComposition, SeparatorLine
 │   ├── table.py             the Table class — state and render orchestration
