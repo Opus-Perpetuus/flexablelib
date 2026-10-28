@@ -557,4 +557,26 @@ def to_excel(table, path, sheet_name: str = 'Sheet1',
     if freeze_header:
         worksheet.freeze_panes = 'A2'
 
+    # Mirror flexablelib merged regions as Excel merged cells. Table coordinates
+    # ignore the optional index column and the header row lives on Excel row 1.
+    col_offset = 2 if include_index else 1
+    for region in getattr(table, 'merged_regions', []):
+        start_row = region.first_row + 2
+        end_row = region.last_row + 2
+        start_col = region.first_column + col_offset
+        end_col = region.last_column + col_offset
+        top_left = worksheet.cell(row=start_row, column=start_col)
+        if region.value is not None:
+            top_left.value = _plain(region.value)
+        top_left.alignment = Alignment(
+            horizontal={'l': 'left', 'r': 'right', 'c': 'center'}.get(
+                region.align, 'center'),
+            vertical='center',
+            wrap_text=True,
+        )
+        worksheet.merge_cells(
+            start_row=start_row, start_column=start_col,
+            end_row=end_row, end_column=end_col,
+        )
+
     workbook.save(path)

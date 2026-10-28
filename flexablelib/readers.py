@@ -344,7 +344,8 @@ def from_excel(table_class, path, sheet=None, has_header: bool = True,
             'Install it with: pip install flexablelib[excel]'
         )
 
-    workbook = load_workbook(filename=path, read_only=True, data_only=True)
+    # read_only hides merged cell ranges; we need them to rebuild merges.
+    workbook = load_workbook(filename=path, read_only=False, data_only=True)
     try:
         if sheet is None:
             worksheet = workbook.active
@@ -357,14 +358,44 @@ def from_excel(table_class, path, sheet=None, has_header: bool = True,
             ['' if cell is None else cell for cell in row]
             for row in worksheet.iter_rows(values_only=True)
         ]
+        merge_ranges = [
+            (merged.min_row, merged.min_col, merged.max_row, merged.max_col)
+            for merged in worksheet.merged_cells.ranges
+        ]
     finally:
         workbook.close()
 
     if not rows:
         return table_class(**options)
     if has_header:
-        return _new_table(table_class, rows[0], rows[1:], parse_numbers,
-                          **options)
-    width = max(len(row) for row in rows)
-    headers = [f'column {i + 1}' for i in range(width)]
-    return _new_table(table_class, headers, rows, parse_numbers, **options)
+        table = _new_table(table_class, rows[0], rows[1:], parse_numbers,
+                           **options)
+        header_rows = 1
+    else:
+        width = max(len(row) for row in rows)
+        headers = [f'column {i + 1}' for i in range(width)]
+        table = _new_table(table_class, headers, rows, parse_numbers, **options)
+        header_rows = 0
+
+    # Excel rows/cols are 1-based. Body rows start after the header row when
+    # has_header is set. Skip merges that only cover the header.
+    for min_row, min_col, max_row, max_col in merge_ranges:
+        # Header-only or header-spanning merges are not table body merges.
+        if min_row <= header_rows:
+            continue
+        first_row = min_row - header_rows - 1
+        last_row = max_row - header_rows - 1
+        first_column = min_col - 1
+        last_column = max_col - 1
+        if first_row == last_row and first_column == last_column:
+            continue
+        if last_row < 0 or last_column < 0:
+            continue
+        if last_row >= table.row_count or last_column >= table.column_count:
+            continue
+        try:
+            table.merge_cells(first_row, first_column, last_row, last_column)
+        except ValueError:
+            # Overlaps or single cells from odd sheets: skip rather than fail.
+            continue
+    return table
