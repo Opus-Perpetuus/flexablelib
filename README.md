@@ -27,7 +27,7 @@ Python package for formatting tabular data as console and HTML tables: border st
 
 ``pip3 install flexablelib`` on Linux
 
-Prebuilt wheels (with the C speedups) are published for Linux (manylinux/musllinux), Windows and macOS; other platforms build from the sdist or fall back to pure Python.
+Prebuilt wheels (with the C speedups) are published for Linux (manylinux/musllinux), Windows (x64) and macOS (arm64); other platforms build from the sdist or fall back to pure Python.
 
 ### Windows console encoding
 Box-drawing styles (`┌─┐`, `╔═╗`, ...) need a UTF-8 console. Legacy `cp1252` consoles raise `UnicodeEncodeError` for them, while ASCII styles work everywhere. Enable UTF-8 with either:
