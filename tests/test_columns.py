@@ -9,14 +9,14 @@ That two-sided measurement is what the bulk of this file covers.
 
 import pytest
 
-from prettyTables import columns
-from prettyTables.columns import (
+from flexablelib import columns
+from flexablelib.columns import (
     ALIGNMENTS_PER_TYPE,
     TYPE_NAMES,
     _column_widths,
     _typify_column,
 )
-from prettyTables.options import COLUMN_ALIGNS
+from flexablelib.options import COLUMN_ALIGNS
 
 # Module-level privates, fetched by string so class-body name mangling can
 # never rewrite the lookup.

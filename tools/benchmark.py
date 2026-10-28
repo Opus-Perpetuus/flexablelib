@@ -10,8 +10,8 @@ in memory into formatted text. Run from the repository root:
 import random
 import time
 
-from prettyTables import Table
-from prettyTables.fast import implementation
+from flexablelib import Table
+from flexablelib.fast import implementation
 
 SHAPES = [(100, 4), (2000, 4), (10000, 6)]
 REPEATS = 5
@@ -48,13 +48,13 @@ def contenders(rows, headers):
     """Every library that is installed, as name -> zero-argument callable."""
     entries = {}
 
-    def build_prettytables():
+    def build_flexablelib():
         table = Table()
         for index, header in enumerate(headers):
             table.add_column(header, [row[index] for row in rows])
         return str(table)
 
-    entries['prettyTables'] = build_prettytables
+    entries['flexablelib'] = build_flexablelib
 
     try:
         from tabulate import tabulate
@@ -96,13 +96,13 @@ def main():
         results = {name: fastest(fn)
                    for name, fn in contenders(rows, headers).items()}
 
-        baseline = results['prettyTables']
+        baseline = results['flexablelib']
         print(f'{row_count} rows x {column_count} columns')
         for name, seconds in sorted(results.items(), key=lambda kv: kv[1]):
-            if name == 'prettyTables':
+            if name == 'flexablelib':
                 marker = '<-- this package'
             else:
-                marker = f'{seconds / baseline:.2f}x of prettyTables'
+                marker = f'{seconds / baseline:.2f}x of flexablelib'
             print(f'  {name:<22} {seconds * 1000:8.1f} ms   {marker}')
         print()
 

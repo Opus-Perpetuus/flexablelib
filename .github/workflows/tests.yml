@@ -70,7 +70,7 @@ jobs:
       # would leave this job silently testing the fallback again.
       - name: Confirm the C extension is the live backend
         run: |
-          python -c "from prettyTables.fast import ACCELERATED, implementation; assert ACCELERATED, 'extension not loaded, backend is ' + implementation()"
+          python -c "from flexablelib.fast import ACCELERATED, implementation; assert ACCELERATED, 'extension not loaded, backend is ' + implementation()"
 
       - name: Run the test suite
         run: python -m pytest

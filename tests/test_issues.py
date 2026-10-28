@@ -3,7 +3,7 @@ Regression tests for the issues.
 
 https://github.com/Opus-Perpetuus/prettyTables/issues
 
-Every issue ever filed against prettyTables has a reproduction here, stated
+Every issue ever filed against flexablelib has a reproduction here, stated
 as the behaviour the report asked for. There are no ``xfail`` markers left:
 all of them pass, and each one fails again the moment its bug comes back.
 
@@ -21,7 +21,7 @@ from textwrap import dedent
 import pytest
 
 from helpers import decimal_point_indexes, table_width, widths_from_border
-from prettyTables import Table
+from flexablelib import Table
 
 INTERSECTION = '┬'   # thin_borderline's top border
 
@@ -373,7 +373,7 @@ def test_issue_1_a_console_that_cannot_be_measured_still_renders(monkeypatch):
     """
     import os
 
-    from prettyTables import utils
+    from flexablelib import utils
 
     def explode():
         raise ValueError('Lines is not in list')
@@ -390,7 +390,7 @@ def test_issue_1_a_console_that_cannot_be_measured_still_renders(monkeypatch):
 def test_issue_1_a_console_that_is_not_a_tty_still_renders(monkeypatch):
     import os
 
-    from prettyTables import utils
+    from flexablelib import utils
 
     def explode():
         raise OSError('not a tty')

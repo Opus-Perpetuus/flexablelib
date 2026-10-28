@@ -11,14 +11,14 @@ after a CPython upgrade brings in a new Unicode revision:
 
     python3 tools/generate_width_tables.py
 
-It rewrites prettyTables/_width_tables.h in place.
+It rewrites flexablelib/_width_tables.h in place.
 """
 
 import sys
 import unicodedata
 
 MAX_CODEPOINT = 0x110000
-HEADER_PATH = 'prettyTables/_width_tables.h'
+HEADER_PATH = 'flexablelib/_width_tables.h'
 
 
 def classify(codepoint: int) -> int:
@@ -71,7 +71,7 @@ def main() -> int:
     wide_ranges = build_ranges(2)
 
     header = f'''/*
- * Unicode width tables for the prettyTables C extension.
+ * Unicode width tables for the flexablelib C extension.
  *
  * GENERATED FILE -- do not edit by hand.
  * Regenerate with: python3 tools/generate_width_tables.py
@@ -82,8 +82,8 @@ def main() -> int:
  * Codepoints absent from both tables are one column wide.
  */
 
-#ifndef PRETTYTABLES_WIDTH_TABLES_H
-#define PRETTYTABLES_WIDTH_TABLES_H
+#ifndef FLEXABLELIB_WIDTH_TABLES_H
+#define FLEXABLELIB_WIDTH_TABLES_H
 
 struct width_range {{
     unsigned int start;
@@ -96,7 +96,7 @@ struct width_range {{
 /* Double-width: East Asian Wide and Fullwidth, which includes emoji. */
 {format_table('wide_ranges', wide_ranges)}
 
-#endif /* PRETTYTABLES_WIDTH_TABLES_H */
+#endif /* FLEXABLELIB_WIDTH_TABLES_H */
 '''
 
     with open(HEADER_PATH, 'w') as handle:
