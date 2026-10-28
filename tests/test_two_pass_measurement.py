@@ -9,7 +9,7 @@ exceeds the terminal, ``__check_columns_size`` shrinks the offending columns
 and a second pass re-wraps and re-measures against the new widths.
 
 Nothing here may depend on the real console: the ``terminal`` fixture patches
-``prettyTables.table.get_window_size``.
+``flexablelib.table.get_window_size``.
 
 The fixture table below is sized so the arithmetic is checkable by hand:
 
@@ -20,7 +20,7 @@ The fixture table below is sized so the arithmetic is checkable by hand:
 import pytest
 
 from helpers import table_width, widths_from_border
-from prettyTables import Table
+from flexablelib import Table
 
 LONG_COMMENT = 'a very long comment here'   # 24 characters
 INTERSECTION = '┬'                          # thin_borderline's top border

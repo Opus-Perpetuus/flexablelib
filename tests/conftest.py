@@ -1,7 +1,7 @@
 """
 Shared fixtures.
 
-Two things make ``prettyTables`` non-deterministic unless they are pinned:
+Two things make ``flexablelib`` non-deterministic unless they are pinned:
 
 1. ``utils.get_window_size()`` reads the real console size, and
    ``Table.compose()`` uses it to decide whether the table has to be
@@ -29,7 +29,7 @@ for path in (REPO_ROOT, TESTS_DIR):
         sys.path.insert(0, path)
 
 from helpers import DEFAULT_TERMINAL_COLS, DEFAULT_TERMINAL_LINES  # noqa: E402
-from prettyTables import table as table_module  # noqa: E402
+from flexablelib import table as table_module  # noqa: E402
 
 
 @pytest.fixture(autouse=True)

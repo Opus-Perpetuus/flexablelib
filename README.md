@@ -1,22 +1,24 @@
 <p align="center">
-  <img src="logos/export/logo.svg" alt="prettyTables" width="440">
+  <img src="logos/export/logo.svg" alt="flexablelib" width="440">
 </p>
 
 <p align="center">
-  <em>Format tabular data with pretty styles.</em>
+  <em>Flexible Table Library — format tabular data with pretty styles.</em>
 </p>
 
 <p align="center">
-  <a href="https://pypi.org/project/prettyTables/"><img alt="PyPI version" src="https://img.shields.io/pypi/v/prettyTables?style=flat-square&color=4338CA&logo=pypi&logoColor=white"></a>
-  <a href="https://pypi.org/project/prettyTables/"><img alt="Python versions" src="https://img.shields.io/pypi/pyversions/prettyTables?style=flat-square&color=4338CA&logo=python&logoColor=white"></a>
-  <a href="https://pypi.org/project/prettyTables/"><img alt="Downloads per month" src="https://img.shields.io/pypi/dm/prettyTables?style=flat-square&color=F59E0B"></a>
-  <a href="https://pypi.org/project/prettyTables/"><img alt="Development status" src="https://img.shields.io/pypi/status/prettyTables?style=flat-square&color=F59E0B"></a>
-  <a href="LICENSE"><img alt="License" src="https://img.shields.io/pypi/l/prettyTables?style=flat-square&color=64748B"></a>
+  <a href="https://pypi.org/project/flexablelib/"><img alt="PyPI version" src="https://img.shields.io/pypi/v/flexablelib?style=flat-square&color=4338CA&logo=pypi&logoColor=white"></a>
+  <a href="https://pypi.org/project/flexablelib/"><img alt="Python versions" src="https://img.shields.io/pypi/pyversions/flexablelib?style=flat-square&color=4338CA&logo=python&logoColor=white"></a>
+  <a href="https://pypi.org/project/flexablelib/"><img alt="Downloads per month" src="https://img.shields.io/pypi/dm/flexablelib?style=flat-square&color=F59E0B"></a>
+  <a href="https://pypi.org/project/flexablelib/"><img alt="Development status" src="https://img.shields.io/pypi/status/flexablelib?style=flat-square&color=F59E0B"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/pypi/l/flexablelib?style=flat-square&color=64748B"></a>
 </p>
 
 ---
 
-# **Pretty Tables**
+# **flexablelib**
+
+Flexible Table Library
 
 This is a python package that aims to provide a simple and pretty way of printing tables to the console making use of a class.
 
@@ -29,15 +31,15 @@ of two other python packages:
 A big part of the behavior of this package was replicated from these.
 
 # Installation
-``pip install prettyTables`` on Windows.
+``pip install flexablelib`` on Windows.
 
-``pip3 install prettyTables`` on Linux
+``pip3 install flexablelib`` on Linux
 
 # Usage
 Creating a table is simple.
 ### Code Example
 ```
-from prettyTables import Table
+from flexablelib import Table
 
 new_table = Table()
 print(new_table)
@@ -211,8 +213,8 @@ CJK or emoji data stay aligned.
 Table.from_csv('sales.csv')          # numeric columns parsed and aligned
 Table.from_html(markup)              # standard library parser, no dependency
 Table.from_dicts(records)
-Table.from_pandas(dataframe)         # pip install prettyTables[pandas]
-Table.from_excel('report.xlsx')      # pip install prettyTables[excel]
+Table.from_pandas(dataframe)         # pip install flexablelib[pandas]
+Table.from_excel('report.xlsx')      # pip install flexablelib[excel]
 
 table.to_csv('out.csv')
 table.to_markdown()
@@ -256,7 +258,7 @@ data:
 
 | Library | 100x4 | 2000x4 | 10000x6 |
 | --- | ---: | ---: | ---: |
-| **prettyTables** | **1.0 ms** | **16.9 ms** | **147 ms** |
+| **flexablelib** | **1.0 ms** | **16.9 ms** | **147 ms** |
 | prettytable | 1.4 ms | 23.2 ms | 174 ms |
 | tabulate | 1.7 ms | 27.5 ms | 193 ms |
 | pandas `.to_string()` | 1.7 ms | 22.9 ms | 228 ms |
@@ -271,7 +273,7 @@ back to pure Python where it is not, so installation never fails for want of a
 toolchain.
 
 ```python
-from prettyTables.fast import implementation
+from flexablelib.fast import implementation
 print(implementation())   # 'C extension' or 'pure Python'
 ```
 
@@ -291,8 +293,8 @@ Open work and the full issue map live in [docs/ISSUES.md](docs/ISSUES.md).
 # Project Layout
 
 ```
-prettyTables/
-├── prettyTables/            the package itself (no runtime dependencies)
+prettyTables/                 # GitHub repository (name unchanged)
+├── flexablelib/            the Python package (no runtime dependencies)
 │   ├── __init__.py          public API: Table, TableComposition, SeparatorLine
 │   ├── table.py             the Table class — state and render orchestration
 │   ├── columns.py           type inference, alignment, column widths

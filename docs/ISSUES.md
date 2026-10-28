@@ -1,6 +1,6 @@
 # Issues
 
-What every issue filed against prettyTables asked for, how it was answered,
+What every issue filed against flexablelib asked for, how it was answered,
 where the answer lives, and which test holds it in place.
 
 Tracker: https://github.com/Opus-Perpetuus/prettyTables/issues
@@ -53,7 +53,7 @@ Rendering called a hand-rolled terminal-size reader that raised
 **Answer.** `get_window_size` catches `ValueError` as well as `OSError` and
 falls back to `shutil.get_terminal_size(fallback=(80, 24))`.
 
-**Where.** `prettyTables/utils.py` (`get_window_size`).
+**Where.** `flexablelib/utils.py` (`get_window_size`).
 
 ### #2 -- Show the row index
 

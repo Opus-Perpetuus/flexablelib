@@ -1,7 +1,7 @@
 <!-- omit in toc -->
 # Architecture
 
-How `prettyTables` is put together, for anyone who wants to fix a bug or add a style.
+How `flexablelib` is put together, for anyone who wants to fix a bug or add a style.
 
 - [Overview](#overview)
 - [Module map](#module-map)
@@ -17,11 +17,11 @@ How `prettyTables` is put together, for anyone who wants to fix a bug or add a s
 
 ## Overview
 
-`prettyTables` is a pure-Python package with **no runtime dependencies**. It takes tabular
+`flexablelib` is a pure-Python package with **no runtime dependencies**. It takes tabular
 data held in memory and returns a formatted string. Everything is synchronous and in-process;
 there is no I/O beyond reading the terminal size.
 
-The public API is deliberately small — `prettyTables/__init__.py` exports exactly three names:
+The public API is deliberately small — `flexablelib/__init__.py` exports exactly three names:
 
 ```python
 from .table import Table
@@ -295,7 +295,7 @@ identical data:
 
 | Library | 100x4 | 2000x4 | 10000x6 |
 | --- | ---: | ---: | ---: |
-| **prettyTables** | **1.0 ms** | **16.9 ms** | **147 ms** |
+| **flexablelib** | **1.0 ms** | **16.9 ms** | **147 ms** |
 | prettytable | 1.4 ms | 23.2 ms | 174 ms |
 | tabulate | 1.7 ms | 27.5 ms | 193 ms |
 | pandas `.to_string()` | 1.7 ms | 22.9 ms | 228 ms |
@@ -403,7 +403,7 @@ Two things have to be pinned or the results are not reproducible, and `tests/con
 does both with autouse fixtures:
 
 - `utils.get_window_size()` reads the real console. It is imported into `table.py`'s namespace,
-  so the patch target is `prettyTables.table.get_window_size`, not the one in `utils`.
+  so the patch target is `flexablelib.table.get_window_size`, not the one in `utils`.
 - the working directory, because of the `style_name` setter described above.
 
 Reproductions of open issues assert the behaviour the issue *asks for*, marked

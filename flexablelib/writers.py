@@ -512,7 +512,7 @@ def to_excel(table, path, sheet_name: str = 'Sheet1',
     except ImportError:  # pragma: no cover - depends on the environment
         raise ImportError(
             'writing Excel requires openpyxl. '
-            'Install it with: pip install prettyTables[excel]'
+            'Install it with: pip install flexablelib[excel]'
         )
 
     headers, rows = _table_data(table, include_index)

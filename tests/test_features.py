@@ -5,7 +5,7 @@ Each test drives the shipped Table entry point and asserts concrete output.
 """
 
 from helpers import table_width
-from prettyTables import Table
+from flexablelib import Table
 
 
 def _simple_table():
@@ -51,7 +51,7 @@ def test_custom_format_per_column():
 
 
 def test_column_min_and_max_width():
-    from prettyTables.fast import visible_width
+    from flexablelib.fast import visible_width
 
     table = Table(style_name='plain')
     table.add_column('name', ['ab'])
@@ -211,7 +211,7 @@ def test_the_package_can_be_star_imported():
     # __all__ held the classes themselves rather than their names, so the
     # import machinery raised TypeError before binding anything.
     namespace = {}
-    exec('from prettyTables import *', namespace)
+    exec('from flexablelib import *', namespace)
 
     assert 'Table' in namespace
     assert 'TableComposition' in namespace

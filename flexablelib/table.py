@@ -78,7 +78,7 @@ class Table(object):
     POSSIBLE STYLES
     ---------------
     ### PLAIN
-    >>> from prettyTables import Table
+    >>> from flexablelib import Table
     >>> new_table = Table()
     >>> new_table.missing_val = 'n/a'
     >>> new_table.add_row(data=[1])
@@ -4104,7 +4104,7 @@ class Table(object):
         """
         Build a table from a pandas DataFrame or Series.
 
-        Requires pandas: pip install prettyTables[pandas]
+        Requires pandas: pip install flexablelib[pandas]
         """
         from .readers import from_pandas
         return from_pandas(cls, dataframe, include_index, **options)
@@ -4115,7 +4115,7 @@ class Table(object):
         """
         Build a table from a worksheet in an .xlsx file.
 
-        Requires openpyxl: pip install prettyTables[excel]
+        Requires openpyxl: pip install flexablelib[excel]
         """
         from .readers import from_excel
         return from_excel(cls, path, sheet, has_header, parse_numbers,
@@ -4183,7 +4183,7 @@ class Table(object):
         Write an .xlsx workbook.
 
         Numbers are written as numbers so the spreadsheet can compute with
-        them. Requires openpyxl: pip install prettyTables[excel]
+        them. Requires openpyxl: pip install flexablelib[excel]
         """
         from .writers import to_excel
         return to_excel(self, path, sheet_name, include_index, autofit,

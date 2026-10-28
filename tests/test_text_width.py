@@ -17,11 +17,11 @@ widths are wrong for a reason that has nothing to do with the code they test.
 
 import pytest
 
-from prettyTables import text_width as reference
-from prettyTables.fast import ACCELERATED, implementation
+from flexablelib import text_width as reference
+from flexablelib.fast import ACCELERATED, implementation
 
 try:
-    from prettyTables import _speedups
+    from flexablelib import _speedups
 except ImportError:
     _speedups = None
 
