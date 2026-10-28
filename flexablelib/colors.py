@@ -193,3 +193,101 @@ __all__ = [
     'ATTRIBUTES',
     'RESET',
 ]
+
+
+# Named ANSI background → approximate sRGB for HTML / Excel fills.
+_BG_HEX = {
+    'black': '1F2937',
+    'red': 'DC2626',
+    'green': '16A34A',
+    'yellow': 'CA8A04',
+    'blue': '2563EB',
+    'magenta': 'C026D3',
+    'cyan': '0891B2',
+    'white': 'F3F4F6',
+    'bright_black': '4B5563',
+    'grey': '6B7280',
+    'gray': '6B7280',
+    'bright_red': 'EF4444',
+    'bright_green': '22C55E',
+    'bright_yellow': 'EAB308',
+    'bright_blue': '3B82F6',
+    'bright_magenta': 'E879F9',
+    'bright_cyan': '22D3EE',
+    'bright_white': 'FFFFFF',
+}
+
+_FG_HEX = {
+    'black': '111827',
+    'red': '991B1B',
+    'green': '14532D',
+    'yellow': '713F12',
+    'blue': '1E3A8A',
+    'magenta': '86198F',
+    'cyan': '155E75',
+    'white': 'F9FAFB',
+    'bright_black': '374151',
+    'grey': '6B7280',
+    'gray': '6B7280',
+    'bright_red': 'B91C1C',
+    'bright_green': '15803D',
+    'bright_yellow': 'A16207',
+    'bright_blue': '1D4ED8',
+    'bright_magenta': 'A21CAF',
+    'bright_cyan': '0E7490',
+    'bright_white': 'FFFFFF',
+}
+
+
+def _split_spec(spec: Union[str, int, None]):
+    if spec is None or spec == '':
+        return [], None
+    if isinstance(spec, int):
+        return [], None
+    foreground_part, _, background_part = str(spec).lower().partition(' on ')
+    fg_tokens = foreground_part.split()
+    bg_token = None
+    if background_part:
+        parts = background_part.split()
+        bg_token = parts[0] if parts else None
+    return fg_tokens, bg_token
+
+
+def background_hex(spec: Union[str, int, None]) -> Optional[str]:
+    """sRGB hex (no ``#``) for the background half of a colour spec, if any."""
+    _fg, bg = _split_spec(spec)
+    if bg is None:
+        return None
+    hex_match = _HEX_RE.match(bg)
+    if hex_match:
+        return hex_match.group(1).upper()
+    return _BG_HEX.get(bg)
+
+
+def foreground_hex(spec: Union[str, int, None]) -> Optional[str]:
+    """sRGB hex (no ``#``) for the first named foreground colour in a spec."""
+    fg_tokens, _bg = _split_spec(spec)
+    for token in fg_tokens:
+        if token in ATTRIBUTES:
+            continue
+        hex_match = _HEX_RE.match(token)
+        if hex_match:
+            return hex_match.group(1).upper()
+        if token in _FG_HEX:
+            return _FG_HEX[token]
+    return None
+
+
+def spec_to_css(spec: Union[str, int, None]) -> str:
+    """Inline CSS ``color`` / ``background-color`` from a colour spec."""
+    parts = []
+    bg = background_hex(spec)
+    fg = foreground_hex(spec)
+    if bg:
+        parts.append(f'background-color:#{bg}')
+    if fg:
+        parts.append(f'color:#{fg}')
+    fg_tokens, _ = _split_spec(spec)
+    if 'bold' in fg_tokens:
+        parts.append('font-weight:600')
+    return ';'.join(parts)

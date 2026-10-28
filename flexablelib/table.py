@@ -1995,7 +1995,7 @@ class Table(object):
         return list(self.__merged_regions)
 
     def merge_cells(self, first_row, first_column, last_row=None,
-                    last_column=None, value=None, align='c'):
+                    last_column=None, value=None, align='c', color=None):
         """
         Render a rectangular block of cells as a single cell.
 
@@ -2007,9 +2007,15 @@ class Table(object):
             table.merge_cells(0, 0, last_column=2)        # across three columns
             table.merge_cells(1, 0, last_row=3)           # down four rows
             table.merge_cells(0, 0, 2, 2, value='Total')  # a 3x3 block
+            table.merge_cells(0, 0, last_row=2, value='A',
+                              color='black on green')    # coloured merge
 
         ``value`` replaces the text; left as None, the top-left cell's own
         content is kept. ``align`` is 'l', 'r' or 'c' within the merged span.
+        ``color`` paints the whole merge span (text + padding + blank lines)
+        with a colour spec; when omitted, the top-left cell's row/column/
+        cell colour is inherited at render time so existing colour APIs light
+        up merges without an extra argument.
 
         Raises ValueError for a merge covering a single cell, coordinates
         outside the table, or an overlap with a merge already in place.
@@ -2028,6 +2034,7 @@ class Table(object):
         region = normalise(
             first_row, first_column, last_row, last_column, value, align,
             self.row_count, self.column_count, self.__merged_regions,
+            color=color,
         )
         self.__merged_regions.append(region)
         return region
@@ -4026,16 +4033,47 @@ class Table(object):
             () if self.__show_empty_columns else self.__empty_column_indexes
         )
 
+        regions = self.__regions_with_colors()
         merged = apply_merges(
             table_string.split('\n'),
             row_line_map,
-            self.__merged_regions,
+            regions,
             column_widths_list,
             self.__style_composition,
             1 if table_with_i else 0,
             hidden_columns,
         )
         return '\n'.join(merged)
+
+    def __regions_with_colors(self):
+        """
+        Merged regions with an effective colour for this render.
+
+        Explicit ``merge_cells(..., color=...)`` wins. Otherwise, when colour
+        output is on, the top-left cell's resolved colour is inherited so
+        ``column_colors`` / ``row_colors`` / ``cell_color`` fill the whole
+        merge span instead of leaving a dark hole.
+        """
+        colors_on = self.__colors_active and self.__has_any_color()
+        headers = list(self.__headers)
+        out = []
+        for region in self.__merged_regions:
+            if region.color is not None or not colors_on:
+                out.append(region)
+                continue
+            col_name = (
+                headers[region.first_column]
+                if region.first_column < len(headers) else ''
+            )
+            try:
+                raw = self.__raw_value_at(
+                    headers, region.first_column, region.first_row
+                )
+            except Exception:
+                raw = None
+            spec = self.__color_for_cell(raw, region.first_row, col_name)
+            out.append(region if not spec else region._replace(color=spec))
+        return out
 
     def __get_processed_columns_data(self, header=False, columns_with_i=False):
         if columns_with_i:
