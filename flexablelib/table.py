@@ -806,6 +806,19 @@ class Table(object):
         self.__header_align = None
         # Optional title drawn above the table.
         self.__title = None
+        # Optional caption drawn below the table (Rich/tablewriter style).
+        self.__caption = None
+        # Alternating body-row colours: None, a single odd-row spec, or (even, odd).
+        self.__zebra = None
+        # Last N rendered body rows treated as footer (Spectre/tablewriter).
+        self.__footer_rows = 0
+        self.__footer_color = None
+        # Per-cell colour map: keys (row, col_index|header) -> colour spec.
+        self.__cell_colors = {}
+        # Override style cell margin (spaces each side); None keeps style default.
+        self.__cell_padding = None
+        # 'wrap' | 'truncate' | None (None defers to auto_wrap bool).
+        self.__overflow = None
         # Row indexes after which a horizontal rule is forced.
         self.__dividers = set()
         # Sort / filter applied to the display copy, not to stored data.
@@ -1374,6 +1387,75 @@ class Table(object):
         return self.__title
 
     @property
+    def caption(self):
+        """
+        Optional text drawn below the table, centred on the table width.
+
+        Distinct from :attr:`title` (above). Inspired by Rich captions and
+        go ``tablewriter`` / Spectre footers' companion labels.
+        """
+        return self.__caption
+
+    @property
+    def zebra(self):
+        """
+        Alternating body-row colours (Rich ``row_styles`` / zebra striping).
+
+        Accepts ``None`` (off), a single colour spec applied to odd rows
+        (1, 3, …), or a two-item sequence ``(even_spec, odd_spec)``. Empty
+        / falsy specs leave that parity uncoloured. Alias: :attr:`row_stripe`.
+        """
+        return self.__zebra
+
+    @property
+    def row_stripe(self):
+        """Alias of :attr:`zebra`."""
+        return self.__zebra
+
+    @property
+    def footer_rows(self):
+        """
+        Number of trailing body rows treated as a footer band.
+
+        Combined with :attr:`footer_color`. Does not change stored data.
+        """
+        return self.__footer_rows
+
+    @property
+    def footer_color(self):
+        """Colour spec applied to the trailing :attr:`footer_rows` band."""
+        return self.__footer_color
+
+    @property
+    def cell_colors(self):
+        """
+        Per-cell colour map.
+
+        Keys are ``(row_index, column)`` where ``column`` is a header name or
+        0-based column index (index column excluded, matching merges)::
+
+            table.cell_colors = {(0, 'Status'): 'bold green', (2, 1): 'reverse'}
+        """
+        return self.__cell_colors
+
+    @property
+    def cell_padding(self):
+        """
+        Spaces on each side of every cell, overriding the style margin.
+
+        ``None`` keeps the style default (and honours :attr:`show_margin`).
+        """
+        return self.__cell_padding
+
+    @property
+    def overflow(self):
+        """
+        How cells behave when wider than their column: ``'wrap'``,
+        ``'truncate'``, or ``None`` to defer to :attr:`auto_wrap`.
+        """
+        return self.__overflow
+
+    @property
     def sort_by(self):
         """
         Column header or 0-based index used to order rows at render time.
@@ -1655,6 +1737,68 @@ class Table(object):
     def title(self, value):
         self.__title = None if value is None else str(value)
 
+    @caption.setter
+    def caption(self, value):
+        self.__caption = None if value is None else str(value)
+
+    @zebra.setter
+    def zebra(self, value):
+        self.__zebra = value
+
+    @row_stripe.setter
+    def row_stripe(self, value):
+        self.__zebra = value
+
+    @footer_rows.setter
+    def footer_rows(self, value):
+        value = int(value or 0)
+        if value < 0:
+            raise ValueError('footer_rows must be >= 0')
+        self.__footer_rows = value
+
+    @footer_color.setter
+    def footer_color(self, value):
+        self.__footer_color = value
+
+    @cell_colors.setter
+    def cell_colors(self, value):
+        if not value:
+            self.__cell_colors = {}
+            return
+        cleaned = {}
+        for key, spec in dict(value).items():
+            if not (isinstance(key, tuple) and len(key) == 2):
+                raise TypeError(
+                    'cell_colors keys must be (row, column) tuples, got {0!r}'
+                    .format(key)
+                )
+            cleaned[(int(key[0]), key[1])] = spec
+        self.__cell_colors = cleaned
+
+    @cell_padding.setter
+    def cell_padding(self, value):
+        if value is None:
+            self.__cell_padding = None
+            return
+        value = int(value)
+        if value < 0:
+            raise ValueError('cell_padding must be >= 0 or None')
+        self.__cell_padding = value
+
+    @overflow.setter
+    def overflow(self, value):
+        if value is None:
+            self.__overflow = None
+            return
+        value = str(value).lower()
+        if value not in ('wrap', 'truncate', 'ellipsis'):
+            raise ValueError(
+                "overflow must be 'wrap', 'truncate', 'ellipsis', or None"
+            )
+        # ellipsis is truncate with the default trimming sign
+        self.__overflow = 'truncate' if value == 'ellipsis' else value
+        self.__auto_wrap_table = self.__overflow == 'wrap'
+
     @sort_by.setter
     def sort_by(self, value):
         self.__sort_by = value
@@ -1716,6 +1860,9 @@ class Table(object):
     @auto_wrap.setter
     def auto_wrap(self, value: bool):
         self.__auto_wrap_table = bool(value)
+        if self.__overflow is not None:
+            # Keep overflow in sync when callers flip the bool directly.
+            self.__overflow = 'wrap' if self.__auto_wrap_table else 'truncate'
 
     # +----------------------+ SHOW SETTERS +------------------------+
 
@@ -1746,8 +1893,20 @@ class Table(object):
     def __style_composition(self) -> TableComposition:
         """
         Gets the style composition using a checked name.
+
+        ``cell_padding`` overrides the style's per-side margin; ``show_margin``
+        False forces margin 0 when no explicit padding is set.
         """
-        return style_catalogue.__getattribute__(self.__checked_style_name)
+        base = style_catalogue.__getattribute__(self.__checked_style_name)
+        if self.__cell_padding is not None:
+            margin = max(0, int(self.__cell_padding))
+        elif not self.__show_margin:
+            margin = 0
+        else:
+            margin = base.margin
+        if margin == base.margin:
+            return base
+        return base._replace(margin=margin)
 
     @property
     def __checked_style_name(self) -> str:
@@ -2211,19 +2370,70 @@ class Table(object):
             return supports_color()
         return bool(self.__use_colors)
 
-    def __color_for_cell(self, value, row_index: int, column_name: str):
+    def __color_for_cell(self, value, row_index: int, column_name: str,
+                         column_index: int = None):
         """
         Colour of a single cell, or None.
 
-        Precedence: an explicit rule, then the row, then the column.
+        Precedence: ``color_rule``, then ``cell_colors``, then ``row_colors``,
+        then footer colour, then zebra stripe, then ``column_colors``.
         """
         if self.__color_rule is not None:
             decided = self.__color_rule(value, row_index, column_name)
             if decided:
                 return decided
+        cell_spec = self.__lookup_cell_color(row_index, column_name, column_index)
+        if cell_spec:
+            return cell_spec
         if row_index in self.__row_colors:
             return self.__row_colors[row_index]
+        footer_spec = self.__footer_color_for_row(row_index)
+        if footer_spec:
+            return footer_spec
+        zebra_spec = self.__zebra_color_for_row(row_index)
+        if zebra_spec:
+            return zebra_spec
         return self.__column_colors.get(column_name)
+
+    def __lookup_cell_color(self, row_index, column_name, column_index):
+        """Resolve ``cell_colors`` keyed by (row, header) or (row, col index)."""
+        if not self.__cell_colors:
+            return None
+        for key in (
+            (row_index, column_name),
+            (row_index, column_index) if column_index is not None else None,
+        ):
+            if key is not None and key in self.__cell_colors:
+                return self.__cell_colors[key]
+        return None
+
+    def __footer_color_for_row(self, row_index: int):
+        """Colour for rows in the trailing footer band, if configured."""
+        if not self.__footer_color or self.__footer_rows <= 0:
+            return None
+        # Body length for the current paint pass is stored when known;
+        # fall back to internal row count.
+        body_len = getattr(self, "_paint_body_len", None)
+        if body_len is None:
+            body_len = self.__real_row_count
+        if body_len <= 0:
+            return None
+        threshold = body_len - int(self.__footer_rows)
+        if row_index >= threshold:
+            return self.__footer_color
+        return None
+
+    def __zebra_color_for_row(self, row_index: int):
+        """Even/odd body stripe from ``zebra`` / ``row_stripe``."""
+        if not self.__zebra:
+            return None
+        # Footer rows keep footer_color (already handled); still allow zebra
+        # on non-footer rows.
+        if isinstance(self.__zebra, (list, tuple)) and len(self.__zebra) >= 2:
+            even_spec, odd_spec = self.__zebra[0], self.__zebra[1]
+        else:
+            even_spec, odd_spec = None, self.__zebra
+        return odd_spec if (row_index % 2) else even_spec
 
     def __has_any_color(self) -> bool:
         """True if anything at all was configured to be coloured."""
@@ -2233,6 +2443,9 @@ class Table(object):
             or self.__column_colors
             or self.__row_colors
             or self.__color_rule
+            or self.__zebra
+            or self.__footer_color
+            or self.__cell_colors
             or any(getattr(r, 'color', None) for r in self.__merged_regions)
         )
 
@@ -3884,7 +4097,7 @@ class Table(object):
                 aligned_header, self.__header_color
             )
         aligned_header = self.__zip_columns(aligned_header, headers=True)
-        aligned_columns = _align_columns(
+        aligned_columns = list(_align_columns(
             self.__style_composition,
             unaligned_columns,
             column_titles,  # here the header is used to know the title of the column
@@ -3893,14 +4106,19 @@ class Table(object):
             self.__empty_column_indexes,
             self.__show_empty_columns,
             float_column_widths
-        )
+        ))
         if colors_on:
+            # Stash body length so footer_rows can resolve during paint.
+            self._paint_body_len = (
+                len(aligned_columns[0]) if aligned_columns else 0
+            )
             aligned_columns = self.__paint_cells(
                 aligned_columns,
                 lambda cell_i, row_i: self.__color_for_cell(
                     self.__raw_value_at(column_titles, cell_i, row_i),
                     row_i,
                     column_titles[cell_i] if cell_i < len(column_titles) else '',
+                    column_index=cell_i,
                 ),
             )
         aligned_columns = self.__zip_columns(aligned_columns)
@@ -3980,6 +4198,7 @@ class Table(object):
             gap_separator=gap_separator,
         )
         title_line = self.__title_line(column_widths_list, table_with_i)
+        caption_line = self.__caption_line(column_widths_list, table_with_i)
 
         # Where the body starts depends on which of the parts before it were
         # drawn at all: a title, a top rule, a header. Counting them off the
@@ -3988,7 +4207,7 @@ class Table(object):
         # every merge one line up, into the header.
         parts = []
         body_offset = 0
-        for part in (title_line, superior_row, body, end_line):
+        for part in (title_line, superior_row, body, end_line, caption_line):
             if not part:
                 continue
             if part is body:
@@ -4078,6 +4297,18 @@ class Table(object):
             return title
         left = (table_width - title_width) // 2
         return (' ' * left) + title
+
+    def __caption_line(self, column_widths_list, table_with_i):
+        """Centre the caption under the full table width, if any."""
+        if not self.__caption:
+            return None
+        table_width = self.__get_string_table_width()
+        caption = self.__caption
+        caption_width = visible_width(caption)
+        if caption_width >= table_width:
+            return caption
+        left = (table_width - caption_width) // 2
+        return (' ' * left) + caption
 
     def __apply_table_align(self, table_string):
         """Pad every line so the table sits left, centre or right."""
@@ -4606,6 +4837,17 @@ class Table(object):
 
     # +-----------------------------------------------------------------------------+
     # start +------------------------+ DATA WRITING +------------------------+ start
+
+    @classmethod
+    def from_markdown(cls, source, parse_numbers=True, **options):
+        """
+        Build a table from a GitHub-flavoured Markdown pipe table string.
+
+        Round-trips with :meth:`to_markdown`. Alignment row (``---``, ``:--``)
+        is detected and discarded; column align codes are applied when present.
+        """
+        from .readers import from_markdown
+        return from_markdown(cls, source, parse_numbers=parse_numbers, **options)
 
     def to_records(self, include_index=False):
         """The table as a list of dicts, one per row."""

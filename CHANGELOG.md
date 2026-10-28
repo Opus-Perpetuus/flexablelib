@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.0.13] - 2026-10-28
+
+### Added
+- Research inventory of 89 terminal/pretty-print table libraries across languages
+  (see delivery demos / research notes); feature backlog mined into this release.
+- ``Table.zebra`` / ``row_stripe``: alternating body-row colours
+  (``None``, odd-only spec, or ``(even, odd)``).
+- ``Table.caption``: centred text below the table (``title`` stays above).
+- ``Table.footer_rows`` + ``Table.footer_color``: style a trailing totals band.
+- ``Table.cell_colors``: per-cell ``{(row, col): spec}`` highlights.
+- ``Table.cell_padding``: override style cell margin; ``show_margin=False`` now
+  forces margin 0 (was stored but unused).
+- ``Table.overflow``: ``'wrap'`` / ``'truncate'`` / ``'ellipsis'`` (keeps
+  ``auto_wrap`` in sync).
+- ``Table.from_markdown``: import GFM pipe tables (alignment row → col_alignment).
+- Colour specs may be background-only: ``on #rrggbb`` / ``on white``.
+
 ## [2.0.12] - 2026-10-28
 
 ### Removed
