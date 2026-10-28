@@ -275,7 +275,7 @@ def test_html_export_preserves_merged_cells():
 
 
 def test_merged_region_color_fills_ansi():
-    table = Table(style_name='flush')
+    table = Table(style_name='pretty_grid')
     table.use_colors = True
     table.add_column('A', ['alpha-0', 'alpha-1', 'alpha-2'])
     table.add_column('B', ['bravo-0', 'bravo-1', 'bravo-2'])
@@ -289,7 +289,7 @@ def test_merged_region_color_fills_ansi():
 
 
 def test_merged_region_inherits_column_color():
-    table = Table(style_name='flush')
+    table = Table(style_name='pretty_grid')
     table.use_colors = True
     # Wide unmerged content so the merge span can hold the label.
     table.add_column('A', ['alpha-0', 'alpha-1'])
@@ -301,12 +301,10 @@ def test_merged_region_inherits_column_color():
     assert 'INHERIT' in rendered
 
 
-def test_flush_style_is_catalogued():
-    assert 'flush' in Table().possible_styles
 
 
 def test_html_and_excel_carry_merge_fill(tmp_path):
-    table = Table(style_name='flush')
+    table = Table(style_name='pretty_grid')
     table.use_colors = True
     table.add_column('A', ['a0', 'a1'])
     table.add_column('B', ['b0', 'b1'])
@@ -319,10 +317,10 @@ def test_html_and_excel_carry_merge_fill(tmp_path):
     ws = openpyxl.load_workbook(path).active
     assert ws['A2'].fill.fgColor.rgb.endswith('0891B2') or '0891B2' in str(ws['A2'].fill.fgColor.rgb)
 
-def test_flush_horizontal_rules_carry_cell_bg():
+def test_horizontal_rules_carry_cell_bg():
     """H-rule dash runs inherit the cell-above background (no dark band)."""
     import re
-    table = Table(style_name='flush')
+    table = Table(style_name='pretty_grid')
     table.use_colors = True
     table.add_column('A', ['a0', 'a1'])
     table.add_column('B', ['b0', 'b1'])
@@ -339,3 +337,63 @@ def test_flush_horizontal_rules_carry_cell_bg():
         if '43m' in line:
             found_yellow_on_rule = True
     assert found_cyan_on_rule and found_yellow_on_rule
+
+
+def test_border_color_foreground_on_modern_and_ascii():
+    import os
+    os.environ['FORCE_COLOR'] = '1'
+    os.environ.pop('NO_COLOR', None)
+    for style in ('modern', 'ascii'):
+        table = Table(style_name=style)
+        table.use_colors = True
+        table.border_color = 'cyan'
+        table.add_column('A', ['x'])
+        table.add_column('B', ['y'])
+        rendered = str(table)
+        assert '\x1b[' in rendered or '\033[' in rendered
+        assert '36m' in rendered  # cyan FG
+
+
+def test_border_text_on_top_rule_with_color():
+    import os
+    os.environ['FORCE_COLOR'] = '1'
+    os.environ.pop('NO_COLOR', None)
+    table = Table(style_name='ascii')
+    table.use_colors = True
+    table.border_color = 'blue'
+    table.add_column('name', ['C', 'Go'])
+    table.add_column('year', [1972, 2009])
+    table.border_text('Languages', where='top', color='bold yellow', offset=2)
+    rendered = str(table)
+    plain_lines = []
+    import re
+    for line in rendered.splitlines():
+        plain_lines.append(re.sub('\x1b' r'\[[0-9;]*m', '', line))
+    assert any('Languages' in line for line in plain_lines)
+    assert 'Languages' in plain_lines[0]
+    assert '33m' in rendered or '1;33m' in rendered
+    assert '34m' in rendered  # blue chrome
+
+
+def test_border_text_left_vertical():
+    table = Table(style_name='ascii')
+    table.add_column('A', ['1', '2'])
+    table.border_text('AB', where='left', offset=1)
+    import re
+    plain = [re.sub('\x1b' r'\[[0-9;]*m', '', line) for line in str(table).splitlines()]
+    # First data-ish lines after offset should start with A then B
+    assert plain[1].startswith('A')
+    assert plain[2].startswith('B')
+
+
+def test_blocks_style_still_works_with_colors():
+    import os
+    os.environ['FORCE_COLOR'] = '1'
+    os.environ.pop('NO_COLOR', None)
+    table = Table(style_name='blocks')
+    table.use_colors = True
+    table.header_color = 'bold white on blue'
+    table.column_colors = {'A': 'black on green'}
+    table.add_column('A', ['x', 'y'])
+    rendered = str(table)
+    assert '42m' in rendered or '44m' in rendered
