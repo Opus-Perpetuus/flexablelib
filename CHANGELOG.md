@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.0.10] - 2026-10-28
+
+### Added
+- ``flush`` style: full unicode grid whose cell backgrounds meet the border
+  glyphs with no interior gap and never paint over them (pad-then-paint
+  contract; recommended for coloured cells and coloured merges).
+- ``merge_cells(..., color=...)`` paints the whole merge span (ANSI + HTML +
+  Excel). When omitted, merges inherit the top-left cell's row/column/cell
+  colour so existing colour APIs fill merges instead of leaving dark holes.
+
 ## [2.0.9] - 2026-10-28
 
 ### Added

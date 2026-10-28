@@ -133,6 +133,7 @@ Compositions = namedtuple(
 
         # Fill-only (background colours, no border glyphs)
         'blocks',
+        'flush',
     ]
 )
 
@@ -882,6 +883,27 @@ __style_compositions = Compositions(
         table_end_line=None,
         vertical_header_lines=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
         vertical_table_body_lines=SeparatorLine(None, INVISIBLE_SEPARATOR, None, None),
+        margin=CELL_MARGIN,
+        align_sensitive=False,
+        align_indicator=None,
+        centered_indicator_on_sides=False,
+        left_and_right_when_centered=False,
+        lines_with_indicator=[],
+        align_indicator_margin=0,
+        always_center_indicator=False
+    ),
+    # Flush cell fills: full unicode grid whose cell backgrounds (pad-then-paint)
+    # meet the border glyphs with no interior gap and never paint over them.
+    # Recommended style for coloured cells and coloured merges. Same box as
+    # pretty_grid; the name encodes the fill contract used by demos/docs.
+    flush=TableComposition(
+        superior_header_line=SeparatorLine('╒', '═', '╤', '╕'),
+        inferior_header_line=SeparatorLine('╞', '═', '╪', '╡'),
+        superior_header_line_no_header=SeparatorLine('╒', '═', '╤', '╕'),
+        table_body_line=SeparatorLine('├', '─', '┼', '┤'),
+        table_end_line=SeparatorLine('╘', '═', '╧', '╛'),
+        vertical_header_lines=SeparatorLine('│', '│', None, '│'),
+        vertical_table_body_lines=SeparatorLine('│', '│', None, '│'),
         margin=CELL_MARGIN,
         align_sensitive=False,
         align_indicator=None,
