@@ -588,3 +588,53 @@ def test_block_merge_header_and_footer_caps():
     rendered = str(table)
     assert '╧' in rendered  # header intersection loses south into the block
     assert '┬' in rendered  # body rule below gains north-less tee
+
+
+def test_last_row_horizontal_merge_uses_table_end_corners_not_header_tees():
+    """A multi-column merge on the final data row must not rewrite the
+    table_end_line as if it had south arms (that yields ╞/╪/╤/╡)."""
+    table = Table(style_name='pretty_grid')
+    table.add_column('A', ['a1', 'a2', 'a3'])
+    table.add_column('B', ['b1', 'b2', 'b3'])
+    table.add_column('C', ['c1', 'c2', 'c3'])
+    table.add_column('D', ['d1', 'd2', 'd3'])
+    table.merge_cells(2, 1, last_column=2, value='BC')
+
+    lines = str(table).splitlines()
+    bottom = lines[-1]
+    assert bottom.startswith('╘'), bottom
+    assert bottom.endswith('╛'), bottom
+    assert '╞' not in bottom and '╡' not in bottom, bottom
+    assert '╪' not in bottom and '╤' not in bottom, bottom
+    # Inner sep under BC becomes a plain double horizontal (no south/north).
+    assert bottom == '╘════╧═════════╧════╛', bottom
+
+
+def test_stress_last_row_merge_bottom_border_is_end_line():
+    """Stress table from demos: H14 on the last row must keep ╘/╧/╛."""
+    table = Table(style_name='pretty_grid')
+    headers = [f'C{c}' for c in range(8)]
+    for c, h in enumerate(headers):
+        table.add_column(h, [f'S{r}c{c}' for r in range(15)])
+    for r in range(0, 15, 3):
+        table.merge_cells(r, 0, last_row=min(r + 2, 14), value=f'R{r}')
+    for r, c0, c1, label in [
+        (0, 2, 4, 'H0'),
+        (1, 5, 7, 'H1'),
+        (4, 2, 3, 'H4'),
+        (7, 3, 6, 'H7'),
+        (10, 1, 2, 'H10'),
+        (12, 4, 7, 'H12'),
+        (14, 2, 5, 'H14'),
+    ]:
+        table.merge_cells(r, c0, last_column=c1, value=label)
+    table.merge_cells(2, 5, 3, 7, value='BOX')
+    table.merge_cells(8, 1, 9, 2, value='SQ')
+
+    bottom = str(table).splitlines()[-1]
+    assert bottom.startswith('╘'), bottom
+    assert bottom.endswith('╛'), bottom
+    assert '╞' not in bottom and '╡' not in bottom, bottom
+    assert '╤' not in bottom and '╪' not in bottom, bottom
+    # Continuous run under H14 (C2–C5): three inner junctions → ═.
+    assert '╧═══════════════════════════════╧' in bottom, bottom  # C2–C5: 7+1+7+1+7+1+7
