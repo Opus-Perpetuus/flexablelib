@@ -1155,11 +1155,19 @@ class Table(object):
     def missing_value(self) -> Any:
         """
         A placeholder for empty cells.
-        
+
         Default is::
-        
+
             ''
+
+        ``missing_val`` is an alias of this attribute (same name as the
+        ``Table(..., missing_val=...)`` constructor argument).
         """
+        return self.__missing_value
+
+    @property
+    def missing_val(self) -> Any:
+        """Alias of :attr:`missing_value`."""
         return self.__missing_value
 
     @property
@@ -1521,6 +1529,10 @@ class Table(object):
 
     @missing_value.setter
     def missing_value(self, value):
+        self.__missing_value = value
+
+    @missing_val.setter
+    def missing_val(self, value):
         self.__missing_value = value
 
     @str_align.setter
