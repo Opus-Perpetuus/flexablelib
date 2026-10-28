@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.0.9] - 2026-10-28
+
+### Added
+- New ``blocks`` style: background-colour cells only — no outer/inner borders
+  and no junctions. Column gaps are a single space spacer; cell margin kept so
+  ANSI / Excel fills read as solid blocks.
+
 ## [2.0.8] - 2026-10-28
 
 ### Fixed
