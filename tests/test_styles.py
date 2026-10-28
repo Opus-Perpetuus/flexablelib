@@ -36,7 +36,7 @@ def build_table(style_name):
 def test_the_catalogue_holds_43_styles():
     # A canary: adding a style is meant to be purely additive, and the README,
     # ARCHITECTURE.md and style_examples.md all quote this number.
-    assert len(ALL_STYLES) == 44
+    assert len(ALL_STYLES) == 56
 
 
 def test_style_names_are_unique():
@@ -212,3 +212,25 @@ def test_blocks_style_keeps_cell_padding_for_background_fills():
     rendered = str(table)
     assert '\x1b[' in rendered or '\033[' in rendered or '[' in rendered
     assert '42m' in rendered or '44m' in rendered  # green or blue bg
+
+
+TABLED_STYLES = [
+    'ascii', 'modern', 'sharp', 'rounded', 'modern_rounded', 'extended',
+    'psql', 'markdown', 're_structured_text', 'dots', 'ascii_rounded',
+    'blank', 'empty',
+]
+
+
+@pytest.mark.parametrize('style_name', TABLED_STYLES)
+def test_tabled_style_names_are_catalogued(style_name):
+    assert style_name in ALL_STYLES
+
+
+@pytest.mark.parametrize('style_name', TABLED_STYLES)
+def test_tabled_styles_render_without_error(style_name):
+    rendered = str(build_table(style_name))
+    assert rendered
+
+
+def test_flush_style_removed():
+    assert 'flush' not in ALL_STYLES

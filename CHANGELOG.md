@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.0.12] - 2026-10-28
+
+### Removed
+- ``flush`` style (colour-fill experiments). Use ``blocks`` for borderless
+  fills, or any bordered style with ``border_color`` / cell colours.
+
+### Added
+- tabled-compatible style names: ``ascii``, ``modern``, ``sharp``, ``rounded``,
+  ``modern_rounded``, ``extended``, ``psql``, ``markdown``, ``re_structured_text``,
+  ``dots``, ``ascii_rounded``, ``blank``, ``empty`` (glyphs aligned with
+  [tabled](https://github.com/zhiburt/tabled) Style presets).
+- ``Table.border_text(text, where=..., color=..., offset=..., align=...)`` —
+  overlay coloured text on horizontal or vertical borders (tabled LineText).
+  ``clear_border_texts()`` resets overlays.
+- ``border_color`` documents FG paint of border/rule/junction glyphs on any
+  style (including the new tabled names).
+
 ## [2.0.11] - 2026-10-28
 
 ### Added

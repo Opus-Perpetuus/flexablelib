@@ -155,7 +155,7 @@ characters needed to draw a line such as `+----+----+`: `+` on the left, `-` rep
 middle, `+` at each intersection, `+` on the right. A field set to `None` means "this style has
 no such line", which is how `plain` and `presto` end up borderless.
 
-All 44 styles live in the `__style_compositions` namedtuple (`style_compositions.py:136`),
+All 56 styles live in the `__style_compositions` namedtuple (`style_compositions.py:136`),
 grouped by character family: box-drawing, thin/bold borderline, ASCII (`+-|~oO:`), simple
 horizontal-rule styles, and `dashes`.
 
@@ -332,7 +332,7 @@ than its span is truncated.
 
 `compute_layout()` derives each column's offsets within a line from the widths
 and the style's own separator characters, so the rewrite lands in the right
-place for all 44 styles. Where a horizontal rule meets the right edge of a
+place for all 56 styles. Where a horizontal rule meets the right edge of a
 merged block, the four-way junction is replaced by the body rule's `left`
 character, since no line arrives from the left there any more.
 
@@ -395,7 +395,7 @@ python -m pytest
 | `tests/test_columns.py` | type inference and the two-sided float measurement |
 | `tests/test_text_width.py` | visible width, and C/Python backend equivalence |
 | `tests/test_cells.py` | padding, justification, wrapping, transposition |
-| `tests/test_styles.py` | all 44 styles rendered, plus style selection |
+| `tests/test_styles.py` | all 56 styles rendered, plus style selection |
 | `tests/test_readme_examples.py` | the README's outputs, as golden strings |
 | `tests/test_issues.py` | reproductions for the open issues, as `xfail` |
 
