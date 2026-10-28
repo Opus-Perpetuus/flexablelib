@@ -116,7 +116,12 @@ def parse_spec(spec: Union[str, int, None]) -> str:
 
     parameters = []
     # 'on' separates foreground from background: 'bold red on white'.
-    foreground_part, _, background_part = spec.lower().partition(' on ')
+    # A bare 'on <bg>' (Rich-style background-only) is also accepted.
+    lowered = spec.lower().strip()
+    if lowered.startswith('on '):
+        foreground_part, background_part = '', lowered[3:]
+    else:
+        foreground_part, _, background_part = lowered.partition(' on ')
 
     for token in foreground_part.split():
         if token in ATTRIBUTES:
