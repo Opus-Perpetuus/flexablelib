@@ -204,7 +204,12 @@ def _region_bounds(region, layout, index_offset):
         return None
 
     first, last = drawn[0], drawn[-1]
-    return (layout.spans[first][0], layout.spans[last][1]), layout.spans[first], last
+    return (
+        (layout.spans[first][0], layout.spans[last][1]),
+        layout.spans[first],
+        first,
+        last,
+    )
 
 
 def apply(lines, row_line_map, regions, column_widths, composition,
@@ -235,7 +240,7 @@ def apply(lines, row_line_map, regions, column_widths, composition,
         bounds = _region_bounds(region, layout, index_offset)
         if bounds is None:
             continue
-        (start, end), (cell_start, cell_end), last_span = bounds
+        (start, end), (cell_start, cell_end), first_span, last_span = bounds
         span_width = end - start - margin * 2
         if span_width < 1:
             continue
@@ -277,13 +282,16 @@ def apply(lines, row_line_map, regions, column_widths, composition,
         # Paint over the separator lines that fall inside the block, so the
         # merged region reads as one cell top to bottom.
         #
-        # Where such a line meets the rule at the block's right edge, that
-        # junction no longer has a line coming in from the left, so the four
-        # way character is wrong there. The body rule's own left character is
-        # exactly the three-way junction needed ('├' where '┼' was).
+        # Blanking the horizontal run removes the arms that fed each vertex.
+        # Rebuild those vertices from the style's own characters:
+        #   - right edge, more columns: body left ('├' where '┼' was)
+        #   - right edge, table border: vertical right ('│' where '┤' was)
+        #   - left edge, prior columns: body right ('┤' where '┼' was)
+        #   - left edge, table border: vertical left ('│' where '├' was)
         body_rule = composition.table_body_line
-        junction = body_rule.left if body_rule is not None else None
+        v_lines = composition.vertical_table_body_lines
         joins_more_columns = last_span + 1 < len(layout.spans)
+        joins_prev_columns = first_span > 0
 
         covered = set(target_lines)
         for line_index in range(min(target_lines), max(target_lines)):
@@ -293,8 +301,17 @@ def apply(lines, row_line_map, regions, column_widths, composition,
             if visible_width(line) < end:
                 continue
             rewritten = _repaint(line, start, end, blank)
-            if junction and joins_more_columns and visible_width(rewritten) > end:
-                rewritten = _repaint(rewritten, end, end + 1, junction)
+            if body_rule is not None or v_lines is not None:
+                if visible_width(rewritten) > end:
+                    if joins_more_columns and body_rule is not None and body_rule.left:
+                        rewritten = _repaint(rewritten, end, end + 1, body_rule.left)
+                    elif not joins_more_columns and v_lines is not None and v_lines.right:
+                        rewritten = _repaint(rewritten, end, end + 1, v_lines.right)
+                if start > 0:
+                    if joins_prev_columns and body_rule is not None and body_rule.right:
+                        rewritten = _repaint(rewritten, start - 1, start, body_rule.right)
+                    elif not joins_prev_columns and v_lines is not None and v_lines.left:
+                        rewritten = _repaint(rewritten, start - 1, start, v_lines.left)
             lines[line_index] = rewritten
 
     return lines
