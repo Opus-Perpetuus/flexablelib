@@ -26,6 +26,7 @@ from .columns import (
     ALIGNMENTS_PER_TYPE as type_alignments
 )
 from .fast import truncate_to_width, visible_width, wrap_to_width
+from .text_width import strip_ansi
 from .table_strings import (
     _get_separators, 
     _get_data_rows, 
@@ -827,6 +828,8 @@ class Table(object):
         # cell. None everywhere means no colour and no cost.
         self.__header_color = None
         self.__border_color = None
+        # LineText-style overlays (tabled): text drawn onto border runs.
+        self.__border_texts = []
         self.__column_colors = {}
         self.__row_colors = {}
         self.__color_rule = None
@@ -2067,6 +2070,69 @@ class Table(object):
     @border_color.setter
     def border_color(self, value):
         self.__border_color = value
+
+    def border_text(self, text, where='top', color=None, offset=1, align='left'):
+        """
+        Overlay ``text`` on a border line (inspired by tabled ``LineText``).
+
+        ``where`` selects the target rule or vertical::
+
+            'top' / 'superior_header'     – top frame
+            'header' / 'header_rule'      – rule under the header
+            'body' / 'body_rule'          – inter-row body rules
+            'bottom' / 'end'              – bottom frame
+            'left' / 'right'              – vertical outer borders
+
+        ``offset`` is the visible column (horizontal) or row (vertical) where
+        the text starts; junctions outside the span are preserved when the
+        text does not overwrite them. ``color`` paints the text foreground
+        (``border_color`` still paints the remaining chrome). ``align`` is
+        ``left``, ``center``, or ``right`` within the writable span when
+        ``offset`` is None.
+
+        Multiple calls accumulate; use ``clear_border_texts()`` to reset.
+        """
+        where_key = str(where).strip().lower()
+        aliases = {
+            'top': 'top',
+            'superior': 'top',
+            'superior_header': 'top',
+            'header': 'header',
+            'header_rule': 'header',
+            'inferior_header': 'header',
+            'body': 'body',
+            'body_rule': 'body',
+            'table_body': 'body',
+            'bottom': 'bottom',
+            'end': 'bottom',
+            'table_end': 'bottom',
+            'left': 'left',
+            'right': 'right',
+        }
+        if where_key not in aliases:
+            raise ValueError(
+                f"Unknown border_text where={where!r}; "
+                f"expected one of {sorted(set(aliases.values()))}"
+            )
+        align_key = (align or 'left').lower()
+        if align_key not in ('left', 'center', 'right', 'l', 'c', 'r'):
+            raise ValueError(f"Unknown border_text align={align!r}")
+        align_key = {'l': 'left', 'c': 'center', 'r': 'right'}.get(
+            align_key, align_key
+        )
+        self.__border_texts.append({
+            'text': '' if text is None else str(text),
+            'where': aliases[where_key],
+            'color': color,
+            'offset': offset,
+            'align': align_key,
+        })
+        return self
+
+    def clear_border_texts(self):
+        """Remove every overlay registered with ``border_text``."""
+        self.__border_texts = []
+        return self
 
     @property
     def column_colors(self) -> dict:
@@ -3880,6 +3946,11 @@ class Table(object):
                 for line in separators
             ])
 
+        if self.__border_texts:
+            separators, gap_separator = self.__apply_horizontal_border_texts(
+                separators, gap_separator
+            )
+
         # Table string is formed
         no_header_superior = separators.superior_header_line_no_header
         body_line = ''.join(['\n', separators.table_body_line]) if (
@@ -3930,6 +4001,9 @@ class Table(object):
                 table_string, body_line_map, body_offset,
                 column_widths_list, table_with_i
             )
+
+        if self.__border_texts:
+            table_string = self.__apply_vertical_border_texts(table_string)
 
         return self.__apply_table_align(table_string)
 
@@ -4104,6 +4178,207 @@ class Table(object):
                 self.__rule_spec_for_cell(row_index, col_i, column_titles)
             )
         return specs
+
+    def __overlay_line_text(self, line, text, offset=1, color=None,
+                              align='left', chrome_color=None):
+        """
+        Replace a span of ``line`` with ``text`` (tabled LineText spirit).
+
+        Works on ANSI-coloured lines by stripping for geometry, then rebuilding
+        ``prefix + colored_text + suffix``. Truncates text that does not fit.
+        ``offset`` None means place by ``align`` inside the full line width.
+        ``chrome_color`` (defaults to ``border_color``) repaints the non-text
+        segments so overlays do not strip an existing border foreground.
+        """
+        if line is None:
+            return None
+        plain = strip_ansi(line)
+        if not plain:
+            return line
+        raw = '' if text is None else str(text)
+        # Drop ANSI from the overlay itself; we recolour via ``color``.
+        raw = strip_ansi(raw)
+        chars = list(plain)
+        width = len(chars)
+        text_chars = list(raw)
+        tw = len(text_chars)
+        if offset is None:
+            if align == 'center':
+                start = max(0, (width - tw) // 2)
+            elif align == 'right':
+                start = max(0, width - tw)
+            else:
+                start = 0
+        else:
+            start = max(0, int(offset))
+        if start >= width:
+            return line
+        available = width - start
+        if tw > available:
+            text_chars = text_chars[:available]
+            tw = len(text_chars)
+        for i, ch in enumerate(text_chars):
+            chars[start + i] = ch
+        new_plain = ''.join(chars)
+        chrome = chrome_color if chrome_color is not None else self.__border_color
+        prefix = new_plain[:start]
+        mid = new_plain[start:start + tw]
+        suffix = new_plain[start + tw:]
+        if color or chrome:
+            left = colorize(prefix, chrome) if chrome and prefix else prefix
+            centre = colorize(mid, color or chrome) if (color or chrome) and mid else mid
+            right = colorize(suffix, chrome) if chrome and suffix else suffix
+            return left + centre + right
+        return new_plain
+
+    def __horizontal_border_specs(self, where):
+        return [spec for spec in self.__border_texts if spec['where'] == where]
+
+    def __apply_horizontal_border_texts(self, separators, gap_separator):
+        """Overlay registered horizontal ``border_text`` entries onto rules."""
+        def paint_field(line, where):
+            if line is None:
+                return None
+            out = line
+            for spec in self.__horizontal_border_specs(where):
+                out = self.__overlay_line_text(
+                    out, spec['text'], spec['offset'],
+                    spec['color'], spec['align'],
+                )
+            return out
+
+        painted = HorizontalComposition(
+            paint_field(separators.superior_header_line, 'top'),
+            paint_field(separators.inferior_header_line, 'header'),
+            paint_field(separators.superior_header_line_no_header, 'top'),
+            paint_field(separators.table_body_line, 'body'),
+            paint_field(separators.table_end_line, 'bottom'),
+        )
+
+        body_specs = self.__horizontal_border_specs('body')
+        if gap_separator is None or not body_specs:
+            return painted, gap_separator
+
+        def wrapped(after_row, _inner=gap_separator, _specs=body_specs):
+            line = _inner(after_row)
+            for spec in _specs:
+                line = self.__overlay_line_text(
+                    line, spec['text'], spec['offset'],
+                    spec['color'], spec['align'],
+                )
+            return line
+
+        return painted, wrapped
+
+    def __apply_vertical_border_texts(self, table_string):
+        """
+        Overlay left/right ``border_text`` onto outer vertical glyphs.
+
+        Writes one character of the text per successive physical line,
+        starting at ``offset`` (0 = first line of the rendered table).
+        """
+        if not table_string:
+            return table_string
+        left_specs = [s for s in self.__border_texts if s['where'] == 'left']
+        right_specs = [s for s in self.__border_texts if s['where'] == 'right']
+        if not left_specs and not right_specs:
+            return table_string
+
+        lines = table_string.split('\n')
+        n = len(lines)
+
+        for spec in left_specs:
+            text = strip_ansi(spec['text'])
+            if not text:
+                continue
+            offset = 0 if spec['offset'] is None else int(spec['offset'])
+            for i, ch in enumerate(text):
+                row = offset + i
+                if row < 0 or row >= n:
+                    break
+                lines[row] = self.__replace_first_visible(
+                    lines[row], ch, spec['color']
+                )
+
+        for spec in right_specs:
+            text = strip_ansi(spec['text'])
+            if not text:
+                continue
+            offset = 0 if spec['offset'] is None else int(spec['offset'])
+            for i, ch in enumerate(text):
+                row = offset + i
+                if row < 0 or row >= n:
+                    break
+                lines[row] = self.__replace_last_visible(
+                    lines[row], ch, spec['color']
+                )
+
+        return '\n'.join(lines)
+
+    @staticmethod
+    def __replace_first_visible(line, ch, color):
+        """Replace the first visible character of ``line`` with ``ch``."""
+        plain = strip_ansi(line)
+        if not plain:
+            return line
+        # Rebuild: find first non-ANSI char span by walking with strip.
+        # Simpler path: compose new_plain then, if colouring, colourize ch.
+        new_plain = ch + plain[1:]
+        if color is None and line == plain:
+            return new_plain
+        # When the line carries ANSI, keep suffix after first visible char.
+        # Locate end of first visible character in the ANSI string.
+        from .text_width import has_ansi
+        if not has_ansi(line):
+            return colorize(ch, color) + plain[1:] if color else new_plain
+        # Walk CSI sequences; first real char is the border glyph.
+        import re
+        sgr = re.compile(r'\x1b\[[0-9;]*m')
+        pos = 0
+        while pos < len(line):
+            m = sgr.match(line, pos)
+            if m:
+                pos = m.end()
+                continue
+            # replace this one character
+            head = line[:pos]
+            # skip one unicode char
+            tail_start = pos + 1
+            # If original char was the start of a combining sequence, still +1
+            # is fine for box-drawing / ascii borders.
+            tail = line[tail_start:]
+            painted = colorize(ch, color) if color else ch
+            return head + painted + tail
+        return line
+
+    @staticmethod
+    def __replace_last_visible(line, ch, color):
+        """Replace the last visible character of ``line`` with ``ch``."""
+        plain = strip_ansi(line)
+        if not plain:
+            return line
+        from .text_width import has_ansi
+        if not has_ansi(line):
+            body = plain[:-1] + ch
+            if color:
+                return plain[:-1] + colorize(ch, color)
+            return body
+        import re
+        sgr = re.compile(r'\x1b\[[0-9;]*m')
+        # Find index of last visible character.
+        last = None
+        pos = 0
+        while pos < len(line):
+            m = sgr.match(line, pos)
+            if m:
+                pos = m.end()
+                continue
+            last = pos
+            pos += 1
+        if last is None:
+            return line
+        painted = colorize(ch, color) if color else ch
+        return line[:last] + painted + line[last + 1:]
 
     def __colour_horizontal_rules(self, separators, column_widths,
                                   column_titles, body_row_count):
