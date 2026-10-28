@@ -271,6 +271,11 @@ def _is_h(ch: str) -> bool:
     return ch in _H_CHARS
 
 
+def _visible_vertical(ch: str) -> bool:
+    """True when a style's vertical glyph is a real column rule, not a spacer."""
+    return bool(ch) and not ch.isspace()
+
+
 def _char_at(line: str, index: int) -> str:
     if index < 0 or index >= visible_width(line):
         return ''
@@ -283,12 +288,12 @@ def _junction_positions(layout, composition):
     if v is None:
         return []
     out = []
-    if layout.spans and v.left:
+    if layout.spans and _visible_vertical(v.left):
         out.append((layout.spans[0][0] - len(v.left), v.left))
     for sep_x in layout.separators:
-        if v.middle:
+        if _visible_vertical(v.middle):
             out.append((sep_x, v.middle))
-    if layout.spans and v.right:
+    if layout.spans and _visible_vertical(v.right):
         out.append((layout.spans[-1][1], v.right))
     return out
 
@@ -398,6 +403,48 @@ def _build_rule_line(layout, composition, column_widths, hidden, rule=None):
     else:
         right = ''
     return left + center + right
+
+
+def _clamp_rule_to_h_ranges(line, layout, composition, h_ranges, filler=' '):
+    """
+    Keep horizontal runs only inside ``h_ranges`` (merge content spans).
+
+    Synthetic caps are inserted for multi-column merges; without clamping, the
+    full-width rule bleeds H into neighbour columns that have no reason for a
+    row edge. Outside the ranges, content is blanked and junctions fall back to
+    the style's vertical glyph so column rules continue cleanly. Callers that
+    also need taller merges punched through should run ``_blank_crossings``
+    *after* this so restored verticals inside those merges stay erased.
+    """
+    if not h_ranges:
+        return line
+    ranges = sorted((int(a), int(b)) for a, b in h_ranges if b > a)
+    if not ranges:
+        return line
+    # Merge overlapping / abutting ranges.
+    merged = [list(ranges[0])]
+    for a, b in ranges[1:]:
+        if a <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], b)
+        else:
+            merged.append([a, b])
+    ranges = [(a, b) for a, b in merged]
+
+    def in_ranges(x):
+        return any(a <= x < b for a, b in ranges)
+
+    rewritten = line
+    for start, end in layout.spans:
+        if any(not (end <= a or start >= b) for a, b in ranges):
+            continue
+        if end > start:
+            rewritten = _repaint(rewritten, start, end, filler * (end - start))
+
+    for x, v_glyph in _junction_positions(layout, composition):
+        if in_ranges(x):
+            continue
+        rewritten = _repaint(rewritten, x, x + 1, v_glyph)
+    return rewritten
 
 
 def _looks_like_rule(line: str, h_glyph: str = None) -> bool:
@@ -574,21 +621,25 @@ def apply(lines, row_line_map, regions, column_widths, composition,
                 if region.first_row > 0:
                     g = region.first_row - 1
                     plan = gap_plans.setdefault(
-                        g, {'s': set(), 'n': set(), 'at': min(target_lines)}
+                        g, {'s': set(), 'n': set(), 'at': min(target_lines),
+                            'h': []}
                     )
                     plan['s'] |= set(inner_seps)
                     plan['at'] = min(plan['at'], min(target_lines))
+                    plan.setdefault('h', []).append((start, end))
                 # Cap below: gap after last_row (unless last table row — end
                 # line is repaired in pass 3).
                 max_row = max(row_line_map) if row_line_map else region.last_row
                 if region.last_row < max_row:
                     g = region.last_row
                     plan = gap_plans.setdefault(
-                        g, {'s': set(), 'n': set(), 'at': max(target_lines) + 1}
+                        g, {'s': set(), 'n': set(), 'at': max(target_lines) + 1,
+                            'h': []}
                     )
                     plan['n'] |= set(inner_seps)
                     plan['at'] = min(plan.get('at', max(target_lines) + 1),
                                      max(target_lines) + 1)
+                    plan.setdefault('h', []).append((start, end))
 
     # --- Pass 2: repair junctions on body rules touched by vertical blanks ---
     if h_glyph:
@@ -658,6 +709,11 @@ def apply(lines, row_line_map, regions, column_widths, composition,
             )
             if rule is None:
                 continue
+            # H only across the merges that asked for this cap — not the
+            # whole table — then punch through taller crossings.
+            rule = _clamp_rule_to_h_ranges(
+                rule, layout, composition, plan.get('h') or []
+            )
             rule = _blank_crossings(rule, g)
             rule = _repair_rule_junctions(
                 rule, layout, composition, syn_h,
