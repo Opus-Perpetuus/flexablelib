@@ -216,3 +216,31 @@ def test_the_package_can_be_star_imported():
     assert 'Table' in namespace
     assert 'TableComposition' in namespace
     assert 'SeparatorLine' in namespace
+
+
+def test_bytes_alignment_code_renders_without_typeerror():
+    """``COLUMN_ALIGNS.bytes`` ('b') must justify like left, not crash.
+
+    Forcing ``*_align`` / ``col_alignment`` to ``'b'`` used to skip every
+    justify branch in ``__align_single_cell``, so the raw int/bytes cell hit
+    ``_add_cell_spacing`` and raised ``TypeError``.
+    """
+    table = Table()
+    table.add_column('Name', ['Jade', 'John'])
+    table.add_column('Age', [20, 30])
+    table.add_column('Blob', [b'abc', b'xy'])
+    table.col_alignment = 'b'
+    rendered = str(table)
+    assert 'Jade' in rendered
+    assert '20' in rendered
+    assert "b'abc'" in rendered or 'abc' in rendered
+
+    only_bytes = Table()
+    only_bytes.add_column('Blob', [b'hello', b'world'])
+    only_bytes.col_alignment = 'b'
+    assert 'hello' in str(only_bytes)
+
+    ints = Table()
+    ints.add_column('n', [1, 2, 3])
+    ints.int_align = 'b'
+    assert '1' in str(ints)
