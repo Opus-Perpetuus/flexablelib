@@ -25,6 +25,7 @@ import json
 from typing import Any, List, Optional, Sequence
 
 from .fast import strip_ansi
+from .colors import background_hex, foreground_hex, spec_to_css
 from .options import FLT_FILTER, INT_FILTER
 
 
@@ -48,6 +49,24 @@ def _table_data(table, include_index: bool):
         headers = [str(header) for header in table.headers]
         rows = table.rows
     return headers, [[cell for cell in row] for row in rows]
+
+
+def _effective_region_color(table, region):
+    """Explicit merge colour, else inherit from row/column colour maps."""
+    if getattr(region, 'color', None):
+        return region.color
+    try:
+        row_colors = getattr(table, 'row_colors', None) or {}
+        if region.first_row in row_colors:
+            return row_colors[region.first_row]
+        headers = list(getattr(table, 'headers', []) or [])
+        if region.first_column < len(headers):
+            col_colors = getattr(table, 'column_colors', None) or {}
+            return col_colors.get(headers[region.first_column])
+    except Exception:
+        return None
+    return None
+
 
 def _align_style(align: str) -> str:
     return {'l': 'left', 'r': 'right', 'c': 'center'}.get(align, 'center')
@@ -93,8 +112,14 @@ def _html_body_with_merges(table, include_index: bool = False) -> str:
                     attrs.append(f'rowspan="{rowspan}"')
                 if colspan > 1:
                     attrs.append(f'colspan="{colspan}"')
-                style = f'text-align:{_align_style(region.align)};vertical-align:middle'
-                attrs.append(f'style="{style}"')
+                style_bits = [
+                    f'text-align:{_align_style(region.align)}',
+                    'vertical-align:middle',
+                ]
+                color_css = spec_to_css(_effective_region_color(table, region))
+                if color_css:
+                    style_bits.append(color_css)
+                attrs.append(f'style="{";".join(style_bits)}"')
                 attr_s = (' ' + ' '.join(attrs)) if attrs else ''
                 parts.append(f'<td{attr_s}>{_html.escape(text)}</td>')
             else:
@@ -676,5 +701,17 @@ def to_excel(table, path, sheet_name: str = 'Sheet1',
             start_row=start_row, start_column=start_col,
             end_row=end_row, end_column=end_col,
         )
+        spec = _effective_region_color(table, region)
+        if spec:
+            from openpyxl.styles import Font as _Font
+            bg = background_hex(spec)
+            fg = foreground_hex(spec)
+            if bg:
+                fill = PatternFill('solid', fgColor=bg)
+                for r in range(start_row, end_row + 1):
+                    for c in range(start_col, end_col + 1):
+                        worksheet.cell(row=r, column=c).fill = fill
+            if fg:
+                top_left.font = _Font(color=fg, bold='bold' in str(spec).lower())
 
     workbook.save(path)
