@@ -39,7 +39,8 @@ from .utils import (
     is_empty_cell,
     ValuePlacer,
     IndexCounter,
-    IndexColumnTitle
+    IndexColumnTitle,
+    to_roman,
 )
 from .options import (
     NONE_VALUE_REPLACEMENT,
@@ -50,7 +51,8 @@ from .options import (
     COLUMN_ALIGNS,
     ALIGNMENT_CODES,
     MIN_COLUMN_SIZE,
-    CELL_MARGIN
+    CELL_MARGIN,
+    INVISIBLE_SEPARATOR,
 )
 from .cells import (
     _wrap_rows,
@@ -785,6 +787,15 @@ class Table(object):
         self.__i_start = 0
         self.__i_step = 1
         self.__index_counter = IndexCounter()
+        # Display-only: number data columns 1..n instead of header names.
+        self.__number_columns = False
+        # Strip leading/trailing whitespace from displayed cell strings.
+        self.__strip_cells = False
+        # PrettyTable-style rule toggles: None keeps the style as authored.
+        # Values: 'all' | 'frame' | 'header' | 'none' (hrules);
+        #         'all' | 'frame' | 'none' (vrules).
+        self.__hrules = None
+        self.__vrules = None
         self.__parse_numbers = True
         self.__parse_str_numbers = False
         self.__auto_wrap_table = False
@@ -1578,6 +1589,75 @@ class Table(object):
         Amount between each index number.
         """
         return self.__i_step
+
+    @property
+    def index_title(self):
+        """
+        Header label for the index column when ``show_index`` is True.
+
+        Default is ``'i'``. Changing it rebinds the internal index key so
+        existing rows keep their index cells.
+        """
+        return str(self.__index_title)
+
+    @property
+    def roman_index(self):
+        """
+        When True with ``show_index``, index values render as Roman numerals.
+        """
+        return self.__roman_index
+
+    @property
+    def number_columns(self):
+        """
+        When True, data column headers display as ``1``, ``2``, … (1-based).
+
+        Stored header names are unchanged; only the composed table uses
+        numbers. The index column (if shown) keeps ``index_title``.
+        """
+        return self.__number_columns
+
+    @property
+    def strip_cells(self):
+        """
+        When True, strip leading/trailing whitespace from string cells on
+        display (storage untouched).
+        """
+        return self.__strip_cells
+
+    @property
+    def hrules(self):
+        """
+        Horizontal rule mode: ``None``/``'all'`` (style default), ``'frame'``
+        (top/bottom only), ``'header'`` (no body separators), or ``'none'``.
+        """
+        return self.__hrules
+
+    @property
+    def vrules(self):
+        """
+        Vertical rule mode: ``None``/``'all'`` (style default), ``'frame'``
+        (outer edges only), or ``'none'``.
+        """
+        return self.__vrules
+
+    @property
+    def max_table_width(self):
+        """Alias of :attr:`max_width` (PrettyTable / comfy-table naming)."""
+        return self.max_width
+
+    @property
+    def justify(self):
+        """Alias of :attr:`table_align` (whole-table left/center/right)."""
+        return self.table_align
+
+    @property
+    def suppress_empty(self):
+        """
+        When True, hide both empty rows and empty columns
+        (``show_empty_rows`` / ``show_empty_columns`` become False).
+        """
+        return (not self.__show_empty_rows) and (not self.__show_empty_columns)
     
     @property
     def auto_wrap(self):
@@ -1940,6 +2020,38 @@ class Table(object):
             raise ValueError('after_row must be >= 0')
         self.__dividers.add(after_row)
 
+    def add_dividers(self, *indexes):
+        """
+        Place several horizontal rules at once.
+
+        Each argument is a 0-based ``after_row`` index (same as
+        :meth:`add_divider`). A single iterable argument is also accepted.
+        """
+        if len(indexes) == 1 and not isinstance(indexes[0], (int, bool)):
+            try:
+                indexes = tuple(indexes[0])
+            except TypeError:
+                pass
+        for index in indexes:
+            self.add_divider(index)
+
+    def divide_every(self, n, start=0):
+        """
+        Insert a divider after every ``n`` body rows, starting at ``start``.
+
+        Example: ``divide_every(3)`` rules after rows 2, 5, 8, …
+        """
+        n = int(n)
+        start = int(start)
+        if n < 1:
+            raise ValueError('n must be >= 1')
+        if start < 0:
+            raise ValueError('start must be >= 0')
+        # First divider after row (start + n - 1).
+        first = start + n - 1
+        for after in range(first, self.__real_row_count, n):
+            self.__dividers.add(after)
+
     def clear_dividers(self):
         """Remove every divider placed with :meth:`add_divider`."""
         self.__dividers.clear()
@@ -1961,6 +2073,110 @@ class Table(object):
             self.__i_step = int(value)
         except ValueError:
             self.__i_step = 1
+
+    @index_title.setter
+    def index_title(self, value):
+        label = I_COL_TIT if value is None else str(value)
+        new_title = IndexColumnTitle(label)
+        old_title = self.__index_title
+        if new_title is old_title:
+            return
+        for mapping in (
+            self.__columns_with_i,
+            self.__cell_types_with_i,
+            self.__column_types_with_i,
+            self.__column_alignments_with_i,
+            self.__column_widths_with_i,
+            self.__float_columns_widths_with_i,
+            self.__processed_columns_with_i,
+            self.__semi_processed_columns_with_i,
+        ):
+            if old_title in mapping:
+                mapping[new_title] = mapping.pop(old_title)
+        if self.__headers_with_i and self.__headers_with_i[0] is old_title:
+            self.__headers_with_i[0] = new_title
+        self.__index_title = new_title
+
+    @roman_index.setter
+    def roman_index(self, value: bool):
+        self.__roman_index = bool(value)
+
+    @number_columns.setter
+    def number_columns(self, value: bool):
+        self.__number_columns = bool(value)
+
+    @strip_cells.setter
+    def strip_cells(self, value: bool):
+        self.__strip_cells = bool(value)
+
+    @hrules.setter
+    def hrules(self, value):
+        if value is None or value is False:
+            self.__hrules = None
+            return
+        if value is True:
+            self.__hrules = 'all'
+            return
+        mode = str(value).lower()
+        aliases = {
+            'all': 'all', 'a': 'all',
+            'frame': 'frame', 'f': 'frame',
+            'header': 'header', 'h': 'header',
+            'none': 'none', 'n': 'none', 'off': 'none',
+        }
+        if mode not in aliases:
+            raise ValueError(
+                "hrules must be 'all', 'frame', 'header', or 'none', got {0!r}"
+                .format(value)
+            )
+        self.__hrules = aliases[mode]
+
+    @vrules.setter
+    def vrules(self, value):
+        if value is None or value is False:
+            self.__vrules = None
+            return
+        if value is True:
+            self.__vrules = 'all'
+            return
+        mode = str(value).lower()
+        aliases = {
+            'all': 'all', 'a': 'all',
+            'frame': 'frame', 'f': 'frame',
+            'none': 'none', 'n': 'none', 'off': 'none',
+        }
+        if mode not in aliases:
+            raise ValueError(
+                "vrules must be 'all', 'frame', or 'none', got {0!r}"
+                .format(value)
+            )
+        self.__vrules = aliases[mode]
+
+    @max_table_width.setter
+    def max_table_width(self, value):
+        self.max_width = value
+
+    @justify.setter
+    def justify(self, value):
+        self.table_align = value
+
+    @suppress_empty.setter
+    def suppress_empty(self, value):
+        show = not bool(value)
+        self.__show_empty_rows = show
+        self.__show_empty_columns = show
+
+    def fit_terminal(self, margin=0):
+        """
+        Set ``max_width`` to the current terminal width minus ``margin``.
+
+        Returns ``self`` for chaining. Equivalent in spirit to comfy-table /
+        tty-table "fit the window" helpers; ``max_width=None`` already tracks
+        the live terminal, but this pins an explicit budget.
+        """
+        cols, _ = get_window_size()
+        self.max_width = max(1, int(cols) - int(margin))
+        return self
         
     @auto_wrap.setter
     def auto_wrap(self, value: bool):
@@ -2019,7 +2235,9 @@ class Table(object):
         Gets the style composition using a checked name.
 
         ``cell_padding`` overrides the style's per-side margin; ``show_margin``
-        False forces margin 0 when no explicit padding is set.
+        False forces margin 0 when no explicit padding is set. ``hrules`` /
+        ``vrules`` optionally thin out horizontal / vertical separators
+        (PrettyTable-style) without changing the named style.
         """
         base = style_catalogue.__getattribute__(self.__checked_style_name)
         if self.__cell_padding is not None:
@@ -2028,9 +2246,97 @@ class Table(object):
             margin = 0
         else:
             margin = base.margin
-        if margin == base.margin:
+        replacements = {}
+        if margin != base.margin:
+            replacements['margin'] = margin
+        hrules = self.__hrules
+        if hrules is not None and hrules != 'all':
+            replacements.update(self.__hrules_replacements(base, hrules))
+        vrules = self.__vrules
+        if vrules is not None and vrules != 'all':
+            replacements.update(self.__vrules_replacements(base, vrules))
+        if not replacements:
             return base
-        return base._replace(margin=margin)
+        return base._replace(**replacements)
+
+    @staticmethod
+    def __hrules_replacements(base, mode):
+        """Map hrules mode -> TableComposition field overrides."""
+        mode = str(mode).lower()
+        none = {
+            'superior_header_line': None,
+            'inferior_header_line': None,
+            'superior_header_line_no_header': None,
+            'table_body_line': None,
+            'table_end_line': None,
+        }
+        if mode in ('none', 'n', 'off', 'false', '0'):
+            return none
+        if mode in ('frame', 'f'):
+            # Top + bottom only; drop body separators and header underline.
+            return {
+                'inferior_header_line': None,
+                'table_body_line': None,
+            }
+        if mode in ('header', 'h'):
+            # Keep only the header underline (and top/bottom frame if present).
+            return {
+                'table_body_line': None,
+            }
+        raise ValueError(
+            "hrules must be 'all', 'frame', 'header', or 'none', got {0!r}"
+            .format(mode)
+        )
+
+    @staticmethod
+    def __vrules_replacements(base, mode):
+        """Map vrules mode -> vertical SeparatorLine overrides."""
+        mode = str(mode).lower()
+        invisible = SeparatorLine(None, INVISIBLE_SEPARATOR, None, None)
+
+        def drop_intersections(sep):
+            """Horizontal rule without column junctions (vrules none/frame)."""
+            if sep is None:
+                return None
+            # Keep the fill character; blank the junction so no leftover ┬/┼.
+            fill = sep.middle if sep.middle not in (None, '') else INVISIBLE_SEPARATOR
+            return SeparatorLine(sep.left, fill, fill, sep.right)
+
+        if mode in ('none', 'n', 'off', 'false', '0'):
+            return {
+                'vertical_header_lines': invisible,
+                'vertical_table_body_lines': invisible,
+                'superior_header_line': drop_intersections(base.superior_header_line),
+                'inferior_header_line': drop_intersections(base.inferior_header_line),
+                'superior_header_line_no_header': drop_intersections(
+                    base.superior_header_line_no_header
+                ),
+                'table_body_line': drop_intersections(base.table_body_line),
+                'table_end_line': drop_intersections(base.table_end_line),
+            }
+        if mode in ('frame', 'f'):
+            def frame_only(sep):
+                if sep is None:
+                    return SeparatorLine(None, INVISIBLE_SEPARATOR, None, None)
+                return SeparatorLine(
+                    sep.left, INVISIBLE_SEPARATOR, None, sep.right
+                )
+            return {
+                'vertical_header_lines': frame_only(base.vertical_header_lines),
+                'vertical_table_body_lines': frame_only(
+                    base.vertical_table_body_lines
+                ),
+                'superior_header_line': drop_intersections(base.superior_header_line),
+                'inferior_header_line': drop_intersections(base.inferior_header_line),
+                'superior_header_line_no_header': drop_intersections(
+                    base.superior_header_line_no_header
+                ),
+                'table_body_line': drop_intersections(base.table_body_line),
+                'table_end_line': drop_intersections(base.table_end_line),
+            }
+        raise ValueError(
+            "vrules must be 'all', 'frame', or 'none', got {0!r}".format(mode)
+        )
 
     @property
     def __checked_style_name(self) -> str:
@@ -3642,19 +3948,28 @@ class Table(object):
         else:
             formatted = value
 
+        if self.__strip_cells and isinstance(formatted, str):
+            formatted = formatted.strip()
+
         custom = self.__custom_format
         if custom is None:
             return formatted
         if callable(custom) and not isinstance(custom, dict):
-            return custom(formatted)
-        if isinstance(custom, dict):
+            result = custom(formatted)
+        elif isinstance(custom, dict):
             spec = custom.get(header)
             if spec is None and column_i is not None:
                 # Allow integer keys for positional columns.
                 spec = custom.get(column_i)
             if spec is not None:
-                return self.__apply_format_spec(formatted, spec)
-        return formatted
+                result = self.__apply_format_spec(formatted, spec)
+            else:
+                result = formatted
+        else:
+            result = formatted
+        if self.__strip_cells and isinstance(result, str):
+            return result.strip()
+        return result
 
     def __bound_for_column(self, bounds, header, column_i):
         """Resolve a per-column min/max width for one column."""
@@ -3983,6 +4298,11 @@ class Table(object):
                     self.__i_step,
                 )
 
+        if self.__roman_index and rows_with_i:
+            for row_i, row in enumerate(rows_with_i):
+                if row:
+                    rows_with_i[row_i][0] = to_roman(row[0])
+
         headers = list(self.__headers)
         for row_i, row in enumerate(rows):
             for column_i, header in enumerate(headers):
@@ -4117,6 +4437,25 @@ class Table(object):
             self.__column_alignments_as_list_with_i.append(column_alignment)
             self.__column_types_as_list_with_i.append(column_type)
 
+    def __display_header_labels(self, headers):
+        """
+        Headers as shown: optional 1-based numbering for data columns.
+
+        Index column (``IndexColumnTitle``) keeps ``index_title``. Dict keys
+        elsewhere still use the real header objects.
+        """
+        if not self.__number_columns:
+            return list(headers)
+        labels = []
+        n = 0
+        for header in headers:
+            if isinstance(header, IndexColumnTitle):
+                labels.append(header)
+            else:
+                n += 1
+                labels.append(str(n))
+        return labels
+
     def __wrap_data(self, 
                     rows, 
                     rows_with_i, 
@@ -4142,11 +4481,12 @@ class Table(object):
         # Fitting can hand back a one-shot zip(); materialise before any
         # pass that walks the rows (valign resolution would otherwise empty it).
         rows = list(rows) if rows is not None else []
+        display_headers = self.__display_header_labels(headers)
         header_valigns, row_valigns = self.__valigns_for_wrap(
             headers, rows
         )
         wrapped_headers, wrapped_rows = _wrap_rows(
-            headers,
+            display_headers,
             rows,
             header_valigns=header_valigns,
             row_valigns=row_valigns,
@@ -5093,17 +5433,29 @@ class Table(object):
 
     @classmethod
     def from_csv(cls, source, parse_numbers=True, has_header=True,
-                 delimiter=',', encoding='utf-8', **options):
+                 delimiter=',', encoding='utf-8', dialect=None, quoting=None,
+                 quotechar=None, escapechar=None, doublequote=None,
+                 lineterminator=None, skipinitialspace=None, strict=None,
+                 **options):
         """
         Build a table from a CSV path or open handle.
 
         Numeric-looking text is converted by default; a column left as strings
         would be left-aligned and look wrong. Pass ``parse_numbers=False`` to
         keep the text exactly as written.
+
+        Dialect extras (``dialect``, ``quoting``, ``quotechar``,
+        ``escapechar``, ``doublequote``, ``lineterminator``,
+        ``skipinitialspace``, ``strict``) go to ``csv.reader``.
         """
         from .readers import from_csv
-        return from_csv(cls, source, parse_numbers, has_header, delimiter,
-                        encoding, **options)
+        return from_csv(
+            cls, source, parse_numbers, has_header, delimiter, encoding,
+            dialect=dialect, quoting=quoting, quotechar=quotechar,
+            escapechar=escapechar, doublequote=doublequote,
+            lineterminator=lineterminator, skipinitialspace=skipinitialspace,
+            strict=strict, **options
+        )
 
     @classmethod
     def from_html(cls, source, index=0, parse_numbers=True, encoding='utf-8',
@@ -5198,6 +5550,62 @@ class Table(object):
             'border_color': '#0074d9',
             'zebra': ('', 'on #001f3f'),
         },
+        'solarized': {
+            'style_name': 'sharp',
+            'use_colors': True,
+            'header_color': 'bold #268bd2',
+            'border_color': '#586e75',
+            'zebra': ('', 'on #073642'),
+        },
+        'neon': {
+            'style_name': 'bold_borderline',
+            'use_colors': True,
+            'header_color': 'bold magenta',
+            'border_color': 'cyan',
+            'zebra': ('', 'on #1a0033'),
+        },
+        'mono': {
+            'style_name': 'simple',
+            'use_colors': True,
+            'header_color': 'bold',
+            'border_color': 'dim',
+            'zebra': 'dim',
+        },
+        'autumn': {
+            'style_name': 'rounded',
+            'use_colors': True,
+            'header_color': 'bold #d75f00',
+            'border_color': '#af5f00',
+            'zebra': ('', 'on #3a1f00'),
+        },
+        'contrast': {
+            'style_name': 'ascii',
+            'use_colors': True,
+            'header_color': 'bold reverse',
+            'border_color': 'bold',
+            'zebra': ('', 'reverse'),
+        },
+        'forest': {
+            'style_name': 'modern',
+            'use_colors': True,
+            'header_color': 'bold #87d787',
+            'border_color': '#005f00',
+            'zebra': ('', 'on #002200'),
+        },
+        'ember': {
+            'style_name': 'bold_borderline',
+            'use_colors': True,
+            'header_color': 'bold #ffaf00',
+            'border_color': '#d70000',
+            'zebra': ('', 'on #2a0000'),
+        },
+        'slate': {
+            'style_name': 'psql',
+            'use_colors': True,
+            'header_color': 'bold #a8a8a8',
+            'border_color': '#6c6c6c',
+            'zebra': ('', 'on #303030'),
+        },
     }
 
     def apply_theme(self, name):
@@ -5205,7 +5613,9 @@ class Table(object):
         Apply a named theme: style plus header/border/zebra colours.
 
         Themes: ``plain``, ``dark``, ``midnight``, ``matrix``, ``report``,
-        ``markdown``, ``ocean``. Returns ``self`` for chaining.
+        ``markdown``, ``ocean``, ``solarized``, ``neon``, ``mono``, ``autumn``,
+        ``contrast``, ``forest``, ``ember``, ``slate``. Returns ``self`` for
+        chaining. See ``THEMES`` for the full map.
         """
         if name not in self.THEMES:
             raise ValueError(
@@ -5349,7 +5759,9 @@ class Table(object):
             'border_color', 'use_colors', 'zebra', 'footer_rows', 'footer_color',
             'cell_padding', 'overflow', 'auto_wrap', 'valign', 'col_valign',
             'panel', 'shadow', 'col_alignment', 'header_align', 'max_width',
-            'table_align', 'hide_columns',
+            'table_align', 'hide_columns', 'index_title', 'roman_index',
+            'number_columns', 'strip_cells', 'hrules', 'vrules',
+            'index_start', 'index_step',
         ):
             try:
                 setattr(out, attr, getattr(self, attr))
@@ -5406,11 +5818,13 @@ class Table(object):
         """Alias of :meth:`transpose` (tabled naming)."""
         return self.transpose(**options)
 
-    def paginate(self, page_length=20):
+    def paginate(self, page_length=20, freeze_header=True, page_label=False):
         """
         Split the table into composed string pages of ``page_length`` body rows.
 
-        Each page is a full table (headers/title/caption/panel repeated).
+        Each page is a full table. With ``freeze_header`` True (default),
+        headers repeat on every page; with False, only the first page shows
+        them. ``page_label`` adds ``page k/n`` to each page title.
         Returns a list of strings. ``page_length`` must be >= 1.
         Inspired by PrettyTable ``paginate`` / go-pretty.
         """
@@ -5421,8 +5835,9 @@ class Table(object):
         n = self.row_count
         if n == 0:
             return [self.compose()]
+        total_pages = (n + page_length - 1) // page_length
         pages = []
-        for start in range(0, n, page_length):
+        for page_num, start in enumerate(range(0, n, page_length), start=1):
             end = min(start + page_length, n)
             slice_rows = []
             for row_i in range(start, end):
@@ -5442,12 +5857,21 @@ class Table(object):
                 'cell_padding', 'overflow', 'auto_wrap', 'valign', 'col_valign',
                 'panel', 'shadow', 'col_alignment', 'header_align', 'max_width',
                 'column_min_width', 'column_max_width', 'table_align',
-                'hide_columns',
+                'hide_columns', 'index_title', 'roman_index', 'number_columns',
+                'strip_cells', 'hrules', 'vrules', 'index_start', 'index_step',
             ):
                 try:
                     setattr(page, attr, getattr(self, attr))
                 except Exception:
                     pass
+            if not freeze_header and page_num > 1:
+                page.show_headers = False
+            if page_label:
+                label = 'page {0}/{1}'.format(page_num, total_pages)
+                existing = page.title
+                page.title = (
+                    '{0} ({1})'.format(existing, label) if existing else label
+                )
             if self.__cell_colors:
                 # Remap absolute row indexes into the page's local indexes.
                 remapped = {}
@@ -5477,15 +5901,25 @@ class Table(object):
         return to_records(self, include_index)
 
     def to_csv(self, target=None, include_index=False, delimiter=',',
-               encoding='utf-8'):
+               encoding='utf-8', dialect=None, quoting=None, quotechar=None,
+               escapechar=None, doublequote=None, lineterminator=None,
+               skipinitialspace=None, strict=None):
         """
         Write the table as CSV.
 
         Returns the CSV as a string when no target is given. Colour is
         stripped -- escape sequences would corrupt the fields.
+
+        Dialect extras are forwarded to ``csv.writer``.
         """
         from .writers import to_csv
-        return to_csv(self, target, include_index, delimiter, encoding)
+        return to_csv(
+            self, target, include_index, delimiter, encoding,
+            dialect=dialect, quoting=quoting, quotechar=quotechar,
+            escapechar=escapechar, doublequote=doublequote,
+            lineterminator=lineterminator, skipinitialspace=skipinitialspace,
+            strict=strict,
+        )
 
     def to_markdown(self, include_index=False, align=True):
         """
