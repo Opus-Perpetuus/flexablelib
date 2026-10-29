@@ -789,19 +789,22 @@ def _align_columns(style_composition: TableComposition,
                    col_widths: List[int],
                    empty_columns_i: List[int], 
                    show_empty: bool, 
-                   float_cols_sizes: dict
+                   float_cols_sizes: dict,
+                   hidden_columns_i=()
                   ) -> Generator[str, None, None]:
     """
     Aligns the columns and adds margin to the cells.
     """
     # The margin that the selected style has.
     margin = style_composition.margin
+    hidden = set(hidden_columns_i or ())
     
     for column_i, column in enumerate(columns):
         
         # Align only the columns that are shown.
-        if (not show_empty and column_i not in empty_columns_i
-        ) or show_empty:
+        if column_i not in hidden and (
+            show_empty or column_i not in empty_columns_i
+        ):
 
             # Get the header of the column.
             header = headers[column_i]
@@ -859,13 +862,15 @@ def _align_headers(style_composition: TableComposition,
                    col_widths: List[int],
                    empty_columns_i: List[int], 
                    show_empty: bool,
-                   float_cols_sizes: dict):
+                   float_cols_sizes: dict,
+                   hidden_columns_i=()):
     """
     Will align the headers using the provided column alignments.
     """
     
     # The margin that the selected style has.
     margin = style_composition.margin
+    hidden = set(hidden_columns_i or ())
     
     for column_i, column in enumerate(headers):
         # Get the alignment of the current column.
@@ -887,8 +892,9 @@ def _align_headers(style_composition: TableComposition,
             float_column_sizes = None
             
         # Only align the headers if its column is shown.
-        if (not show_empty and column_i not in empty_columns_i
-        ) or show_empty:
+        if column_i not in hidden and (
+            show_empty or column_i not in empty_columns_i
+        ):
             yield from __align_one_header(
                 column, 
                 col_width, 
