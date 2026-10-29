@@ -828,6 +828,8 @@ class Table(object):
         self.__shadow = False
         # Row indexes after which a horizontal rule is forced.
         self.__dividers = set()
+        # Columns hidden by name or index (go-pretty / prettytable suppress).
+        self.__hide_columns = ()
         # Sort / filter applied to the display copy, not to stored data.
         self.__sort_by = None
         self.__sort_reverse = False
@@ -1506,7 +1508,8 @@ class Table(object):
     @property
     def sort_by(self):
         """
-        Column header or 0-based index used to order rows at render time.
+        Column header, 0-based index, or callable ``key(row)`` used to order
+        rows at render time.
         """
         return self.__sort_by
 
@@ -1984,6 +1987,25 @@ class Table(object):
     def show_empty_columns(self, value: bool):
         self.__show_empty_columns = value
 
+    @property
+    def hide_columns(self):
+        """
+        Column names or indexes to omit from display (go-pretty suppress).
+
+        Accepts ``None``, a single name/index, or an iterable of them.
+        Stored data is unchanged; only compose/export chrome hides them.
+        """
+        return self.__hide_columns
+
+    @hide_columns.setter
+    def hide_columns(self, value):
+        if value is None:
+            self.__hide_columns = ()
+            return
+        if isinstance(value, (str, bytes)) or not hasattr(value, '__iter__'):
+            value = (value,)
+        self.__hide_columns = tuple(value)
+
     # end +-----------------------------+ SETTERS +-----------------------------+ end
     # +-----------------------------------------------------------------------------+
 
@@ -2037,6 +2059,45 @@ class Table(object):
             if all(is_empty_cell(cell, self.__value_placer) for cell in row):
                 empty_rows.append(i)
         return empty_rows
+
+    def __user_hidden_column_indexes(self, table_with_i=False):
+        """
+        Resolve ``hide_columns`` keys to drawn column indexes.
+
+        Names match headers; ints are 0-based user column indexes (index
+        column excluded). When ``table_with_i`` the drawn index column is
+        offset by one, matching ``__empty_column_indexes``.
+        """
+        keys = self.__hide_columns or ()
+        if not keys:
+            return ()
+        headers = list(self.__headers)
+        resolved = []
+        for key in keys:
+            if isinstance(key, int):
+                user_i = key
+            else:
+                try:
+                    user_i = headers.index(key)
+                except ValueError:
+                    raise ValueError(
+                        'hide_columns key {0!r} is not in the table headers'
+                        .format(key)
+                    )
+            if user_i < 0 or user_i >= len(headers):
+                raise ValueError(
+                    'hide_columns index {0!r} out of range'.format(key)
+                )
+            drawn = user_i + 1 if table_with_i else user_i
+            resolved.append(drawn)
+        return tuple(resolved)
+
+    def __effective_hidden_columns(self, table_with_i=False):
+        """Empty-column hides plus user ``hide_columns``, as drawn indexes."""
+        hidden = set(self.__user_hidden_column_indexes(table_with_i))
+        if not self.__show_empty_columns:
+            hidden.update(self.__empty_column_indexes)
+        return tuple(sorted(hidden))
 
     @property
     def __empty_column_indexes(self) -> list:
@@ -3791,23 +3852,33 @@ class Table(object):
 
         if self.__sort_by is not None and indices:
             key = self.__sort_by
-            if isinstance(key, int):
-                column_i = key
+            if callable(key) and not isinstance(key, (str, bytes)):
+                def sort_key(row_i, _key=key):
+                    row = list(self.__rows[row_i])
+                    # Replace ValuePlacer with missing_value for the key fn.
+                    cleaned = [
+                        self.__missing_value if isinstance(c, ValuePlacer) else c
+                        for c in row
+                    ]
+                    return _key(cleaned)
             else:
-                try:
-                    column_i = list(self.__headers).index(key)
-                except ValueError:
-                    raise ValueError(
-                        'sort_by column {0!r} is not in the table headers'
-                        .format(key)
-                    )
+                if isinstance(key, int):
+                    column_i = key
+                else:
+                    try:
+                        column_i = list(self.__headers).index(key)
+                    except ValueError:
+                        raise ValueError(
+                            'sort_by column {0!r} is not in the table headers'
+                            .format(key)
+                        )
 
-            def sort_key(row_i):
-                cell = self.__rows[row_i][column_i]
-                if isinstance(cell, ValuePlacer):
-                    # Missing sorts as empty string so it is stable and low.
-                    return (1, '')
-                return (0, cell)
+                def sort_key(row_i, _column_i=column_i):
+                    cell = self.__rows[row_i][_column_i]
+                    if isinstance(cell, ValuePlacer):
+                        # Missing sorts as empty string so it is stable and low.
+                        return (1, '')
+                    return (0, cell)
 
             indices.sort(key=sort_key, reverse=self.__sort_reverse)
 
@@ -4191,6 +4262,7 @@ class Table(object):
         header_alignments_list = self.__header_alignments_list(
             column_alignments_list, column_titles
         )
+        user_hidden = self.__user_hidden_column_indexes(table_with_i)
         # Header and body rows get aligned
         aligned_header = _align_headers(
             self.__style_composition,
@@ -4199,7 +4271,8 @@ class Table(object):
             column_widths_list,
             self.__empty_column_indexes,
             self.__show_empty_columns,
-            float_column_widths
+            float_column_widths,
+            user_hidden,
         )
         # Colour is applied after alignment, never before. By this point every
         # cell has been padded to its exact visible width, so wrapping it in
@@ -4219,7 +4292,8 @@ class Table(object):
             column_widths_list,
             self.__empty_column_indexes,
             self.__show_empty_columns,
-            float_column_widths
+            float_column_widths,
+            user_hidden,
         ))
         if colors_on:
             # Stash body length so footer_rows can resolve during paint.
@@ -4246,6 +4320,7 @@ class Table(object):
             self.__empty_column_indexes,
             self.__show_empty_columns,
             column_alignments_list,
+            user_hidden,
         )
         empty_rows_for_render = (
             self.__compose_empty_row_indexes
@@ -4597,9 +4672,7 @@ class Table(object):
         # Columns the table is leaving out take up no room in a line, so the
         # merge offsets must not count them either -- the same list the
         # separators were built from.
-        hidden_columns = (
-            () if self.__show_empty_columns else self.__empty_column_indexes
-        )
+        hidden_columns = self.__effective_hidden_columns(table_with_i)
 
         regions = self.__regions_with_colors()
         merged = apply_merges(
@@ -4638,10 +4711,7 @@ class Table(object):
 
     def __rule_specs_for_row(self, row_index, column_titles, column_widths):
         """One colour spec per *drawn* column for the rule under ``row_index``."""
-        hidden = (
-            () if self.__show_empty_columns else self.__empty_column_indexes
-        )
-        hidden = set(hidden)
+        hidden = set(self.__effective_hidden_columns(self.__show_index))
         specs = []
         for col_i, _width in enumerate(column_widths):
             if col_i in hidden:
@@ -4866,9 +4936,7 @@ class Table(object):
         """
         from .merges import compute_layout, paint_rule_cell_backgrounds
 
-        hidden = (
-            () if self.__show_empty_columns else self.__empty_column_indexes
-        )
+        hidden = self.__effective_hidden_columns(self.__show_index)
         layout = compute_layout(
             column_widths, self.__style_composition, hidden
         )
@@ -5079,6 +5147,230 @@ class Table(object):
     # +-----------------------------------------------------------------------------+
     # start +------------------------+ DATA WRITING +------------------------+ start
 
+    # Named colour+style bundles (Spectre / Rich theme spirit).
+    THEMES = {
+        'plain': {
+            'style_name': 'plain',
+            'use_colors': False,
+            'header_color': None,
+            'border_color': None,
+            'zebra': None,
+        },
+        'dark': {
+            'style_name': 'rounded',
+            'use_colors': True,
+            'header_color': 'bold cyan',
+            'border_color': 'dim',
+            'zebra': 'on #2a2a2a',
+        },
+        'midnight': {
+            'style_name': 'sharp',
+            'use_colors': True,
+            'header_color': 'bold white',
+            'border_color': 'blue',
+            'zebra': ('', 'on #1a1a2e'),
+        },
+        'matrix': {
+            'style_name': 'ascii',
+            'use_colors': True,
+            'header_color': 'bold green',
+            'border_color': 'green',
+            'zebra': 'dim green',
+        },
+        'report': {
+            'style_name': 'simple_bold',
+            'use_colors': True,
+            'header_color': 'bold',
+            'border_color': None,
+            'zebra': None,
+        },
+        'markdown': {
+            'style_name': 'markdown',
+            'use_colors': False,
+            'header_color': None,
+            'border_color': None,
+            'zebra': None,
+        },
+        'ocean': {
+            'style_name': 'rounded',
+            'use_colors': True,
+            'header_color': 'bold #7fdbff',
+            'border_color': '#0074d9',
+            'zebra': ('', 'on #001f3f'),
+        },
+    }
+
+    def apply_theme(self, name):
+        """
+        Apply a named theme: style plus header/border/zebra colours.
+
+        Themes: ``plain``, ``dark``, ``midnight``, ``matrix``, ``report``,
+        ``markdown``, ``ocean``. Returns ``self`` for chaining.
+        """
+        if name not in self.THEMES:
+            raise ValueError(
+                'unknown theme {0!r}; choose from {1}'.format(
+                    name, ', '.join(sorted(self.THEMES))
+                )
+            )
+        for key, value in self.THEMES[name].items():
+            setattr(self, key, value)
+        return self
+
+    def stream(self, rows, append=False):
+        """
+        Yield table lines as rows arrive (beautifultable-style streaming).
+
+        Column widths are frozen from headers, existing rows, and any
+        ``column_min_width`` / ``column_max_width`` before iteration starts
+        (beautifultable contract: set floors ahead of time if later rows are
+        wider than the seed). Cells that exceed those widths follow
+        ``overflow`` (truncate/wrap).
+
+        Requires headers (or existing columns) so widths can be measured
+        before the first streamed row.
+
+        Parameters
+        ----------
+        rows : iterable
+            Yields one row (list/tuple) at a time.
+        append : bool
+            If True, streamed rows are added to this table when the
+            generator is exhausted. If False (default), this table is
+            left unchanged; streaming mutates only an internal copy.
+
+        Yields
+        ------
+        str
+            Individual composed lines (borders, header, body, caption).
+        """
+        if not self.__headers and self.__real_column_count == 0:
+            raise ValueError(
+                'stream() needs headers or existing columns so widths '
+                'can be frozen before rows arrive'
+            )
+
+        work = self.__display_clone(include_rows=True)
+        # Measure natural widths, then pin min=max so later rows cannot
+        # widen the table (beautifultable stream contract).
+        work.compose()
+        widths = list(work.__column_widths_as_list)
+        # Honour caller floors already set on self.
+        if self.__column_min_width is not None:
+            for i, header in enumerate(work.headers):
+                floor = self.__lookup_width_map(
+                    self.__column_min_width, header, i
+                )
+                if floor is not None:
+                    widths[i] = max(widths[i], int(floor))
+        if self.__column_max_width is not None:
+            for i, header in enumerate(work.headers):
+                ceil = self.__lookup_width_map(
+                    self.__column_max_width, header, i
+                )
+                if ceil is not None:
+                    widths[i] = min(widths[i], int(ceil))
+        work.column_min_width = list(widths)
+        work.column_max_width = list(widths)
+
+        n_close = self.__stream_closing_line_count(work, widths)
+        before = work.compose().splitlines()
+        open_part = before[:-n_close] if n_close else before
+        for line in open_part:
+            yield line
+
+        streamed = []
+        for row in rows:
+            row = list(row)
+            streamed.append(row)
+            work.add_row(row)
+            after = work.compose().splitlines()
+            open_after = after[:-n_close] if n_close else after
+            open_before_len = len(before) - n_close if n_close else len(before)
+            for line in open_after[open_before_len:]:
+                yield line
+            before = after
+
+        for line in (before[-n_close:] if n_close else []):
+            yield line
+
+        if append and streamed:
+            for row in streamed:
+                self.add_row(row)
+
+    def __stream_closing_line_count(self, template, widths):
+        """
+        How many trailing lines are shared by empty-body and one-row tables
+        (bottom border + caption). Those are deferred until stream ends.
+        """
+        empty = self.__display_clone(include_rows=False)
+        one = self.__display_clone(include_rows=False)
+        empty.column_min_width = list(widths)
+        empty.column_max_width = list(widths)
+        one.column_min_width = list(widths)
+        one.column_max_width = list(widths)
+        placeholders = ['' for _ in empty.headers] or ['']
+        if empty.headers:
+            one.add_row(placeholders)
+        else:
+            return 0
+        la = empty.compose().splitlines()
+        lb = one.compose().splitlines()
+        n = 0
+        while n < len(la) and n < len(lb) and la[-(n + 1)] == lb[-(n + 1)]:
+            n += 1
+        return n
+
+    def __display_clone(self, include_rows=True):
+        """Shallow display copy used by stream/paginate helpers."""
+        headers = list(self.headers)
+        rows = []
+        if include_rows:
+            for row_i in range(self.__real_row_count):
+                row = []
+                for header in headers:
+                    col = self.__columns.get(header, [])
+                    if row_i < len(col):
+                        cell = col[row_i]
+                        if isinstance(cell, ValuePlacer):
+                            cell = self.__missing_value
+                        row.append(cell)
+                    else:
+                        row.append(self.__missing_value)
+                rows.append(row)
+        out = type(self).from_records(
+            rows,
+            headers=headers if headers else None,
+            style_name=self.style_name,
+            missing_val=self.__missing_value,
+        )
+        for attr in (
+            'title', 'caption', 'show_headers', 'show_index', 'header_color',
+            'border_color', 'use_colors', 'zebra', 'footer_rows', 'footer_color',
+            'cell_padding', 'overflow', 'auto_wrap', 'valign', 'col_valign',
+            'panel', 'shadow', 'col_alignment', 'header_align', 'max_width',
+            'table_align', 'hide_columns',
+        ):
+            try:
+                setattr(out, attr, getattr(self, attr))
+            except Exception:
+                pass
+        return out
+
+    def __lookup_width_map(self, spec, header, index):
+        """Resolve column_min/max_width entry for one column."""
+        if spec is None:
+            return None
+        if isinstance(spec, dict):
+            if header in spec:
+                return spec[header]
+            return spec.get(index)
+        if is_some_instance(spec, list, tuple):
+            if index < len(spec):
+                return spec[index]
+            return None
+        return spec
+
     def transpose(self, **options):
         """
         Return a new table with rows and columns swapped (display rotate).
@@ -5150,6 +5442,7 @@ class Table(object):
                 'cell_padding', 'overflow', 'auto_wrap', 'valign', 'col_valign',
                 'panel', 'shadow', 'col_alignment', 'header_align', 'max_width',
                 'column_min_width', 'column_max_width', 'table_align',
+                'hide_columns',
             ):
                 try:
                     setattr(page, attr, getattr(self, attr))
