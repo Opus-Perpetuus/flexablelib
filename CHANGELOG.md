@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.0.15] - 2026-10-28
+
+### Added
+- ``Table.stream(rows, append=False)``: beautifultable-style incremental
+  print — yields composed lines as rows arrive with widths frozen from
+  headers / seed rows / ``column_min_width`` (F13).
+- ``Table.hide_columns``: omit columns by name or index at display time
+  (go-pretty / prettytable suppress); stored data unchanged.
+- ``Table.apply_theme(name)`` + ``Table.THEMES``: named style+colour
+  bundles (``plain``, ``dark``, ``midnight``, ``matrix``, ``report``,
+  ``markdown``, ``ocean``).
+- ``sort_by`` accepts a callable ``key(row)`` in addition to header/index.
+
+### Notes
+- Streaming pins column widths; set ``column_min_width`` when later rows
+  are wider than the seed content.
+
 ## [2.0.14] - 2026-10-28
 
 ### Added
@@ -19,7 +36,7 @@ All notable changes to this project will be documented in this file. See [standa
 ### Notes
 - Column percent-width constraints (F10) remain covered by existing
   ``column_min_width`` / ``column_max_width``; no API change.
-- Streaming / incremental print (F13) deferred.
+- Streaming / incremental print (F13) shipped in 2.0.15.
 
 ## [2.0.13] - 2026-10-28
 

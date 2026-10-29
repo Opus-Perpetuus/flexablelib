@@ -286,7 +286,8 @@ def __get_horizontal_line_group(line_style: SeparatorLine,
                                 will_have_indicators: bool,
                                 indicator_margin: str,
                                 full_margin_width: int,
-                                always_center_indicator: bool
+                                always_center_indicator: bool,
+                                hidden_columns_i=()
                                ) -> Generator[str, None, None]:
     """
     This creates a group of horizontal lines for all the columns
@@ -322,10 +323,12 @@ def __get_horizontal_line_group(line_style: SeparatorLine,
     middle = __check_if_none(line_style.middle)
 
     # Create a line for each column (width)    
+    hidden = set(hidden_columns_i or ())
     for width_i, width in enumerate(widths):
         # Do it only if the column is shown
-        if (not show_empty and width_i not in empty_column_i
-        ) or show_empty:
+        if width_i not in hidden and (
+            show_empty or width_i not in empty_column_i
+        ):
             if is_align_sensitive and will_have_indicators:
                 checking_sets = list(map(lambda checker: [
                         alignments[width_i], 
@@ -410,7 +413,8 @@ def __get_column_lines(line_styles: List[SeparatorLine],
                        left_right_upon_centering: bool,
                        lines_with_indicator: List[int],
                        indicator_margin: int,
-                       always_center_indicator: bool
+                       always_center_indicator: bool,
+                       hidden_columns_i=()
                       ) -> Generator[str, None, None]:
     """
     Will get all the horizontal separators for the table based on
@@ -438,7 +442,8 @@ def __get_column_lines(line_styles: List[SeparatorLine],
                     will_have_indicators,
                     indicator_margin_string,
                     full_margin_width,
-                    always_center_indicator
+                    always_center_indicator,
+                    hidden_columns_i,
                 )
             )
         else:
@@ -449,7 +454,8 @@ def _get_separators(style_composition: TableComposition,
                     col_widths: list,
                     empty_column_i: List[int], 
                     show_empty: bool,
-                    alignments: list
+                    alignments: list,
+                    hidden_columns_i=()
                    ) -> HorizontalComposition:
     """
     Get the horizontal separators for the table.
@@ -545,7 +551,8 @@ def _get_separators(style_composition: TableComposition,
         left_right_upon_centering,
         lines_with_indicator,
         indicator_margin,
-        always_center
+        always_center,
+        hidden_columns_i,
     )
 
     # Create a HorizontalComposition object and pass the separator lines.
