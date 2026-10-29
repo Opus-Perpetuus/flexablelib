@@ -230,3 +230,29 @@ class ValuePlacer(object):
     def __call__(self, value):
         return value
     
+
+
+def to_roman(number):
+    """
+    Convert a non-negative integer to a Roman numeral string.
+
+    ``0`` and negatives fall back to decimal (Romans had no zero). Values
+    above 3999 use additive ``M`` thousands rather than overlines.
+    """
+    try:
+        number = int(number)
+    except (TypeError, ValueError):
+        return str(number)
+    if number <= 0:
+        return str(number)
+    parts = []
+    table = (
+        (1000, 'M'), (900, 'CM'), (500, 'D'), (400, 'CD'),
+        (100, 'C'), (90, 'XC'), (50, 'L'), (40, 'XL'),
+        (10, 'X'), (9, 'IX'), (5, 'V'), (4, 'IV'), (1, 'I'),
+    )
+    for value, numeral in table:
+        while number >= value:
+            parts.append(numeral)
+            number -= value
+    return ''.join(parts)

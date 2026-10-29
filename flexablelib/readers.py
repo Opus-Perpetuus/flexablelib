@@ -132,20 +132,61 @@ def from_dicts(table_class, records: Iterable[Dict[str, Any]],
     return _new_table(table_class, headers, rows, parse_numbers, **options)
 
 
+def _csv_reader_kwargs(delimiter=',', dialect=None, quoting=None,
+                       quotechar=None, escapechar=None, doublequote=None,
+                       lineterminator=None, skipinitialspace=None,
+                       strict=None):
+    """Build kwargs for ``csv.reader`` / ``csv.writer`` from optional extras."""
+    kwargs = {}
+    if dialect is not None:
+        kwargs['dialect'] = dialect
+    else:
+        kwargs['delimiter'] = delimiter
+    for key, value in (
+        ('quoting', quoting),
+        ('quotechar', quotechar),
+        ('escapechar', escapechar),
+        ('doublequote', doublequote),
+        ('lineterminator', lineterminator),
+        ('skipinitialspace', skipinitialspace),
+        ('strict', strict),
+    ):
+        if value is not None:
+            kwargs[key] = value
+    # dialect already carries delimiter; still allow override when both given
+    if dialect is not None and delimiter is not None and delimiter != ',':
+        kwargs['delimiter'] = delimiter
+    return kwargs
+
+
 def from_csv(table_class, source, parse_numbers: bool = True,
              has_header: bool = True, delimiter: str = ',',
-             encoding: str = 'utf-8', **options):
+             encoding: str = 'utf-8', dialect=None, quoting=None,
+             quotechar=None, escapechar=None, doublequote=None,
+             lineterminator=None, skipinitialspace=None, strict=None,
+             **options):
     """
     Build from a CSV file path, or any open text handle.
 
     With ``has_header`` false, columns are named automatically.
+
+    Extra ``csv`` dialect knobs (``quoting``, ``quotechar``, ``escapechar``,
+    ``doublequote``, ``lineterminator``, ``skipinitialspace``, ``strict``,
+    and a registered ``dialect`` name or Dialect instance) are forwarded to
+    ``csv.reader``.
     """
+    reader_kwargs = _csv_reader_kwargs(
+        delimiter=delimiter, dialect=dialect, quoting=quoting,
+        quotechar=quotechar, escapechar=escapechar,
+        doublequote=doublequote, lineterminator=lineterminator,
+        skipinitialspace=skipinitialspace, strict=strict,
+    )
     if hasattr(source, 'read'):
-        reader = _csv.reader(source, delimiter=delimiter)
+        reader = _csv.reader(source, **reader_kwargs)
         rows = [row for row in reader]
     else:
         with open(source, 'r', newline='', encoding=encoding) as handle:
-            rows = [row for row in _csv.reader(handle, delimiter=delimiter)]
+            rows = [row for row in _csv.reader(handle, **reader_kwargs)]
 
     if not rows:
         return table_class(**options)

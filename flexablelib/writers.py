@@ -165,17 +165,31 @@ def to_simple_html(table, include_index: bool = False) -> str:
 
 
 def to_csv(table, target=None, include_index: bool = False,
-           delimiter: str = ',', encoding: str = 'utf-8') -> Optional[str]:
+           delimiter: str = ',', encoding: str = 'utf-8',
+           dialect=None, quoting=None, quotechar=None, escapechar=None,
+           doublequote=None, lineterminator=None, skipinitialspace=None,
+           strict=None) -> Optional[str]:
     """
     Write CSV.
 
     With no target, returns the CSV as a string; otherwise writes to the given
     path or open handle and returns None.
+
+    Dialect extras (``quoting``, ``quotechar``, ``escapechar``,
+    ``doublequote``, ``lineterminator``, ``skipinitialspace``, ``strict``,
+    ``dialect``) are forwarded to ``csv.writer``.
     """
     headers, rows = _table_data(table, include_index)
+    from .readers import _csv_reader_kwargs
+    writer_kwargs = _csv_reader_kwargs(
+        delimiter=delimiter, dialect=dialect, quoting=quoting,
+        quotechar=quotechar, escapechar=escapechar,
+        doublequote=doublequote, lineterminator=lineterminator,
+        skipinitialspace=skipinitialspace, strict=strict,
+    )
 
     def dump(handle):
-        writer = _csv.writer(handle, delimiter=delimiter)
+        writer = _csv.writer(handle, **writer_kwargs)
         writer.writerow([_plain(header) for header in headers])
         for row in rows:
             writer.writerow([_plain(cell) for cell in row])

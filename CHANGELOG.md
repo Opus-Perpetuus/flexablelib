@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.0.16] - 2026-10-28
+
+### Added
+- ``Table.index_title``: rename the ``show_index`` column header (default ``i``).
+- ``Table.roman_index``: render index values as Roman numerals.
+- ``Table.number_columns``: display data headers as ``1``, ``2``, … (stored names kept).
+- ``Table.strip_cells``: strip whitespace from string cells on display.
+- ``Table.hrules`` / ``Table.vrules``: PrettyTable-style rule toggles
+  (``all`` / ``frame`` / ``header`` / ``none`` for hrules; ``all`` / ``frame`` /
+  ``none`` for vrules).
+- ``Table.add_dividers(*indexes)`` and ``Table.divide_every(n, start=0)``.
+- ``Table.fit_terminal(margin=0)``: pin ``max_width`` to the live terminal.
+- Aliases ``max_table_width`` (``max_width``) and ``justify`` (``table_align``).
+- ``Table.suppress_empty``: hide empty rows and columns together.
+- CSV dialect extras on ``from_csv`` / ``to_csv``: ``dialect``, ``quoting``,
+  ``quotechar``, ``escapechar``, ``doublequote``, ``lineterminator``,
+  ``skipinitialspace``, ``strict``.
+- Themes: ``solarized``, ``neon``, ``mono``, ``autumn``, ``contrast``,
+  ``forest``, ``ember``, ``slate``.
+- ``paginate(..., freeze_header=True, page_label=False)``: opt-out of repeating
+  headers after page 1; optional ``page k/n`` title labels.
+
+### Notes
+- ``from_html`` was already present (2.0.x); no API change this release.
+
 ## [2.0.15] - 2026-10-28
 
 ### Added
