@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.0.17] - 2026-10-31
+
+### Security
+- ``to_html`` (interactive page): cell or header text containing
+  ``</script>`` could close the inline script and inject markup. The embedded
+  JSON now escapes ``<``, ``>`` and ``&`` as ``\uXXXX``; values are unchanged
+  once parsed.
+
+### Fixed
+- ``border_text(..., offset=None, align='right' | 'center')`` and overlong
+  labels no longer overwrite the frame's closing corner.
+- Rich/X11 percentage greys (``grey0`` … ``grey100``, ``gray`` too) are valid
+  colour names, e.g. ``table.zebra = 'on grey23'``; they map to the nearest
+  xterm-256 grey.
+
+### Performance
+- Rendering skips the per-cell vertical-alignment lookup when every cell is
+  top-aligned (the default): 10,000 × 6 renders in ~157 ms instead of ~187 ms.
+  ``tools/benchmark.py`` now includes rich and a ``--pure`` mode; numbers in
+  ``docs/BENCHMARKS.md``.
+
+### Packaging
+- ``py.typed`` marker (PEP 561); ``Typing :: Typed`` classifier.
+- Development status **5 - Production/Stable**; richer keywords, classifiers
+  and ``project_urls`` (Source, Issues, Changelog, Documentation).
+- The sdist now ships ``style_examples.md``, ``pytest.ini`` and ``tests/`` so
+  the suite runs from it (useful for distro / conda-forge packaging, #26).
+- ``setup.cfg``: ``description_file`` (the hyphenated key is deprecated).
+
+### Docs
+- README rewritten for adoption: quickstart, feature gallery (PNG renders
+  from ``tools/readme_gallery.py``), comparison with tabulate / prettytable /
+  rich, production notes, stability policy. Images and links use absolute
+  URLs so they render on PyPI.
+- ``CONTRIBUTING.md``, ``SECURITY.md``, issue and PR templates,
+  ``docs/COMPARISON.md`` (89-library survey), ``docs/BENCHMARKS.md``.
+
 ## [2.0.16] - 2026-10-28
 
 ### Added

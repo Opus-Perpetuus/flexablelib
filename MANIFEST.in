@@ -5,3 +5,7 @@ include package.json
 include flexablelib/_speedups.c
 include flexablelib/_width_tables.h
 recursive-include tools *.py
+include style_examples.md
+include flexablelib/py.typed
+include pytest.ini
+recursive-include tests *.py
