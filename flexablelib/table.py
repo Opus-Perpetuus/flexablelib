@@ -4855,6 +4855,15 @@ class Table(object):
         """Build header_valigns and per-row body valign lists for ``_wrap_rows``."""
         from .cells import _normalize_valign
         default = _normalize_valign(self.__valign)
+        # Only pay the cost when something is not top: resolving a code per
+        # cell is a measurable share of a large render.
+        needs = (
+            default != 't'
+            or self.__col_valign is not None
+            or bool(self.__cell_valign)
+        )
+        if not needs:
+            return None, None
         n = len(headers) if headers is not None else 0
         # Headers follow column valign (no per-cell header map).
         header_valigns = []
@@ -4886,14 +4895,6 @@ class Table(object):
                     user_i = column_i
                 codes.append(self.__valign_for_cell(row_i, header, user_i))
             row_valigns.append(codes)
-        # Only pay the cost when something is not top.
-        needs = (
-            default != 't'
-            or self.__col_valign is not None
-            or bool(self.__cell_valign)
-        )
-        if not needs:
-            return None, None
         return header_valigns, row_valigns
 
     def __apply_panel_and_shadow(self, table_string):
@@ -5084,18 +5085,23 @@ class Table(object):
         width = len(chars)
         text_chars = list(raw)
         tw = len(text_chars)
+        # The writable span excludes the outer corners, so an aligned or
+        # overlong label never eats the frame's closing junction.
+        lo = 1 if width > 2 and not chars[0].isspace() else 0
+        hi = width - 1 if width > 2 and not chars[-1].isspace() else width
         if offset is None:
+            span = hi - lo
             if align == 'center':
-                start = max(0, (width - tw) // 2)
+                start = lo + max(0, (span - tw) // 2)
             elif align == 'right':
-                start = max(0, width - tw)
+                start = lo + max(0, span - tw)
             else:
-                start = 0
+                start = lo
         else:
             start = max(0, int(offset))
         if start >= width:
             return line
-        available = width - start
+        available = (hi if start < hi else width) - start
         if tw > available:
             text_chars = text_chars[:available]
             tw = len(text_chars)
