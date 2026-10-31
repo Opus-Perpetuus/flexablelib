@@ -87,11 +87,22 @@ def test_middle_valign_still_applies_after_the_fast_path():
 # --- packaging ------------------------------------------------------------
 
 def test_py_typed_marker_ships_with_the_package():
-    assert os.path.isfile(os.path.join(REPO_ROOT, 'flexablelib', 'py.typed'))
+    import flexablelib
+    package_dir = os.path.dirname(os.path.abspath(flexablelib.__file__))
+    assert os.path.isfile(os.path.join(package_dir, 'py.typed'))
+
+
+def _repo_file(name):
+    # Downstream packagers (conda-forge) run the suite against an installed
+    # package with only tests/ copied over; repo-only checks skip there.
+    path = os.path.join(REPO_ROOT, name)
+    if not os.path.isfile(path):
+        pytest.skip(f'{name} is only present in a source checkout')
+    return path
 
 
 def test_manifest_ships_style_examples_and_tests_in_the_sdist():
-    with open(os.path.join(REPO_ROOT, 'MANIFEST.in')) as handle:
+    with open(_repo_file('MANIFEST.in')) as handle:
         manifest = handle.read()
     assert 'include style_examples.md' in manifest
     assert 'recursive-include tests *.py' in manifest
@@ -117,7 +128,7 @@ def test_style_name_works_outside_the_repository_root(tmp_path):
 
 def test_readme_quickstart_prints_the_output_shown_below_it(capsys):
     """The first python block in README.md is what new users paste."""
-    with open(os.path.join(REPO_ROOT, 'README.md'), encoding='utf-8') as handle:
+    with open(_repo_file('README.md'), encoding='utf-8') as handle:
         readme = handle.read()
     section = readme[readme.index('## 30-second quickstart'):]
     code = re.search(r'```python\n(.*?)```', section, re.S).group(1)
