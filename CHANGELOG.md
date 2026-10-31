@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.0.18] - 2026-10-31
+
+### Fixed
+- ``border_text(..., align='right' | 'center')`` now works with the default
+  offset; you no longer have to pass ``offset=None``. The ``offset`` default
+  is now ``None`` (automatic: a one-cell margin inside the frame corners).
+  An explicit ``offset`` is a margin from the aligned edge: the start column
+  for ``left`` (unchanged), the gap before the right edge for ``right``, and
+  the margin on both sides for ``center``. Default (left) placement is
+  unchanged.
+- ``border_text`` on ``where='left' | 'right'`` honours ``align`` too
+  (``left`` = top, ``center``, ``right`` = bottom) and, by default, no longer
+  overwrites the top corner.
+- ``border_text`` rejects a negative or non-integer ``offset`` with a clear
+  error.
+
+### Packaging
+- CPython **3.14** wheels (Linux manylinux/musllinux, Windows, macOS) via
+  cibuildwheel 3.4.1.
+- Removed the unused npm toolchain (commitlint, husky, standard-version…) and
+  ``package-lock.json``. ``package.json`` only carries the version number now,
+  which clears all 35 Dependabot alerts; none of them ever reached PyPI users.
+
 ## [2.0.17] - 2026-10-31
 
 ### Security

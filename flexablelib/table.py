@@ -2699,7 +2699,7 @@ class Table(object):
     def border_color(self, value):
         self.__border_color = value
 
-    def border_text(self, text, where='top', color=None, offset=1, align='left'):
+    def border_text(self, text, where='top', color=None, offset=None, align='left'):
         """
         Overlay ``text`` on a border line (inspired by tabled ``LineText``).
 
@@ -2711,12 +2711,25 @@ class Table(object):
             'bottom' / 'end'              – bottom frame
             'left' / 'right'              – vertical outer borders
 
-        ``offset`` is the visible column (horizontal) or row (vertical) where
-        the text starts; junctions outside the span are preserved when the
-        text does not overwrite them. ``color`` paints the text foreground
-        (``border_color`` still paints the remaining chrome). ``align`` is
-        ``left``, ``center``, or ``right`` within the writable span when
-        ``offset`` is None.
+        ``align`` is ``left``, ``center`` or ``right`` (``l``/``c``/``r``).
+        On the vertical borders ``left`` means top and ``right`` means bottom.
+
+        ``offset`` is a margin measured from the aligned edge, in visible
+        columns (horizontal) or lines (vertical):
+
+        - ``align='left'``: the text starts ``offset`` columns from the left
+          edge (the historical meaning; ``offset=0`` overwrites the corner).
+        - ``align='right'``: the text ends ``offset`` columns before the
+          right edge.
+        - ``align='center'``: the text is centred between margins of
+          ``offset`` on both sides.
+
+        ``offset=None`` (the default) is automatic: a margin of 1, so the
+        label sits just inside the frame corners and never overwrites them.
+        ``table.border_text('v2', align='right')`` therefore works without
+        any offset. Junctions outside the text are preserved. ``color`` paints
+        the text foreground (``border_color`` still paints the remaining
+        chrome).
 
         Multiple calls accumulate; use ``clear_border_texts()`` to reset.
         """
@@ -2745,6 +2758,17 @@ class Table(object):
         align_key = (align or 'left').lower()
         if align_key not in ('left', 'center', 'right', 'l', 'c', 'r'):
             raise ValueError(f"Unknown border_text align={align!r}")
+        if offset is not None:
+            try:
+                offset = int(offset)
+            except (TypeError, ValueError):
+                raise TypeError(
+                    f"border_text offset must be an int or None, got {offset!r}"
+                ) from None
+            if offset < 0:
+                raise ValueError(
+                    f"border_text offset must be >= 0, got {offset!r}"
+                )
         align_key = {'l': 'left', 'c': 'center', 'r': 'right'}.get(
             align_key, align_key
         )
@@ -5062,14 +5086,49 @@ class Table(object):
             )
         return specs
 
-    def __overlay_line_text(self, line, text, offset=1, color=None,
+    @staticmethod
+    def _border_text_span(length, text_len, offset, align, lo, hi):
+        """
+        Where a ``border_text`` label goes on a line (or column) of
+        ``length`` cells: returns ``(start, stop)``; the label is written from
+        ``start`` and truncated at ``stop``.
+
+        ``lo``/``hi`` bound the writable span inside the frame corners and are
+        used when ``offset`` is None (automatic margin). An explicit
+        ``offset`` is a margin from the aligned edge; for ``left`` it is the
+        absolute start, exactly as before 2.0.18.
+        """
+        if offset is None:
+            first, last = lo, hi
+            if align == 'left':
+                # Historic default was offset=1: keep it on corner-less lines.
+                first = min(1, length)
+        else:
+            margin = int(offset)
+            if align == 'left':
+                first, last = margin, (hi if margin < hi else length)
+            elif align == 'right':
+                first, last = lo, max(lo, length - margin)
+            else:
+                first, last = margin, max(margin, length - margin)
+        span = max(0, last - first)
+        if align == 'center':
+            start = first + max(0, (span - text_len) // 2)
+        elif align == 'right':
+            start = first + max(0, span - text_len)
+        else:
+            start = first
+        return start, last
+
+    def __overlay_line_text(self, line, text, offset=None, color=None,
                               align='left', chrome_color=None):
         """
         Replace a span of ``line`` with ``text`` (tabled LineText spirit).
 
         Works on ANSI-coloured lines by stripping for geometry, then rebuilding
         ``prefix + colored_text + suffix``. Truncates text that does not fit.
-        ``offset`` None means place by ``align`` inside the full line width.
+        Placement (``offset`` + ``align``) is worked out by
+        ``_border_text_span``.
         ``chrome_color`` (defaults to ``border_color``) repaints the non-text
         segments so overlays do not strip an existing border foreground.
         """
@@ -5089,19 +5148,10 @@ class Table(object):
         # overlong label never eats the frame's closing junction.
         lo = 1 if width > 2 and not chars[0].isspace() else 0
         hi = width - 1 if width > 2 and not chars[-1].isspace() else width
-        if offset is None:
-            span = hi - lo
-            if align == 'center':
-                start = lo + max(0, (span - tw) // 2)
-            elif align == 'right':
-                start = lo + max(0, span - tw)
-            else:
-                start = lo
-        else:
-            start = max(0, int(offset))
+        start, stop = self._border_text_span(width, tw, offset, align, lo, hi)
         if start >= width:
             return line
-        available = (hi if start < hi else width) - start
+        available = stop - start
         if tw > available:
             text_chars = text_chars[:available]
             tw = len(text_chars)
@@ -5179,10 +5229,13 @@ class Table(object):
             text = strip_ansi(spec['text'])
             if not text:
                 continue
-            offset = 0 if spec['offset'] is None else int(spec['offset'])
+            start, stop = self._border_text_span(
+                n, len(text), spec['offset'], spec['align'],
+                1 if n > 2 else 0, n - 1 if n > 2 else n,
+            )
             for i, ch in enumerate(text):
-                row = offset + i
-                if row < 0 or row >= n:
+                row = start + i
+                if row < 0 or row >= stop:
                     break
                 lines[row] = self.__replace_first_visible(
                     lines[row], ch, spec['color']
@@ -5192,10 +5245,13 @@ class Table(object):
             text = strip_ansi(spec['text'])
             if not text:
                 continue
-            offset = 0 if spec['offset'] is None else int(spec['offset'])
+            start, stop = self._border_text_span(
+                n, len(text), spec['offset'], spec['align'],
+                1 if n > 2 else 0, n - 1 if n > 2 else n,
+            )
             for i, ch in enumerate(text):
-                row = offset + i
-                if row < 0 or row >= n:
+                row = start + i
+                if row < 0 or row >= stop:
                     break
                 lines[row] = self.__replace_last_visible(
                     lines[row], ch, spec['color']

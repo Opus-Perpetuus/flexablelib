@@ -414,7 +414,7 @@ flexablelib/                 # GitHub repository
 ├── logos/                   brand assets — see logos/README.md
 ├── ARCHITECTURE.md          how it all fits together
 ├── style_examples.md        all 56 styles rendered
-├── package.json             canonical version number; drives the release
+├── package.json             canonical version number (no npm deps)
 └── setup.py                 reads the version from package.json
 ```
 
