@@ -29,6 +29,23 @@ from .colors import background_hex, foreground_hex, spec_to_css
 from .options import FLT_FILTER, INT_FILTER
 
 
+
+def _script_safe_json(payload) -> str:
+    """
+    JSON for embedding inside an inline ``<script>`` element.
+
+    ``json.dumps`` leaves ``<``, ``>`` and ``&`` alone, so a cell containing
+    ``</script>`` would close the element and let the rest of the cell run
+    as markup -- an XSS hole for any page built from untrusted data. Escaping
+    them (and the two line separators JavaScript treats as newlines) as
+    ``\\uXXXX`` keeps the value identical once parsed.
+    """
+    text = json.dumps(payload)
+    for char, code in (('<', '\\u003c'), ('>', '\\u003e'), ('&', '\\u0026'),
+                       ('\u2028', '\\u2028'), ('\u2029', '\\u2029')):
+        text = text.replace(char, code)
+    return text
+
 def _plain(value: Any) -> str:
     """
     Cell text with any colour removed.
@@ -615,7 +632,7 @@ def to_html(table, target=None, title: str = 'Table', paginate: int = 25,
   </div>
 </div>
 <script>
-var DATA = {json.dumps(payload)};
+var DATA = {_script_safe_json(payload)};
 {_HTML_SCRIPT}
 </script>
 </body>
