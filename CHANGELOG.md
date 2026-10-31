@@ -24,6 +24,9 @@ All notable changes to this project will be documented in this file. See [standa
 - Removed the unused npm toolchain (commitlint, husky, standard-version…) and
   ``package-lock.json``. ``package.json`` only carries the version number now,
   which clears all 35 Dependabot alerts; none of them ever reached PyPI users.
+- The test suite passes against an installed package with only ``tests/``,
+  ``pytest.ini`` and ``style_examples.md`` copied next to it (the conda-forge
+  recipe layout, #26): checks that need a source checkout now skip there.
 
 ## [2.0.17] - 2026-10-31
 
