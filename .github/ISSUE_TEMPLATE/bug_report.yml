@@ -1,0 +1,34 @@
+name: Bug report
+description: A table renders wrong, raises, or behaves unexpectedly.
+labels: [bug]
+body:
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: The smallest script that shows the problem.
+      render: python
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What you got
+      description: Paste the rendered table or the full traceback.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: "flexablelib version, Python version, OS, terminal. `from flexablelib.fast import implementation; print(implementation())`"
+      placeholder: flexablelib 2.0.17, Python 3.12, Windows 11, Windows Terminal, C extension
+    validations:
+      required: true

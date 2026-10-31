@@ -35,8 +35,9 @@ are summarised at the end of this file.
 | [#18](https://github.com/Opus-Perpetuus/flexablelib/issues/18) | Trimming mutated stored data | Closed | `test_issue_18_*` |
 | [#19](https://github.com/Opus-Perpetuus/flexablelib/issues/19) | Constructor headers still auto-named | Closed | `test_issue_19_*` |
 | [#22](https://github.com/Opus-Perpetuus/flexablelib/issues/22) | Hidden rows still widened columns | Closed | `test_issue_22_*` |
-| [#23](https://github.com/Opus-Perpetuus/flexablelib/issues/23) | Float columns lose alignment on shrink | Fixed here; close when released | `test_issue_23_*` |
+| [#23](https://github.com/Opus-Perpetuus/flexablelib/issues/23) | Float columns lose alignment on shrink | Closed | `test_issue_23_*` |
 | [#24](https://github.com/Opus-Perpetuus/flexablelib/issues/24) | Wide rows without prior columns | Closed | `test_issue_24_*` |
+| [#26](https://github.com/Opus-Perpetuus/flexablelib/issues/26) | conda-forge package | Open (packaging prep done in 2.0.17) | `test_manifest_ships_*` |
 
 Issues #20 and #21 never existed on the tracker (or were removed); the suite
 jumps from #19 to #22 for that reason.

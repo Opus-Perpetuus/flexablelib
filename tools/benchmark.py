@@ -4,14 +4,20 @@ Render benchmark against the other table libraries.
 The target is the specific job this package does: turning tabular data already
 in memory into formatted text. Run from the repository root:
 
-    python3 tools/benchmark.py
+    python3 tools/benchmark.py           # C extension, if built
+    python3 tools/benchmark.py --pure    # pure-Python fallback
 """
 
 import random
+import sys
 import time
 
-from flexablelib import Table
-from flexablelib.fast import implementation
+if '--pure' in sys.argv:
+    # Measure the fallback every install has, compiler or not.
+    sys.modules['flexablelib._speedups'] = None
+
+from flexablelib import Table  # noqa: E402
+from flexablelib.fast import implementation  # noqa: E402
 
 SHAPES = [(100, 4), (2000, 4), (10000, 6)]
 REPEATS = 5
@@ -78,6 +84,27 @@ def contenders(rows, headers):
         pass
 
     try:
+        import io
+
+        from rich.console import Console
+        from rich.table import Table as RichTable
+
+        def build_rich():
+            table = RichTable()
+            for header in headers:
+                table.add_column(header)
+            for row in rows:
+                table.add_row(*[str(value) for value in row])
+            console = Console(file=io.StringIO(), width=200,
+                              color_system=None, force_terminal=False)
+            console.print(table)
+            return console.file.getvalue()
+
+        entries['rich'] = build_rich
+    except ImportError:
+        pass
+
+    try:
         import pandas
 
         frame = pandas.DataFrame(rows, columns=headers)
@@ -88,8 +115,21 @@ def contenders(rows, headers):
     return entries
 
 
+def versions():
+    """Installed version of every contender, for the record."""
+    from importlib import metadata
+    found = []
+    for name in ('flexablelib', 'tabulate', 'prettytable', 'rich', 'pandas'):
+        try:
+            found.append(f'{name} {metadata.version(name)}')
+        except metadata.PackageNotFoundError:
+            pass
+    return ', '.join(found)
+
+
 def main():
-    print(f'backend: {implementation()}\n')
+    print(f'backend: {implementation()}')
+    print(f'versions: {versions()}\n')
     for row_count, column_count in SHAPES:
         rows = make_rows(row_count, column_count)
         headers = headers_for(column_count)

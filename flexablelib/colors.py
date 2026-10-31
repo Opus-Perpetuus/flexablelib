@@ -12,6 +12,7 @@ Colours may be given as:
     a name        'red', 'bright_blue', 'bold', 'dim'
     a 256 index   'color:93'      or the int 93
     a hex triple  '#ff8800'       true colour, 24-bit
+    a grey level  'grey23'        Rich/X11 style, nearest xterm grey
     a combination 'bold red on white'
 
 Resolution happens once per render, not once per cell, so the parsing cost
@@ -61,6 +62,20 @@ COLOURS = {
 }
 
 _HEX_RE = re.compile(r'^#?([0-9a-fA-F]{6})$')
+# Rich / X11-style percentage greys: 'grey23', 'gray70', 'grey100'.
+_GREY_RE = re.compile(r'^gr[ae]y(\d{1,3})$')
+
+# The xterm 256-colour grey levels: black (16), the 24-step ramp
+# (232..255, level 8 + 10*i) and white (231).
+_GREY_LEVELS = [(0, 16)] + [(8 + 10 * i, 232 + i) for i in range(24)] + [(255, 231)]
+
+
+def _grey_index(percent: int) -> int:
+    """Nearest xterm 256-colour index for a grey at ``percent`` lightness."""
+    if not 0 <= percent <= 100:
+        raise ColourError(f'grey percentage out of range: {percent}')
+    target = percent * 255 / 100
+    return min(_GREY_LEVELS, key=lambda level: abs(level[0] - target))[1]
 _INDEX_RE = re.compile(r'^(?:color|colour):(\d{1,3})$')
 
 
@@ -82,6 +97,11 @@ def _colour_codes(token: str, background: bool = False) -> list:
         green = int(digits[2:4], 16)
         blue = int(digits[4:6], 16)
         return [48 if background else 38, 2, red, green, blue]
+
+    grey_match = _GREY_RE.match(token)
+    if grey_match:
+        index = _grey_index(int(grey_match.group(1)))
+        return [48 if background else 38, 5, index]
 
     index_match = _INDEX_RE.match(token)
     if index_match:
