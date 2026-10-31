@@ -247,15 +247,18 @@ the budget, so a cell never prints wider than it was allowed.
 
 ## Release process
 
-Versioning is driven from the **JavaScript** side of the repo, which is unusual for a Python
-package and worth knowing before you cut a release:
+The version number lives in `package.json` (a leftover of the old npm tooling), which is
+unusual for a Python package and worth knowing before you cut a release:
 
-- `package.json` holds the canonical version number.
+- `package.json` holds the canonical version number and nothing else that runs: since
+  2.0.18 it has no npm dependencies or scripts (the old commitlint / husky /
+  standard-version toolchain was removed, along with `package-lock.json`, because it only
+  produced Dependabot noise). There is nothing to `npm install`.
 - `setup.py` reads it at build time: `version = read_json('./package.json')['version']`.
-- `standard-version` (`npm run release`) bumps `package.json`, writes `CHANGELOG.md`, and tags,
-  based on Conventional Commits.
-- `commitlint` + `husky` enforce the commit message format.
-- `npm run install-local-linux` builds a wheel and installs it locally.
+- To release: bump `version` in `package.json`, add the `CHANGELOG.md` entry by hand, merge
+  `dev-yael` into `main`, then push a `vX.Y.Z` tag. The `wheels` workflow builds the sdist and
+  the cibuildwheel wheels (CPython 3.8–3.14) and publishes them to PyPI.
+- To install a local build: `python3 -m pip install .` from the repository root.
 
 So `setup.py` must be run from the repository root — it resolves `./package.json` relative to
 the working directory, not to the file.
