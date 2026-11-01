@@ -852,8 +852,12 @@ def __align_one_header(column: Union[str, list, tuple],
             column
         ))
     else:
-        # Apply to the cell.
-        yield __align_single_cell(column, col_width, to_where, margin)
+        # Apply to the cell. The float sizes must be passed here too: a
+        # numeric-looking header ('0', '2024') over a float column was
+        # decimal-aligned with no sizes and raised TypeError.
+        yield __align_single_cell(
+            column, col_width, to_where, margin, float_column_sizes
+        )
 
 
 def _align_headers(style_composition: TableComposition, 
@@ -875,6 +879,11 @@ def _align_headers(style_composition: TableComposition,
     for column_i, column in enumerate(headers):
         # Get the alignment of the current column.
         to_where = col_alignments[column_i]
+        if to_where == COLUMN_ALIGNS.float:
+            # A header is a label, not a number. Decimal-aligning one that
+            # looks numeric ('2024') pushed it past the column edge; text
+            # headers already came out right-aligned, so all of them do.
+            to_where = COLUMN_ALIGNS.right
         
         # Get the width that the current column should have.
         col_width = col_widths[column_i]
