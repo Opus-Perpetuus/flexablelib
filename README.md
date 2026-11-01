@@ -139,7 +139,7 @@ one place.
   tabulate and ~18× faster than rich's table. pandas `to_string()` is faster
   still (~85 ms). Full method and numbers:
   [docs/BENCHMARKS.md](https://github.com/Opus-Perpetuus/flexablelib/blob/main/docs/BENCHMARKS.md).
-- **Wheels.** Prebuilt for CPython 3.8 – 3.13 on Linux (manylinux, musllinux),
+- **Wheels.** Prebuilt for CPython 3.8 – 3.14 on Linux (manylinux, musllinux),
   Windows x64 and macOS arm64. Anywhere else it builds from source or falls
   back to pure Python — installation never fails for want of a compiler.
   `from flexablelib.fast import implementation; implementation()` tells you
