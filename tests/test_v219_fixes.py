@@ -396,3 +396,31 @@ def test_merge_with_wide_padding_matches_layout():
         '|           +-----+',
         '|     M     |  f  |',
     ]
+
+
+# --- colour specs exported to CSS / XLSX ----------------------------------
+
+from flexablelib.colors import background_hex, foreground_hex, spec_to_css
+
+
+@pytest.mark.parametrize('spec, bg, fg', [
+    ('on red', 'DC2626', None),
+    ('on  blue', '2563EB', None),
+    ('black on grey15', '262626', '111827'),
+    ('red on 236', '303030', '991B1B'),
+    ('grey50', None, '808080'),
+    ('color:196', None, 'FF0000'),
+    ('bold #ff8800 on #112233', '112233', 'FF8800'),
+    ('bright_red on blue', '2563EB', 'B91C1C'),
+    (None, None, None),
+])
+def test_spec_hex_matches_terminal_grammar(spec, bg, fg):
+    assert background_hex(spec) == bg
+    assert foreground_hex(spec) == fg
+
+
+def test_background_only_merge_colour_reaches_html():
+    t = Table(rows=[['a', 'b'], ['c', 'd']], headers=['x', 'y'])
+    t.merge_cells(0, 0, 0, 1, value='M', color='on red')
+    assert 'background-color:#DC2626' in t.to_html()
+    assert spec_to_css('on red') == 'background-color:#DC2626'
