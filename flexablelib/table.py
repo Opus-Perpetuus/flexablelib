@@ -3080,13 +3080,25 @@ class Table(object):
         """
         Returns a generic name for a column.
         """
-        return f'{self.__generic_column_name} {len(self.__headers) + 1}'
+        return self.__first_free_name(
+            self.__generic_column_name, len(self.__headers) + 1
+        )
     
     def __name_duplicated_header(self, header: str) -> str:
         """
         Returns a name for a column if the name is already in use.
+
+        Counting copies of ``header`` was not enough: with ['x', 'x', 'x']
+        the third became 'x 2' again, two columns shared a key and compose()
+        raised IndexError. The first unused 'header N' is taken instead.
         """
-        return f'{header} {self.__headers.count(header) + 1}'
+        return self.__first_free_name(header, self.__headers.count(header) + 1)
+
+    def __first_free_name(self, base: str, number: int) -> str:
+        taken = set(self.__headers)
+        while f'{base} {number}' in taken:
+            number += 1
+        return f'{base} {number}'
         
     def __process_header(self, header: str) -> str:
         """
