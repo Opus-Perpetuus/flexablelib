@@ -166,7 +166,7 @@ def compute_layout(column_widths, composition, hidden=()) -> Layout:
     so counting them here would put every offset after them too far right.
     """
     body = composition.vertical_table_body_lines
-    margin = 1 if composition.margin else 0
+    margin = max(0, int(composition.margin or 0))
     hidden = set(hidden)
 
     offset = len(body.left) if body.left is not None else 0
@@ -227,6 +227,10 @@ def _region_bounds(region, layout, index_offset):
 _H_CHARS = set('─━═┄┅┈┉╌╍▬−' '-~=')
 # A real rule has a *run* of dashes. A lone '-' inside "Beta-1" is not a rule.
 _H_RUN = re.compile(r'[─━═┄┅┈┉╌╍▬−\-~=]{2,}')
+# Corner and tee glyphs a rule may carry; plain verticals are left out.
+_JUNCTIONS = set('+') | {
+    chr(c) for c in range(0x2500, 0x2580)
+} - set('│┃║┊┋┆┇╎╏')
 _PURE_H = {(0, 0, 1, 1), (0, 0, 1, 0), (0, 0, 0, 1)}
 _ROUND_CORNERS = set('╭╮╰╯')
 
@@ -362,7 +366,7 @@ def _synthesize_body_rule(composition):
     if v.middle in '|+':
         return SeparatorLine(
             left='+' if v.left else None,
-            middle=h if h in '-=~' else '-',
+            middle=h if h and h in '-=~' else '-',
             intersection='+',
             right='+' if v.right else None,
         )
@@ -394,7 +398,7 @@ def _build_rule_line(layout, composition, column_widths, hidden, rule=None):
     if rule is None:
         return None
     v = composition.vertical_table_body_lines
-    margin = 1 if composition.margin else 0
+    margin = max(0, int(composition.margin or 0))
     hidden = set(hidden or ())
     chunks = []
     first = True
@@ -470,7 +474,19 @@ def _looks_like_rule(line: str, h_glyph: str = None) -> bool:
         return False
     if h_glyph and len(h_glyph) >= 1 and (h_glyph * 2) in line:
         return True
-    return _H_RUN.search(line) is not None
+    if _H_RUN.search(line) is not None:
+        return True
+    # cell_padding=0 with 1-column cells draws rules like '├─┼─┤', with no
+    # run of two dashes (and a merge may have blanked part of it). Such a
+    # line is a rule when it holds dashes and junctions and nothing else but
+    # spaces; a body line always has text or a plain vertical.
+    plain = strip_ansi(line)
+    return (
+        any(ch in _H_CHARS for ch in plain)
+        and any(ch in _JUNCTIONS for ch in plain)
+        and all(ch in _H_CHARS or ch in _JUNCTIONS or ch == ' '
+                for ch in plain)
+    )
 
 
 def _repair_rule_junctions(line, layout, composition, h_glyph, missing_south=None, missing_north=None,
@@ -574,7 +590,7 @@ def apply(lines, row_line_map, regions, column_widths, composition,
 
     layout = compute_layout(column_widths, composition, hidden_columns)
     lines = list(lines)
-    margin = 1 if composition.margin else 0
+    margin = max(0, int(composition.margin or 0))
     body_rule = composition.table_body_line
     h_glyph = body_rule.middle if body_rule is not None else None
     # Separator lines whose horizontal run was blanked by a vertical span.

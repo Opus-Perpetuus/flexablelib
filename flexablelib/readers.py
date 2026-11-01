@@ -28,6 +28,7 @@ import csv as _csv
 import io as _io
 import re
 from html.parser import HTMLParser
+from collections.abc import Mapping
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 # Numeric text that should become a number. Deliberately strict: no leading
@@ -101,6 +102,16 @@ def from_records(table_class, rows: Iterable[Sequence],
 
     With no headers, the first row is used as the header row.
     """
+    rows = list(rows)
+    if rows and all(isinstance(row, Mapping) for row in rows):
+        # ``list(dict)`` is its keys, so dict rows (what ``to_records``
+        # returns) used to become a table of repeated header names.
+        if headers is None:
+            return from_dicts(table_class, rows, parse_numbers=parse_numbers,
+                              **options)
+        headers = list(headers)
+        rows = [[row.get(key, '') for key in headers] for row in rows]
+        return _new_table(table_class, headers, rows, parse_numbers, **options)
     rows = [list(row) for row in rows]
     if headers is None:
         if not rows:
@@ -220,6 +231,11 @@ class _TableExtractor(HTMLParser):
         self._current_cell = None
         self._header_flags: List[bool] = []
         self._row_is_header = False
+        # Per table: which rows are <th> rows, and the rowspan/colspan blocks
+        # as (row, column, last_row, last_column) in the expanded grid.
+        self.header_flags: List[List[bool]] = []
+        self.spans: List[List[tuple]] = []
+        self._cell_span = (1, 1)
 
     def handle_starttag(self, tag, attrs):
         if tag == 'table':
@@ -235,13 +251,17 @@ class _TableExtractor(HTMLParser):
             self._row_is_header = False
         elif tag in ('td', 'th'):
             self._current_cell = []
+            self._cell_span = (_span(attrs, 'rowspan'), _span(attrs, 'colspan'))
             if tag == 'th':
                 self._row_is_header = True
 
     def handle_endtag(self, tag):
         if tag == 'table':
             if self._table_depth == 1 and self._current_table is not None:
-                self.tables.append(self._current_table)
+                grid, spans = _expand_spans(self._current_table)
+                self.tables.append(grid)
+                self.spans.append(spans)
+                self.header_flags.append(list(self._header_flags))
                 self._current_table = None
             self._table_depth = max(0, self._table_depth - 1)
             return
@@ -252,7 +272,7 @@ class _TableExtractor(HTMLParser):
             # Collapse whitespace the way a browser would render it.
             cleaned = ' '.join(text.split())
             if self._current_row is not None:
-                self._current_row.append(cleaned)
+                self._current_row.append((cleaned,) + self._cell_span)
             self._current_cell = None
         elif tag == 'tr' and self._current_row is not None:
             self._current_table.append(self._current_row)
@@ -263,12 +283,72 @@ class _TableExtractor(HTMLParser):
         if self._current_cell is not None:
             self._current_cell.append(data)
 
-    def header_row_index(self) -> Optional[int]:
-        """Index of the first row made of <th> cells, if there is one."""
-        for index, is_header in enumerate(self._header_flags):
+    def header_row_index(self, table: int = 0) -> Optional[int]:
+        """Index of the first row made of <th> cells in one table, if any."""
+        for index, is_header in enumerate(self.header_flags[table]):
             if is_header:
                 return index
         return None
+
+
+def _span(attrs, name) -> int:
+    """A rowspan/colspan attribute as a sane positive int (default 1)."""
+    for key, value in attrs:
+        if key == name:
+            try:
+                return max(1, min(int(str(value).strip()), 1000))
+            except ValueError:
+                return 1
+    return 1
+
+
+def _expand_spans(rows):
+    """
+    Lay ``(text, rowspan, colspan)`` cells out on a grid, as a browser does.
+
+    The cells a span covers are absent from the markup, so reading cells in
+    order slid every later value of those rows one column left. Covered
+    cells become '' and each span is returned as a block.
+    """
+    cells, spans = {}, []
+    for r, row in enumerate(rows):
+        c = 0
+        for text, rowspan, colspan in row:
+            while (r, c) in cells:
+                c += 1
+            rowspan = min(rowspan, len(rows) - r)
+            for dr in range(rowspan):
+                for dc in range(colspan):
+                    cells[(r + dr, c + dc)] = text if dr == dc == 0 else ''
+            if rowspan > 1 or colspan > 1:
+                spans.append((r, c, r + rowspan - 1, c + colspan - 1))
+            c += colspan
+    out = []
+    for r in range(len(rows)):
+        width = max([c + 1 for (rr, c) in cells if rr == r] + [0])
+        out.append([cells.get((r, c), '') for c in range(width)])
+    return out, spans
+
+
+_PAYLOAD_RE = re.compile(r'^var DATA = (\{.*\});$', re.MULTILINE)
+
+
+def _flexablelib_payload(markup: str):
+    """The ``{headers, rows}`` JSON a ``to_html`` page embeds, or None."""
+    import json
+    match = _PAYLOAD_RE.search(markup)
+    if match is None:
+        return None
+    try:
+        payload = json.loads(match.group(1))
+    except ValueError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    headers, rows = payload.get('headers'), payload.get('rows')
+    if not isinstance(headers, list) or not isinstance(rows, list):
+        return None
+    return {'headers': headers, 'rows': rows}
 
 
 def from_html(table_class, source, index: int = 0, parse_numbers: bool = True,
@@ -303,22 +383,42 @@ def from_html(table_class, source, index: int = 0, parse_numbers: bool = True,
         )
 
     rows = extractor.tables[index]
+    if len(extractor.tables) == 1 and len(rows) <= 1:
+        # ``Table.to_html`` renders its rows from an inline JSON payload, so
+        # the <tbody> is empty in the markup. Read that payload instead of
+        # returning a header-only table for our own export.
+        payload = _flexablelib_payload(markup)
+        if payload is not None:
+            return _new_table(table_class, payload['headers'],
+                              payload['rows'], parse_numbers, **options)
     if not rows:
         return table_class(**options)
 
-    header_index = extractor.header_row_index() if index == 0 else None
-    if header_index is not None and header_index < len(rows):
-        headers = rows[header_index]
-        body = rows[:header_index] + rows[header_index + 1:]
-    else:
-        headers, body = rows[0], rows[1:]
+    header_index = extractor.header_row_index(index)
+    if header_index is None or header_index >= len(rows):
+        header_index = 0
+    headers = rows[header_index]
+    body = rows[:header_index] + rows[header_index + 1:]
 
     # Ragged rows are padded so every row reaches the column count.
     width = max([len(headers)] + [len(row) for row in body]) if body else len(headers)
     headers = list(headers) + [f'column {i + 1}' for i in range(len(headers), width)]
     body = [list(row) + [''] * (width - len(row)) for row in body]
 
-    return _new_table(table_class, headers, body, parse_numbers, **options)
+    table = _new_table(table_class, headers, body, parse_numbers, **options)
+    # Restore rowspan/colspan blocks that lie wholly in the body as merges.
+    for first_row, first_col, last_row, last_col in extractor.spans[index]:
+        if first_row <= header_index <= last_row:
+            continue
+        shift = 1 if first_row > header_index else 0
+        first_row, last_row = first_row - shift, last_row - shift
+        if last_row >= table.row_count or last_col >= table.column_count:
+            continue
+        try:
+            table.merge_cells(first_row, first_col, last_row, last_col)
+        except ValueError:
+            continue
+    return table
 
 
 def from_pandas(table_class, dataframe, include_index: bool = False, **options):
@@ -442,6 +542,31 @@ def from_excel(table_class, path, sheet=None, has_header: bool = True,
     return table
 
 
+def _split_pipe_row(body: str) -> List[str]:
+    """
+    Split a Markdown row on unescaped pipes and unescape ``\\|``.
+
+    ``to_markdown`` writes a literal pipe as ``\\|``; splitting on every
+    ``|`` cut such a cell in two and left a stray backslash behind, so the
+    table did not round-trip.
+    """
+    cells, current, i = [], [], 0
+    while i < len(body):
+        ch = body[i]
+        if ch == '\\' and i + 1 < len(body) and body[i + 1] == '|':
+            current.append('|')
+            i += 2
+            continue
+        if ch == '|':
+            cells.append(''.join(current))
+            current = []
+        else:
+            current.append(ch)
+        i += 1
+    cells.append(''.join(current))
+    return cells
+
+
 def from_markdown(table_class, source, parse_numbers: bool = True, **options):
     """
     Parse a GitHub-flavoured Markdown pipe table into a Table.
@@ -469,9 +594,9 @@ def from_markdown(table_class, source, parse_numbers: bool = True, **options):
         if '|' not in ln:
             continue
         body = ln[1:] if ln.startswith('|') else ln
-        if body.endswith('|'):
+        if body.endswith('|') and not body.endswith('\\|'):
             body = body[:-1]
-        rows_raw.append([c.strip() for c in body.split('|')])
+        rows_raw.append([c.strip() for c in _split_pipe_row(body)])
 
     if not rows_raw:
         return _new_table(table_class, [], [], parse_numbers, **options)

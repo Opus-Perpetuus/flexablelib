@@ -849,6 +849,14 @@ def to_latex(table, include_index: bool = False) -> str:
                 out.append(r'\textasciitilde{}')
             elif ch == '^':
                 out.append(r'\textasciicircum{}')
+            elif ch == '|':
+                # Under the default OT1 font encoding these three print as
+                # an em dash and inverted punctuation.
+                out.append(r'\textbar{}')
+            elif ch == '<':
+                out.append(r'\textless{}')
+            elif ch == '>':
+                out.append(r'\textgreater{}')
             else:
                 out.append(ch)
         return ''.join(out)
