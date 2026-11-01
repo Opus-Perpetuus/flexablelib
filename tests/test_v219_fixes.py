@@ -139,3 +139,23 @@ def test_from_html_reads_a_to_html_page():
 def test_from_html_of_a_plain_table_is_unchanged():
     markup = '<table><tr><th>a</th></tr><tr><td>1</td></tr></table>'
     assert Table.from_html(markup).rows == [[1]]
+
+
+# a float column narrower than its integer digits broke the frame --------------
+
+def test_float_column_below_its_integer_width_keeps_the_frame_square():
+    table = Table(rows=[[1.5], [22.25], [3.0]], headers=['v'])
+    table.style_name = 'ascii'
+    table.column_max_width = 1
+    lines = strip_ansi(table.compose()).splitlines()
+    assert len(_widths(table)) == 1
+    assert '| 22 |' in lines
+
+
+def test_float_column_cap_that_fits_still_applies():
+    table = Table(rows=[[1.125], [22.25]], headers=['v'])
+    table.style_name = 'ascii'
+    table.column_max_width = 4
+    lines = strip_ansi(table.compose()).splitlines()
+    assert len(_widths(table)) == 1
+    assert max(len(line) for line in lines) == 8
