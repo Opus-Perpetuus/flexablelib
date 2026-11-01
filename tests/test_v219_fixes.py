@@ -355,3 +355,44 @@ def test_max_width_beats_min_width():
     t.column_min_width = 8
     t.column_max_width = 4
     assert '| a... |' in t.compose()
+
+
+# --- merges follow cell_padding -------------------------------------------
+
+def _merged(style, pad):
+    t = Table(rows=[['a', 'b', 'c'], ['d', 'e', 'f'], ['g', 'h', 'i']],
+              headers=['x', 'y', 'z'])
+    t.style_name = style
+    t.cell_padding = pad
+    t.merge_cells(0, 0, 1, 1, value='M')
+    return t.compose()
+
+
+@pytest.mark.parametrize('style', ['modern', 'ascii', 'rounded', 'double'])
+@pytest.mark.parametrize('pad', [0, 2, 3])
+def test_merge_respects_cell_padding(style, pad):
+    lines = _merged(style, pad).split('\n')
+    assert len({visible_width(line) for line in lines}) == 1
+    assert any('M' in line for line in lines)
+
+
+def test_merge_with_zero_padding_repairs_junctions():
+    assert _merged('modern', 0) == '\n'.join([
+        '┌─┬─┬─┐',
+        '│x│y│z│',
+        '├─┴─┼─┤',
+        '│   │c│',
+        '│   ├─┤',
+        '│ M │f│',
+        '├─┬─┼─┤',
+        '│g│h│i│',
+        '└─┴─┴─┘',
+    ])
+
+
+def test_merge_with_wide_padding_matches_layout():
+    assert _merged('ascii', 2).split('\n')[3:6] == [
+        '|           |  c  |',
+        '|           +-----+',
+        '|     M     |  f  |',
+    ]
