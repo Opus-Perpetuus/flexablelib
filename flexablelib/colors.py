@@ -269,7 +269,12 @@ def _split_spec(spec: Union[str, int, None]):
         return [], None
     if isinstance(spec, int):
         return [], None
-    foreground_part, _, background_part = str(spec).lower().partition(' on ')
+    lowered = str(spec).lower().strip()
+    # Same grammar as parse_spec: a bare 'on <bg>' is background-only.
+    if lowered.startswith('on '):
+        foreground_part, background_part = '', lowered[3:]
+    else:
+        foreground_part, _, background_part = lowered.partition(' on ')
     fg_tokens = foreground_part.split()
     bg_token = None
     if background_part:
@@ -278,15 +283,44 @@ def _split_spec(spec: Union[str, int, None]):
     return fg_tokens, bg_token
 
 
+def _xterm_hex(index: int) -> Optional[str]:
+    """sRGB hex for an xterm 256-colour index (16..255; 0..15 are themed)."""
+    if 16 <= index <= 231:
+        index -= 16
+        steps = [0, 95, 135, 175, 215, 255]
+        rgb = (steps[index // 36], steps[(index // 6) % 6], steps[index % 6])
+    elif 232 <= index <= 255:
+        level = 8 + 10 * (index - 232)
+        rgb = (level, level, level)
+    else:
+        return None
+    return '{0:02X}{1:02X}{2:02X}'.format(*rgb)
+
+
+def _token_hex(token: str, named: dict) -> Optional[str]:
+    """Hex for one colour token: #rrggbb, a name, greyNN or a 256 index."""
+    hex_match = _HEX_RE.match(token)
+    if hex_match:
+        return hex_match.group(1).upper()
+    if token in named:
+        return named[token]
+    grey_match = _GREY_RE.match(token)
+    if grey_match and int(grey_match.group(1)) <= 100:
+        return _xterm_hex(_grey_index(int(grey_match.group(1))))
+    index_match = _INDEX_RE.match(token)
+    if index_match:
+        return _xterm_hex(int(index_match.group(1)))
+    if token.isdigit():
+        return _xterm_hex(int(token))
+    return None
+
+
 def background_hex(spec: Union[str, int, None]) -> Optional[str]:
     """sRGB hex (no ``#``) for the background half of a colour spec, if any."""
     _fg, bg = _split_spec(spec)
     if bg is None:
         return None
-    hex_match = _HEX_RE.match(bg)
-    if hex_match:
-        return hex_match.group(1).upper()
-    return _BG_HEX.get(bg)
+    return _token_hex(bg, _BG_HEX)
 
 
 def foreground_hex(spec: Union[str, int, None]) -> Optional[str]:
@@ -295,11 +329,9 @@ def foreground_hex(spec: Union[str, int, None]) -> Optional[str]:
     for token in fg_tokens:
         if token in ATTRIBUTES:
             continue
-        hex_match = _HEX_RE.match(token)
-        if hex_match:
-            return hex_match.group(1).upper()
-        if token in _FG_HEX:
-            return _FG_HEX[token]
+        found = _token_hex(token, _FG_HEX)
+        if found:
+            return found
     return None
 
 
