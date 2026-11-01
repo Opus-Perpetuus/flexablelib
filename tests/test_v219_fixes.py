@@ -324,3 +324,34 @@ def test_divider_matches_table_width_after_wrapped_row(style):
     t.add_divider(0)
     lines = t.compose().split('\n')
     assert len({visible_width(line) for line in lines}) == 1
+
+
+# --- a width cap never cuts below content that cannot shrink ---------------
+
+def test_max_width_leaves_index_column_whole():
+    t = Table(rows=[['a'], ['b'], ['c']], headers=['h'])
+    t.style_name = 'ascii'
+    t.show_index = True
+    t.roman_index = True
+    t.column_max_width = 1
+    lines = t.compose().split('\n')
+    assert len({visible_width(line) for line in lines}) == 1
+    assert '| II | c |' in lines
+
+
+@pytest.mark.parametrize('overflow', ['wrap', 'truncate'])
+def test_max_width_one_with_wide_glyphs(overflow):
+    t = Table(rows=[['x']], headers=['名前0'])
+    t.style_name = 'ascii'
+    t.column_max_width = 1
+    t.overflow = overflow
+    lines = t.compose().split('\n')
+    assert len({visible_width(line) for line in lines}) == 1
+
+
+def test_max_width_beats_min_width():
+    t = Table(rows=[['abcdef']], headers=['h'])
+    t.style_name = 'ascii'
+    t.column_min_width = 8
+    t.column_max_width = 4
+    assert '| a... |' in t.compose()

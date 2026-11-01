@@ -4049,25 +4049,18 @@ class Table(object):
             hi = self.__bound_for_column(
                 self.__column_max_width, header, user_i
             )
-            width = widths[column_i]
+            # By now the content has been through __enforce_column_max_widths,
+            # so the measured width is what the cells really need. A cap can
+            # take away padding from column_min_width but never cut below
+            # that: some content cannot shrink (a float's integer digits, a
+            # 2-column CJK glyph in a 1-column cap, the index column), and
+            # clamping the number anyway drew a frame narrower than the text.
+            content = widths[column_i]
+            width = content
             if lo is not None:
                 width = max(width, int(lo))
-            # A float column gives up decimals but never integer digits, so
-            # after __enforce_column_max_widths its content can still be wider
-            # than the cap. Clamping the number anyway drew a frame narrower
-            # than the digits inside it; the column keeps its real width.
-            types = (self.__column_types_as_list_with_i if self.__show_index
-                     else self.__column_types_as_list)
-            unshrinkable = (
-                column_i < len(types) and types[column_i] == TYPE_NAMES.float_
-            )
-            if hi is not None and not unshrinkable:
-                hi = max(1, int(hi))
-                if width > hi:
-                    width = hi
-            if (lo is not None and hi is not None and not unshrinkable
-                    and int(lo) > max(1, int(hi))):
-                width = max(1, int(hi))
+            if hi is not None:
+                width = max(min(width, max(1, int(hi))), content)
             widths[column_i] = width
             store[header] = width
 
