@@ -1020,6 +1020,22 @@ class Table(object):
             str(piece), new_width, DEFAULT_TRIMMING_SIGN
         )
         
+    @classmethod
+    def __trim_lines(cls, piece, new_width: int):
+        """
+        Trim each line of a cell to ``new_width`` visible columns.
+
+        Measuring with ``len`` left CJK and emoji cells untrimmed (two columns
+        per character) and trimmed short ZWJ sequences that fit; measuring the
+        whole multi-line string at once turned ``'a\\nbb'`` into ``'...'``.
+        A cell that already fits is returned unchanged, type included.
+        """
+        text = str(piece)
+        lines = text.split('\n')
+        if all(visible_width(line) <= new_width for line in lines):
+            return piece
+        return '\n'.join(cls.__trim_with_sign(line, new_width) for line in lines)
+
     @staticmethod
     def __check_if_none_and_get_len(value: Union[str, None]) -> int:
         """
@@ -3821,18 +3837,9 @@ class Table(object):
             header_to_trim = self.__headers_with_i[column_i]
         else:
             header_to_trim = self.__headers[column_i]
-        if len(str(header_to_trim)) > new_width:
-            header_to_trim = self.__trim_with_sign(
-                header_to_trim, 
-                new_width
-            )
+        header_to_trim = self.__trim_lines(header_to_trim, new_width)
         for row_i, row in enumerate(col_to_trim):
-            if len(str(row)) > new_width:
-                trimmed = self.__trim_with_sign(
-                    row,
-                    new_width
-                )
-                col_to_trim[row_i] = trimmed
+            col_to_trim[row_i] = self.__trim_lines(row, new_width)
         
         return header_to_trim, col_to_trim
     
