@@ -362,7 +362,7 @@ def _synthesize_body_rule(composition):
     if v.middle in '|+':
         return SeparatorLine(
             left='+' if v.left else None,
-            middle=h if h in '-=~' else '-',
+            middle=h if h and h in '-=~' else '-',
             intersection='+',
             right='+' if v.right else None,
         )
