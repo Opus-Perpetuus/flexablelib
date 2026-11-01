@@ -273,6 +273,36 @@ def __line_with_indicator(alignment_to_check: str,
         return None
     
 
+def __fit_indicator_line(line, target, check_set, align_indicator, middle,
+                         width, margin, centered_ind_on_sides,
+                         left_right_upon_centering, always_center_indicator):
+    """
+    Keep an alignment-indicator segment exactly ``width + margin`` long.
+
+    A column narrower than the indicator plus its margins (an index column
+    of one digit under ``sticks``) produced ``' ~>~ '`` over a three-column
+    cell, so every separator overhung the rows below it. Drop the margins
+    first; if the indicator alone still does not fit, draw a plain rule.
+    """
+    if len(line) == target:
+        return line
+    tight = __line_with_indicator(
+        *check_set,
+        align_indicator,
+        middle,
+        width,
+        margin,
+        centered_ind_on_sides,
+        left_right_upon_centering,
+        '',
+        0,
+        always_center_indicator
+    )
+    if tight is not None and len(tight) == target:
+        return tight
+    return middle * target
+
+
 def __get_horizontal_line_group(line_style: SeparatorLine, 
                                 widths: list, 
                                 margin: int,
@@ -351,9 +381,19 @@ def __get_horizontal_line_group(line_style: SeparatorLine,
                     )
                     
                     if horizontal_group_line is not None:
-                        yield horizontal_group_line
+                        yield __fit_indicator_line(
+                            horizontal_group_line,
+                            width + margin,
+                            check_set,
+                            align_indicator,
+                            middle,
+                            width,
+                            margin,
+                            centered_ind_on_sides,
+                            left_right_upon_centering,
+                            always_center_indicator,
+                        )
                         break
-                        pass
             else:   
                 horizontal_group_line =  middle * (width + margin)
                 yield horizontal_group_line
