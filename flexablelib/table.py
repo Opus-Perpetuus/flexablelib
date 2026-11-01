@@ -5229,6 +5229,14 @@ class Table(object):
         if not left_specs and not right_specs:
             return table_string
 
+        # A style with no outer vertical border (simple, clean, psql...) has
+        # cell text in the first and last column; overwriting it would eat
+        # data, so the label is dropped on that side.
+        if not self.__has_outer_vertical('left'):
+            left_specs = []
+        if not self.__has_outer_vertical('right'):
+            right_specs = []
+
         lines = table_string.split('\n')
         n = len(lines)
 
@@ -5265,6 +5273,16 @@ class Table(object):
                 )
 
         return '\n'.join(lines)
+
+    def __has_outer_vertical(self, side):
+        """True when the active style draws a glyph on that outer edge."""
+        composition = self.style_composition
+        for group in (composition.vertical_table_body_lines,
+                      composition.vertical_header_lines):
+            glyph = getattr(group, side, None) if group is not None else None
+            if glyph and glyph.strip():
+                return True
+        return False
 
     @staticmethod
     def __replace_first_visible(line, ch, color):
