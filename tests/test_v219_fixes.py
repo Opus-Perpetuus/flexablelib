@@ -241,3 +241,86 @@ def test_numeric_header_over_float_column(valign, header):
     lines = strip_ansi(table.compose()).splitlines()
     assert len(_widths(table)) == 1
     assert lines[1].startswith('| ' + header.rjust(5) + ' |')
+
+
+# --- colours stay off when colours are off --------------------------------
+
+def _coloured_frame(**kw):
+    t = Table(rows=[['b', 'c'], ['d', 'e']], headers=['h', 'k'])
+    t.style_name = 'ascii'
+    t.border_color = 'blue'
+    t.header_color = 'red'
+    t.border_text('TOP', 'top', color='red')
+    t.border_text('LR', 'left', color='green')
+    for key, value in kw.items():
+        setattr(t, key, value)
+    return t
+
+
+def test_border_color_emits_nothing_when_colours_disabled():
+    assert '\x1b' not in _coloured_frame(use_colors=False).compose()
+
+
+def test_border_color_respects_no_color(monkeypatch):
+    monkeypatch.setenv('NO_COLOR', '1')
+    monkeypatch.delenv('FORCE_COLOR', raising=False)
+    assert '\x1b' not in _coloured_frame().compose()
+
+
+def test_border_color_still_paints_when_colours_enabled():
+    out = _coloured_frame(use_colors=True).compose()
+    assert '\x1b[34m' in out and '\x1b[31m' in out
+
+
+def test_theme_does_not_force_colour_into_a_pipe(monkeypatch):
+    monkeypatch.setenv('NO_COLOR', '1')
+    monkeypatch.delenv('FORCE_COLOR', raising=False)
+    t = Table(rows=[['b', 'c']], headers=['h', 'k'])
+    t.apply_theme('dark')
+    assert t.use_colors is None
+    assert '\x1b' not in t.compose()
+    t.use_colors = True
+    assert '\x1b' in t.compose()
+
+
+def test_vertical_border_text_skips_title_and_caption():
+    plain = Table(rows=[['b', 'c'], ['d', 'e']], headers=['h', 'k'])
+    plain.style_name = 'ascii'
+    plain.border_text('LR', 'left')
+    framed = plain.compose()
+    plain.title = 't'
+    plain.caption = 'c'
+    lines = plain.compose().split('\n')
+    assert lines[0].strip() == 't' and lines[-1].strip() == 'c'
+    assert '\n'.join(lines[1:-1]) == framed
+    assert lines[1].startswith('+')
+
+
+# --- float cells fill wider columns ----------------------------------------
+
+@pytest.mark.parametrize('style', ['ascii', 'grid_eheader', 'modern'])
+def test_float_column_fills_min_width(style):
+    t = Table(rows=[[1.5, 'x'], [22.25, 'y']], headers=['h', 'k'])
+    t.style_name = style
+    t.column_min_width = {'h': 10}
+    widths = {visible_width(line) for line in t.compose().split('\n')}
+    assert len(widths) == 1
+
+
+def test_float_column_fills_long_header():
+    t = Table(rows=[[1.5], [22.25]], headers=['a long header'])
+    t.style_name = 'ascii'
+    lines = t.compose().split('\n')
+    assert len({visible_width(line) for line in lines}) == 1
+    assert lines[3].rstrip('| ').endswith('1.5')
+
+
+# --- divider on a style without a body rule --------------------------------
+
+@pytest.mark.parametrize('style', ['dashes', 'grid_eheader'])
+def test_divider_matches_table_width_after_wrapped_row(style):
+    t = Table(rows=[['a\nbb', 'c'], ['d', 'e']], headers=['h', 'k'])
+    t.style_name = style
+    t.add_divider(0)
+    lines = t.compose().split('\n')
+    assert len({visible_width(line) for line in lines}) == 1
