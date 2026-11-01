@@ -424,3 +424,57 @@ def test_background_only_merge_colour_reaches_html():
     t.merge_cells(0, 0, 0, 1, value='M', color='on red')
     assert 'background-color:#DC2626' in t.to_html()
     assert spec_to_css('on red') == 'background-color:#DC2626'
+
+
+# --- from_html lays out rowspan / colspan ----------------------------------
+
+def test_from_html_round_trips_vertical_merge():
+    t = Table(rows=[['a', 1, 2.5], ['b', None, 3.0], ['c', 3, None]],
+              headers=['n', 'i', 'f'])
+    t.merge_cells(0, 0, 1, 0)
+    back = Table.from_html(t.to_html())
+    assert back.headers == ['n', 'i', 'f']
+    assert [[r['i'], r['f']] for r in back.to_records()] == [
+        [1, 2.5], ['', 3.0], [3, ''],
+    ]
+    region = back.merged_regions[0]
+    assert (region.first_row, region.first_column,
+            region.last_row, region.last_column) == (0, 0, 1, 0)
+
+
+def test_from_html_colspan_keeps_columns_in_place():
+    markup = ('<table><tr><th>a</th><th>b</th><th>c</th></tr>'
+              '<tr><td colspan="2">wide</td><td>z</td></tr>'
+              '<tr><td>1</td><td>2</td><td>3</td></tr></table>')
+    back = Table.from_html(markup)
+    assert [list(r.values()) for r in back.to_records()] == [
+        ['wide', '', 'z'], [1, 2, 3],
+    ]
+    assert len(back.merged_regions) == 1
+
+
+def test_from_html_header_row_of_the_selected_table():
+    markup = ('<table><tr><th>other</th></tr></table>'
+              '<table><tr><td>a</td><td>b</td></tr>'
+              '<tr><th>H1</th><th>H2</th></tr>'
+              '<tr><td>1</td><td>2</td></tr></table>')
+    assert Table.from_html(markup, index=1).headers == ['H1', 'H2']
+
+
+def test_from_html_bad_span_attributes():
+    back = Table.from_html('<table><tr><td rowspan="x">1</td>'
+                           '<td colspan="-3">2</td></tr></table>')
+    assert back.headers == ['1', '2']
+
+
+# --- repeated headers get unique names -------------------------------------
+
+@pytest.mark.parametrize('headers, expected', [
+    (['x', 'x', 'x', 'x'], ['x', 'x 2', 'x 3', 'x 4']),
+    (['x', 'x 2', 'x'], ['x', 'x 2', 'x 3']),
+])
+def test_repeated_headers_are_unique(headers, expected):
+    t = Table(rows=[list(range(len(headers)))], headers=headers)
+    assert t.headers == expected
+    lines = t.compose().split('\n')
+    assert len({visible_width(line) for line in lines}) == 1
