@@ -28,6 +28,7 @@ import csv as _csv
 import io as _io
 import re
 from html.parser import HTMLParser
+from collections.abc import Mapping
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 # Numeric text that should become a number. Deliberately strict: no leading
@@ -101,6 +102,16 @@ def from_records(table_class, rows: Iterable[Sequence],
 
     With no headers, the first row is used as the header row.
     """
+    rows = list(rows)
+    if rows and all(isinstance(row, Mapping) for row in rows):
+        # ``list(dict)`` is its keys, so dict rows (what ``to_records``
+        # returns) used to become a table of repeated header names.
+        if headers is None:
+            return from_dicts(table_class, rows, parse_numbers=parse_numbers,
+                              **options)
+        headers = list(headers)
+        rows = [[row.get(key, '') for key in headers] for row in rows]
+        return _new_table(table_class, headers, rows, parse_numbers, **options)
     rows = [list(row) for row in rows]
     if headers is None:
         if not rows:
@@ -271,6 +282,27 @@ class _TableExtractor(HTMLParser):
         return None
 
 
+_PAYLOAD_RE = re.compile(r'^var DATA = (\{.*\});$', re.MULTILINE)
+
+
+def _flexablelib_payload(markup: str):
+    """The ``{headers, rows}`` JSON a ``to_html`` page embeds, or None."""
+    import json
+    match = _PAYLOAD_RE.search(markup)
+    if match is None:
+        return None
+    try:
+        payload = json.loads(match.group(1))
+    except ValueError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    headers, rows = payload.get('headers'), payload.get('rows')
+    if not isinstance(headers, list) or not isinstance(rows, list):
+        return None
+    return {'headers': headers, 'rows': rows}
+
+
 def from_html(table_class, source, index: int = 0, parse_numbers: bool = True,
               encoding: str = 'utf-8', **options):
     """
@@ -303,6 +335,14 @@ def from_html(table_class, source, index: int = 0, parse_numbers: bool = True,
         )
 
     rows = extractor.tables[index]
+    if len(extractor.tables) == 1 and len(rows) <= 1:
+        # ``Table.to_html`` renders its rows from an inline JSON payload, so
+        # the <tbody> is empty in the markup. Read that payload instead of
+        # returning a header-only table for our own export.
+        payload = _flexablelib_payload(markup)
+        if payload is not None:
+            return _new_table(table_class, payload['headers'],
+                              payload['rows'], parse_numbers, **options)
     if not rows:
         return table_class(**options)
 
@@ -442,6 +482,31 @@ def from_excel(table_class, path, sheet=None, has_header: bool = True,
     return table
 
 
+def _split_pipe_row(body: str) -> List[str]:
+    """
+    Split a Markdown row on unescaped pipes and unescape ``\\|``.
+
+    ``to_markdown`` writes a literal pipe as ``\\|``; splitting on every
+    ``|`` cut such a cell in two and left a stray backslash behind, so the
+    table did not round-trip.
+    """
+    cells, current, i = [], [], 0
+    while i < len(body):
+        ch = body[i]
+        if ch == '\\' and i + 1 < len(body) and body[i + 1] == '|':
+            current.append('|')
+            i += 2
+            continue
+        if ch == '|':
+            cells.append(''.join(current))
+            current = []
+        else:
+            current.append(ch)
+        i += 1
+    cells.append(''.join(current))
+    return cells
+
+
 def from_markdown(table_class, source, parse_numbers: bool = True, **options):
     """
     Parse a GitHub-flavoured Markdown pipe table into a Table.
@@ -469,9 +534,9 @@ def from_markdown(table_class, source, parse_numbers: bool = True, **options):
         if '|' not in ln:
             continue
         body = ln[1:] if ln.startswith('|') else ln
-        if body.endswith('|'):
+        if body.endswith('|') and not body.endswith('\\|'):
             body = body[:-1]
-        rows_raw.append([c.strip() for c in body.split('|')])
+        rows_raw.append([c.strip() for c in _split_pipe_row(body)])
 
     if not rows_raw:
         return _new_table(table_class, [], [], parse_numbers, **options)
