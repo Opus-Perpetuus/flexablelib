@@ -80,3 +80,62 @@ def test_sticks_wide_columns_are_unchanged():
     table = Table(rows=[['alpha', 100]], headers=['name', 'qty'])
     table.style_name = 'sticks'
     assert strip_ansi(table.compose()).splitlines()[0] == '+ ~<~   + ~>~ +'
+
+
+# border_text left/right ate cell text on styles with no outer border ---------
+
+@pytest.mark.parametrize('style', ['simple', 'clean', 'psql', 'plain', 'presto'])
+@pytest.mark.parametrize('where', ['left', 'right'])
+def test_vertical_border_text_never_overwrites_cells(style, where):
+    table = Table(rows=[['alpha', 1], ['beta', 2]], headers=['name', 'n'])
+    table.style_name = style
+    before = table.compose()
+    table.border_text('HI', where)
+    assert table.compose() == before
+
+
+def test_vertical_border_text_still_draws_on_framed_styles():
+    table = Table(rows=[['alpha', 1], ['beta', 2]], headers=['name', 'n'])
+    table.style_name = 'modern'
+    table.border_text('HI', 'left')
+    lines = strip_ansi(table.compose()).splitlines()
+    assert lines[1][0] == 'H' and lines[2][0] == 'I'
+
+
+# readers ----------------------------------------------------------------------
+
+def test_markdown_round_trips_escaped_pipes():
+    table = Table(rows=[['a|b', 'c']], headers=['x|y', 'z'])
+    back = Table.from_markdown(table.to_markdown())
+    assert back.headers == ['x|y', 'z']
+    assert back.rows == [['a|b', 'c']]
+
+
+def test_markdown_escaped_pipe_at_the_end_of_a_row_is_kept():
+    back = Table.from_markdown('| a | b |\n|---|---|\n| 1 | x \\|')
+    assert back.rows == [[1, 'x |']]
+
+
+def test_from_records_accepts_to_records_output():
+    table = Table(rows=[['ann', 30], ['bob', 41]], headers=['name', 'age'])
+    back = Table.from_records(table.to_records())
+    assert back.headers == ['name', 'age']
+    assert back.rows == [['ann', 30], ['bob', 41]]
+
+
+def test_from_records_dict_rows_follow_the_given_headers():
+    back = Table.from_records([{'a': 1, 'b': 2}, {'b': 3}], headers=['b', 'a'])
+    assert back.headers == ['b', 'a']
+    assert back.rows == [[2, 1], [3, '']]
+
+
+def test_from_html_reads_a_to_html_page():
+    table = Table(rows=[['</script>x', 1.5], ['a|b', 7]], headers=['x', 'y'])
+    back = Table.from_html(table.to_html())
+    assert back.headers == ['x', 'y']
+    assert back.rows == [['</script>x', 1.5], ['a|b', 7]]
+
+
+def test_from_html_of_a_plain_table_is_unchanged():
+    markup = '<table><tr><th>a</th></tr><tr><td>1</td></tr></table>'
+    assert Table.from_html(markup).rows == [[1]]
