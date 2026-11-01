@@ -2627,7 +2627,7 @@ class Table(object):
         if column_count == 0:
             return 0
         composition = self.__style_composition
-        margins = (CELL_MARGIN * 2) if composition.margin else 0
+        margins = max(0, int(composition.margin or 0)) * 2
         body_lines = composition.vertical_table_body_lines
         separator_count = sum(
             1 for part in (body_lines.left, body_lines.right) if part is not None
