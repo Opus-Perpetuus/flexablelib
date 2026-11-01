@@ -7,6 +7,8 @@ Print formatted tabular data in different styles
 # Main Class.
 # Here the whole table is formed
 
+import numbers
+
 from .style_compositions import (
     __style_compositions as style_catalogue, 
     HorizontalComposition, 
@@ -3920,7 +3922,7 @@ class Table(object):
             column_i,
             new_width,
             columns,
-            index=False,
+            index=self.__show_index,
             col_type_name=col_type,
             column_title=col_title
         )
@@ -4192,6 +4194,26 @@ class Table(object):
             self.__column_widths_as_list = widths
         return True
 
+    @staticmethod
+    def _sort_rank(cell):
+        """
+        Total-order key for one ``sort_by`` cell.
+
+        Comparing raw cells raised ``TypeError`` as soon as a column mixed
+        numbers and text, or held a ``None`` -- ordinary in real data. Numbers
+        come first, then text, then other types grouped by type, then
+        missing values (``None``, NaN, unset cells), so every column sorts.
+        """
+        if isinstance(cell, ValuePlacer) or cell is None:
+            return (3, '', '')
+        if isinstance(cell, numbers.Number) and not isinstance(cell, complex):
+            if cell != cell:  # NaN never compares; treat it as missing.
+                return (3, '', '')
+            return (0, '', cell)
+        if isinstance(cell, str):
+            return (1, '', cell)
+        return (2, type(cell).__name__, cell)
+
     def __display_row_order(self, rows):
         """
         Indices of rows to render, after filter and sort.
@@ -4230,11 +4252,13 @@ class Table(object):
                         )
 
                 def sort_key(row_i, _column_i=column_i):
-                    cell = self.__rows[row_i][_column_i]
-                    if isinstance(cell, ValuePlacer):
-                        # Missing sorts as empty string so it is stable and low.
-                        return (1, '')
-                    return (0, cell)
+                    return self._sort_rank(self.__rows[row_i][_column_i])
+
+                # Missing values stay at the bottom in both directions.
+                present = [i for i in indices if sort_key(i)[0] != 3]
+                missing = [i for i in indices if sort_key(i)[0] == 3]
+                present.sort(key=sort_key, reverse=self.__sort_reverse)
+                return present + missing
 
             indices.sort(key=sort_key, reverse=self.__sort_reverse)
 

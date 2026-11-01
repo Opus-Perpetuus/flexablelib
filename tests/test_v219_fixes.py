@@ -159,3 +159,85 @@ def test_float_column_cap_that_fits_still_applies():
     lines = strip_ansi(table.compose()).splitlines()
     assert len(_widths(table)) == 1
     assert max(len(line) for line in lines) == 8
+
+
+# show_index + column_max_width on a text column ------------------------------
+
+def test_index_with_max_width_trims_the_last_text_column():
+    table = Table(rows=[['é', 'abcdef']], headers=['a', 'b'])
+    table.show_index = True
+    table.column_max_width = 2
+    table.style_name = 'ascii'
+    lines = strip_ansi(table.compose()).splitlines()
+    assert '| 0 | é | .. |' in lines
+
+
+def test_index_with_max_width_leaves_other_alignments_alone():
+    table = Table(rows=[['abcdef', 5], ['x', 10]], headers=['name', 'qty'])
+    table.show_index = True
+    table.column_max_width = {'name': 3}
+    table.col_alignment = ['l', 'l']
+    table.style_name = 'ascii'
+    lines = strip_ansi(table.compose()).splitlines()
+    assert '| 0 | ... | 5   |' in lines
+
+
+# merges on styles whose frame has no horizontal glyph ------------------------
+
+@pytest.mark.parametrize('hrules', ['none', 'frame', 'header'])
+def test_merge_with_hrules_on_ascii_rounded(hrules):
+    table = Table(rows=[['a', 'b'], ['c', 'd']], headers=['x', 'y'])
+    table.style_name = 'ascii_rounded'
+    table.hrules = hrules
+    table.merge_cells(0, 0, 1, 0)
+    assert len(_widths(table)) == 1
+
+
+# sort_by over mixed types ------------------------------------------------------
+
+def _mixed():
+    table = Table(rows=[['a', None], ['b', 3], ['c', 'x'], ['d', 1.5],
+                        ['e', float('nan')], ['f', 'w']], headers=['k', 'v'])
+    table.style_name = 'ascii'
+    table.sort_by = 'v'
+    return table
+
+
+def test_sort_by_mixed_numbers_text_and_none():
+    table = _mixed()
+    order = [line.split('|')[1].strip()
+             for line in strip_ansi(table.compose()).splitlines()
+             if line.startswith('|')][1:]
+    assert order == ['d', 'b', 'f', 'c', 'a', 'e']
+
+
+def test_sort_by_reverse_keeps_missing_last():
+    table = _mixed()
+    table.sort_reverse = True
+    order = [line.split('|')[1].strip()
+             for line in strip_ansi(table.compose()).splitlines()
+             if line.startswith('|')][1:]
+    assert order == ['c', 'f', 'b', 'd', 'a', 'e']
+
+
+def test_sort_by_plain_numbers_is_unchanged():
+    table = Table(rows=[[3], [1], [2]], headers=['n'])
+    table.sort_by = 'n'
+    assert [r for r in table.rows] == [[3], [1], [2]]
+    body = [line.strip('| ') for line in strip_ansi(table.compose()).splitlines()
+            if line.startswith('|')][1:]
+    assert body == ['1', '2', '3']
+
+
+# numeric-looking header over a float column ----------------------------------
+
+@pytest.mark.parametrize('valign', [None, 'top', 'middle', 'bottom'])
+@pytest.mark.parametrize('header', ['0', '2024', '1.25', 'a'])
+def test_numeric_header_over_float_column(valign, header):
+    table = Table(rows=[[1.5, 'x\ny'], [22.25, 'z']], headers=[header, 'b'])
+    table.style_name = 'ascii'
+    if valign:
+        table.valign = valign
+    lines = strip_ansi(table.compose()).splitlines()
+    assert len(_widths(table)) == 1
+    assert lines[1].startswith('| ' + header.rjust(5) + ' |')
