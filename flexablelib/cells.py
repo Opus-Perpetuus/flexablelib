@@ -186,6 +186,21 @@ def fljust(string: str,
     return ''.join([left, point or fill_char, right])
 
 
+def __fill_to(aligned: str, cell_length: int, fill_char: str) -> str:
+    """
+    Right-align a decimal-aligned block within a wider column.
+
+    The block is exactly as wide as the column's widest number. When the
+    column is wider than that -- a ``column_min_width``, a long header, or
+    a text cell such as ``None`` -- the numbers came out short and the row
+    border moved left. Padding every block on the left by the same amount
+    keeps the decimal points on one axis.
+    """
+    if visible_width(aligned) < cell_length:
+        return pad_to_width(aligned, cell_length, 'r', fill_char)
+    return aligned
+
+
 def __fljust_part(cell_part: Any, 
                   cell_length: int, 
                   float_column_sizes: Union[List[int], Tuple[int, int, int]], 
@@ -228,11 +243,11 @@ def __fljust_part(cell_part: Any,
     
     # If it is a float, align it as a float.
     if is_float_number:
-        return fljust(
+        return __fill_to(fljust(
             str_cell, 
             float_column_sizes, 
             fill_char
-        )
+        ), cell_length, fill_char)
     
     # If it is an int, align it as an int.
     # Will be aligned to the int part of the float.
@@ -266,13 +281,13 @@ def __fljust_part(cell_part: Any,
         fixed_right_width = right_width + float_column_sizes[POINT_WIDTH_I]
         
         # Add the spaces to the left and right.
-        return _add_cell_spacing(
+        return __fill_to(_add_cell_spacing(
             str_cell,
             fixed_left_width,
             fixed_right_width,
             0,
             fill_char
-        )
+        ), cell_length, fill_char)
         
     # If it is not a float nor an int, align it to the right.
     else:
