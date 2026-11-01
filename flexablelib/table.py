@@ -4752,11 +4752,6 @@ class Table(object):
                 column_titles,
                 len(body_rows),
             )
-        elif self.__border_color:
-            separators = HorizontalComposition(*[
-                colorize(line, self.__border_color) if line is not None else None
-                for line in separators
-            ])
 
         if self.__border_texts:
             separators, gap_separator = self.__apply_horizontal_border_texts(
@@ -4816,7 +4811,18 @@ class Table(object):
             )
 
         if self.__border_texts:
-            table_string = self.__apply_vertical_border_texts(table_string)
+            # Only the framed block carries vertical borders. Counting the
+            # title and caption lines put the first label character on the
+            # top-left corner and the last on the caption.
+            lines = table_string.split('\n')
+            head = title_line.count('\n') + 1 if title_line else 0
+            tail = caption_line.count('\n') + 1 if caption_line else 0
+            framed = '\n'.join(lines[head:len(lines) - tail])
+            framed = self.__apply_vertical_border_texts(framed)
+            table_string = '\n'.join(
+                lines[:head] + ([framed] if framed else [])
+                + lines[len(lines) - tail:]
+            )
 
         table_string = self.__apply_panel_and_shadow(table_string)
         return self.__apply_table_align(table_string)
@@ -4858,7 +4864,13 @@ class Table(object):
         )
         rule = None
         if explicit_dividers:
-            rule = '-' * max(visible_width(body_rows[0]), 1)
+            # Measure one physical line: a wrapped first row holds several,
+            # and measuring the whole string drew a rule as wide as all of
+            # them put together.
+            rule = '-' * max(
+                max(visible_width(line) for line in body_rows[0].split('\n')),
+                1,
+            )
 
         separator_lines = body_line.count('\n') if separator_line is not None else 0
 
@@ -5200,6 +5212,9 @@ class Table(object):
             chars[start + i] = ch
         new_plain = ''.join(chars)
         chrome = chrome_color if chrome_color is not None else self.__border_color
+        if not self.__colors_active:
+            # use_colors=False / NO_COLOR / a pipe: the label is plain text.
+            color = chrome = None
         prefix = new_plain[:start]
         mid = new_plain[start:start + tw]
         suffix = new_plain[start + tw:]
@@ -5273,6 +5288,7 @@ class Table(object):
 
         lines = table_string.split('\n')
         n = len(lines)
+        colors_on = self.__colors_active
 
         for spec in left_specs:
             text = strip_ansi(spec['text'])
@@ -5287,7 +5303,7 @@ class Table(object):
                 if row < 0 or row >= stop:
                     break
                 lines[row] = self.__replace_first_visible(
-                    lines[row], ch, spec['color']
+                    lines[row], ch, spec['color'] if colors_on else None
                 )
 
         for spec in right_specs:
@@ -5303,7 +5319,7 @@ class Table(object):
                 if row < 0 or row >= stop:
                     break
                 lines[row] = self.__replace_last_visible(
-                    lines[row], ch, spec['color']
+                    lines[row], ch, spec['color'] if colors_on else None
                 )
 
         return '\n'.join(lines)
@@ -5631,28 +5647,28 @@ class Table(object):
         },
         'dark': {
             'style_name': 'rounded',
-            'use_colors': True,
+            'use_colors': None,
             'header_color': 'bold cyan',
             'border_color': 'dim',
             'zebra': 'on #2a2a2a',
         },
         'midnight': {
             'style_name': 'sharp',
-            'use_colors': True,
+            'use_colors': None,
             'header_color': 'bold white',
             'border_color': 'blue',
             'zebra': ('', 'on #1a1a2e'),
         },
         'matrix': {
             'style_name': 'ascii',
-            'use_colors': True,
+            'use_colors': None,
             'header_color': 'bold green',
             'border_color': 'green',
             'zebra': 'dim green',
         },
         'report': {
             'style_name': 'simple_bold',
-            'use_colors': True,
+            'use_colors': None,
             'header_color': 'bold',
             'border_color': None,
             'zebra': None,
@@ -5666,63 +5682,63 @@ class Table(object):
         },
         'ocean': {
             'style_name': 'rounded',
-            'use_colors': True,
+            'use_colors': None,
             'header_color': 'bold #7fdbff',
             'border_color': '#0074d9',
             'zebra': ('', 'on #001f3f'),
         },
         'solarized': {
             'style_name': 'sharp',
-            'use_colors': True,
+            'use_colors': None,
             'header_color': 'bold #268bd2',
             'border_color': '#586e75',
             'zebra': ('', 'on #073642'),
         },
         'neon': {
             'style_name': 'bold_borderline',
-            'use_colors': True,
+            'use_colors': None,
             'header_color': 'bold magenta',
             'border_color': 'cyan',
             'zebra': ('', 'on #1a0033'),
         },
         'mono': {
             'style_name': 'simple',
-            'use_colors': True,
+            'use_colors': None,
             'header_color': 'bold',
             'border_color': 'dim',
             'zebra': 'dim',
         },
         'autumn': {
             'style_name': 'rounded',
-            'use_colors': True,
+            'use_colors': None,
             'header_color': 'bold #d75f00',
             'border_color': '#af5f00',
             'zebra': ('', 'on #3a1f00'),
         },
         'contrast': {
             'style_name': 'ascii',
-            'use_colors': True,
+            'use_colors': None,
             'header_color': 'bold reverse',
             'border_color': 'bold',
             'zebra': ('', 'reverse'),
         },
         'forest': {
             'style_name': 'modern',
-            'use_colors': True,
+            'use_colors': None,
             'header_color': 'bold #87d787',
             'border_color': '#005f00',
             'zebra': ('', 'on #002200'),
         },
         'ember': {
             'style_name': 'bold_borderline',
-            'use_colors': True,
+            'use_colors': None,
             'header_color': 'bold #ffaf00',
             'border_color': '#d70000',
             'zebra': ('', 'on #2a0000'),
         },
         'slate': {
             'style_name': 'psql',
-            'use_colors': True,
+            'use_colors': None,
             'header_color': 'bold #a8a8a8',
             'border_color': '#6c6c6c',
             'zebra': ('', 'on #303030'),
