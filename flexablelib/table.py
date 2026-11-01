@@ -7,6 +7,8 @@ Print formatted tabular data in different styles
 # Main Class.
 # Here the whole table is formed
 
+import numbers
+
 from .style_compositions import (
     __style_compositions as style_catalogue, 
     HorizontalComposition, 
@@ -1020,6 +1022,22 @@ class Table(object):
             str(piece), new_width, DEFAULT_TRIMMING_SIGN
         )
         
+    @classmethod
+    def __trim_lines(cls, piece, new_width: int):
+        """
+        Trim each line of a cell to ``new_width`` visible columns.
+
+        Measuring with ``len`` left CJK and emoji cells untrimmed (two columns
+        per character) and trimmed short ZWJ sequences that fit; measuring the
+        whole multi-line string at once turned ``'a\\nbb'`` into ``'...'``.
+        A cell that already fits is returned unchanged, type included.
+        """
+        text = str(piece)
+        lines = text.split('\n')
+        if all(visible_width(line) <= new_width for line in lines):
+            return piece
+        return '\n'.join(cls.__trim_with_sign(line, new_width) for line in lines)
+
     @staticmethod
     def __check_if_none_and_get_len(value: Union[str, None]) -> int:
         """
@@ -2609,7 +2627,7 @@ class Table(object):
         if column_count == 0:
             return 0
         composition = self.__style_composition
-        margins = (CELL_MARGIN * 2) if composition.margin else 0
+        margins = max(0, int(composition.margin or 0)) * 2
         body_lines = composition.vertical_table_body_lines
         separator_count = sum(
             1 for part in (body_lines.left, body_lines.right) if part is not None
@@ -3062,13 +3080,25 @@ class Table(object):
         """
         Returns a generic name for a column.
         """
-        return f'{self.__generic_column_name} {len(self.__headers) + 1}'
+        return self.__first_free_name(
+            self.__generic_column_name, len(self.__headers) + 1
+        )
     
     def __name_duplicated_header(self, header: str) -> str:
         """
         Returns a name for a column if the name is already in use.
+
+        Counting copies of ``header`` was not enough: with ['x', 'x', 'x']
+        the third became 'x 2' again, two columns shared a key and compose()
+        raised IndexError. The first unused 'header N' is taken instead.
         """
-        return f'{header} {self.__headers.count(header) + 1}'
+        return self.__first_free_name(header, self.__headers.count(header) + 1)
+
+    def __first_free_name(self, base: str, number: int) -> str:
+        taken = set(self.__headers)
+        while f'{base} {number}' in taken:
+            number += 1
+        return f'{base} {number}'
         
     def __process_header(self, header: str) -> str:
         """
@@ -3821,18 +3851,9 @@ class Table(object):
             header_to_trim = self.__headers_with_i[column_i]
         else:
             header_to_trim = self.__headers[column_i]
-        if len(str(header_to_trim)) > new_width:
-            header_to_trim = self.__trim_with_sign(
-                header_to_trim, 
-                new_width
-            )
+        header_to_trim = self.__trim_lines(header_to_trim, new_width)
         for row_i, row in enumerate(col_to_trim):
-            if len(str(row)) > new_width:
-                trimmed = self.__trim_with_sign(
-                    row,
-                    new_width
-                )
-                col_to_trim[row_i] = trimmed
+            col_to_trim[row_i] = self.__trim_lines(row, new_width)
         
         return header_to_trim, col_to_trim
     
@@ -3913,7 +3934,7 @@ class Table(object):
             column_i,
             new_width,
             columns,
-            index=False,
+            index=self.__show_index,
             col_type_name=col_type,
             column_title=col_title
         )
@@ -4040,15 +4061,18 @@ class Table(object):
             hi = self.__bound_for_column(
                 self.__column_max_width, header, user_i
             )
-            width = widths[column_i]
+            # By now the content has been through __enforce_column_max_widths,
+            # so the measured width is what the cells really need. A cap can
+            # take away padding from column_min_width but never cut below
+            # that: some content cannot shrink (a float's integer digits, a
+            # 2-column CJK glyph in a 1-column cap, the index column), and
+            # clamping the number anyway drew a frame narrower than the text.
+            content = widths[column_i]
+            width = content
             if lo is not None:
                 width = max(width, int(lo))
             if hi is not None:
-                hi = max(1, int(hi))
-                if width > hi:
-                    width = hi
-            if lo is not None and hi is not None and int(lo) > max(1, int(hi)):
-                width = max(1, int(hi))
+                width = max(min(width, max(1, int(hi))), content)
             widths[column_i] = width
             store[header] = width
 
@@ -4175,6 +4199,26 @@ class Table(object):
             self.__column_widths_as_list = widths
         return True
 
+    @staticmethod
+    def _sort_rank(cell):
+        """
+        Total-order key for one ``sort_by`` cell.
+
+        Comparing raw cells raised ``TypeError`` as soon as a column mixed
+        numbers and text, or held a ``None`` -- ordinary in real data. Numbers
+        come first, then text, then other types grouped by type, then
+        missing values (``None``, NaN, unset cells), so every column sorts.
+        """
+        if isinstance(cell, ValuePlacer) or cell is None:
+            return (3, '', '')
+        if isinstance(cell, numbers.Number) and not isinstance(cell, complex):
+            if cell != cell:  # NaN never compares; treat it as missing.
+                return (3, '', '')
+            return (0, '', cell)
+        if isinstance(cell, str):
+            return (1, '', cell)
+        return (2, type(cell).__name__, cell)
+
     def __display_row_order(self, rows):
         """
         Indices of rows to render, after filter and sort.
@@ -4213,11 +4257,13 @@ class Table(object):
                         )
 
                 def sort_key(row_i, _column_i=column_i):
-                    cell = self.__rows[row_i][_column_i]
-                    if isinstance(cell, ValuePlacer):
-                        # Missing sorts as empty string so it is stable and low.
-                        return (1, '')
-                    return (0, cell)
+                    return self._sort_rank(self.__rows[row_i][_column_i])
+
+                # Missing values stay at the bottom in both directions.
+                present = [i for i in indices if sort_key(i)[0] != 3]
+                missing = [i for i in indices if sort_key(i)[0] == 3]
+                present.sort(key=sort_key, reverse=self.__sort_reverse)
+                return present + missing
 
             indices.sort(key=sort_key, reverse=self.__sort_reverse)
 
@@ -4711,11 +4757,6 @@ class Table(object):
                 column_titles,
                 len(body_rows),
             )
-        elif self.__border_color:
-            separators = HorizontalComposition(*[
-                colorize(line, self.__border_color) if line is not None else None
-                for line in separators
-            ])
 
         if self.__border_texts:
             separators, gap_separator = self.__apply_horizontal_border_texts(
@@ -4775,7 +4816,18 @@ class Table(object):
             )
 
         if self.__border_texts:
-            table_string = self.__apply_vertical_border_texts(table_string)
+            # Only the framed block carries vertical borders. Counting the
+            # title and caption lines put the first label character on the
+            # top-left corner and the last on the caption.
+            lines = table_string.split('\n')
+            head = title_line.count('\n') + 1 if title_line else 0
+            tail = caption_line.count('\n') + 1 if caption_line else 0
+            framed = '\n'.join(lines[head:len(lines) - tail])
+            framed = self.__apply_vertical_border_texts(framed)
+            table_string = '\n'.join(
+                lines[:head] + ([framed] if framed else [])
+                + lines[len(lines) - tail:]
+            )
 
         table_string = self.__apply_panel_and_shadow(table_string)
         return self.__apply_table_align(table_string)
@@ -4817,7 +4869,13 @@ class Table(object):
         )
         rule = None
         if explicit_dividers:
-            rule = '-' * max(visible_width(body_rows[0]), 1)
+            # Measure one physical line: a wrapped first row holds several,
+            # and measuring the whole string drew a rule as wide as all of
+            # them put together.
+            rule = '-' * max(
+                max(visible_width(line) for line in body_rows[0].split('\n')),
+                1,
+            )
 
         separator_lines = body_line.count('\n') if separator_line is not None else 0
 
@@ -5159,6 +5217,9 @@ class Table(object):
             chars[start + i] = ch
         new_plain = ''.join(chars)
         chrome = chrome_color if chrome_color is not None else self.__border_color
+        if not self.__colors_active:
+            # use_colors=False / NO_COLOR / a pipe: the label is plain text.
+            color = chrome = None
         prefix = new_plain[:start]
         mid = new_plain[start:start + tw]
         suffix = new_plain[start + tw:]
@@ -5222,8 +5283,17 @@ class Table(object):
         if not left_specs and not right_specs:
             return table_string
 
+        # A style with no outer vertical border (simple, clean, psql...) has
+        # cell text in the first and last column; overwriting it would eat
+        # data, so the label is dropped on that side.
+        if not self.__has_outer_vertical('left'):
+            left_specs = []
+        if not self.__has_outer_vertical('right'):
+            right_specs = []
+
         lines = table_string.split('\n')
         n = len(lines)
+        colors_on = self.__colors_active
 
         for spec in left_specs:
             text = strip_ansi(spec['text'])
@@ -5238,7 +5308,7 @@ class Table(object):
                 if row < 0 or row >= stop:
                     break
                 lines[row] = self.__replace_first_visible(
-                    lines[row], ch, spec['color']
+                    lines[row], ch, spec['color'] if colors_on else None
                 )
 
         for spec in right_specs:
@@ -5254,10 +5324,20 @@ class Table(object):
                 if row < 0 or row >= stop:
                     break
                 lines[row] = self.__replace_last_visible(
-                    lines[row], ch, spec['color']
+                    lines[row], ch, spec['color'] if colors_on else None
                 )
 
         return '\n'.join(lines)
+
+    def __has_outer_vertical(self, side):
+        """True when the active style draws a glyph on that outer edge."""
+        composition = self.style_composition
+        for group in (composition.vertical_table_body_lines,
+                      composition.vertical_header_lines):
+            glyph = getattr(group, side, None) if group is not None else None
+            if glyph and glyph.strip():
+                return True
+        return False
 
     @staticmethod
     def __replace_first_visible(line, ch, color):
@@ -5572,28 +5652,28 @@ class Table(object):
         },
         'dark': {
             'style_name': 'rounded',
-            'use_colors': True,
+            'use_colors': None,
             'header_color': 'bold cyan',
             'border_color': 'dim',
             'zebra': 'on #2a2a2a',
         },
         'midnight': {
             'style_name': 'sharp',
-            'use_colors': True,
+            'use_colors': None,
             'header_color': 'bold white',
             'border_color': 'blue',
             'zebra': ('', 'on #1a1a2e'),
         },
         'matrix': {
             'style_name': 'ascii',
-            'use_colors': True,
+            'use_colors': None,
             'header_color': 'bold green',
             'border_color': 'green',
             'zebra': 'dim green',
         },
         'report': {
             'style_name': 'simple_bold',
-            'use_colors': True,
+            'use_colors': None,
             'header_color': 'bold',
             'border_color': None,
             'zebra': None,
@@ -5607,63 +5687,63 @@ class Table(object):
         },
         'ocean': {
             'style_name': 'rounded',
-            'use_colors': True,
+            'use_colors': None,
             'header_color': 'bold #7fdbff',
             'border_color': '#0074d9',
             'zebra': ('', 'on #001f3f'),
         },
         'solarized': {
             'style_name': 'sharp',
-            'use_colors': True,
+            'use_colors': None,
             'header_color': 'bold #268bd2',
             'border_color': '#586e75',
             'zebra': ('', 'on #073642'),
         },
         'neon': {
             'style_name': 'bold_borderline',
-            'use_colors': True,
+            'use_colors': None,
             'header_color': 'bold magenta',
             'border_color': 'cyan',
             'zebra': ('', 'on #1a0033'),
         },
         'mono': {
             'style_name': 'simple',
-            'use_colors': True,
+            'use_colors': None,
             'header_color': 'bold',
             'border_color': 'dim',
             'zebra': 'dim',
         },
         'autumn': {
             'style_name': 'rounded',
-            'use_colors': True,
+            'use_colors': None,
             'header_color': 'bold #d75f00',
             'border_color': '#af5f00',
             'zebra': ('', 'on #3a1f00'),
         },
         'contrast': {
             'style_name': 'ascii',
-            'use_colors': True,
+            'use_colors': None,
             'header_color': 'bold reverse',
             'border_color': 'bold',
             'zebra': ('', 'reverse'),
         },
         'forest': {
             'style_name': 'modern',
-            'use_colors': True,
+            'use_colors': None,
             'header_color': 'bold #87d787',
             'border_color': '#005f00',
             'zebra': ('', 'on #002200'),
         },
         'ember': {
             'style_name': 'bold_borderline',
-            'use_colors': True,
+            'use_colors': None,
             'header_color': 'bold #ffaf00',
             'border_color': '#d70000',
             'zebra': ('', 'on #2a0000'),
         },
         'slate': {
             'style_name': 'psql',
-            'use_colors': True,
+            'use_colors': None,
             'header_color': 'bold #a8a8a8',
             'border_color': '#6c6c6c',
             'zebra': ('', 'on #303030'),

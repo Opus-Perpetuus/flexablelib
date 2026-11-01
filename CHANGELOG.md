@@ -2,6 +2,50 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.0.19] - 2026-11-01
+
+### Fixed
+- ``column_max_width`` trims by terminal columns and line by line: CJK text
+  is cut to fit, emoji ZWJ sequences are no longer over-trimmed and
+  multi-line cells keep their lines instead of collapsing to ``...``.
+- A width cap never narrows a column below content that cannot shrink (the
+  index column, a float's integer digits, a 2-column glyph in a 1-column
+  cap); the frame used to come out narrower than the text.
+- ``show_index`` with ``column_max_width`` raised ``IndexError`` or trimmed
+  the wrong column.
+- Float columns fill wider columns (``column_min_width``, a long header)
+  instead of leaving rows short.
+- A numeric-looking header (``'0'``, ``'2024'``) over a float column crashed
+  with ``valign`` and overflowed without it; it is now right-aligned.
+- ``sort_by`` on mixed types or ``None`` raised ``TypeError``. Numbers sort
+  before text, other types group by type, and missing values (``None``,
+  NaN) always go last, also with ``sort_reverse``.
+- ``border_color`` and ``border_text`` emitted ANSI escapes with
+  ``use_colors=False``, under ``NO_COLOR`` or into a pipe (regression from
+  2.0.11). Coloured themes now leave ``use_colors`` on auto instead of
+  forcing it on, so ``apply_theme`` output to a file stays clean; set
+  ``use_colors = True`` to force colour.
+- Left/right ``border_text`` overwrote cell text on styles without an outer
+  border, and started on the title line when a ``title`` was set.
+- ``sticks`` alignment indicators overhung columns narrower than 3.
+- ``add_divider`` on styles without a body rule (``dashes``,
+  ``grid_eheader``) drew a rule too wide after a wrapped row.
+- Merged cells follow ``cell_padding`` (0, 2, 3...); ``hrules`` with merges
+  on styles whose frame has no horizontal glyph raised ``TypeError``.
+- Three or more repeated headers (``['x', 'x', 'x']``) produced a duplicate
+  name and ``compose()`` raised ``IndexError``.
+- Readers: ``from_markdown`` unescapes ``\|``; ``from_records`` accepts the
+  dicts ``to_records`` returns; ``from_html`` reads ``to_html`` pages, lays
+  out ``rowspan``/``colspan`` (later cells used to slide left) and restores
+  them as merges, and takes the ``<th>`` header from the selected table.
+- HTML/XLSX colours: a background-only ``'on red'`` exported as red text,
+  and ``greyNN`` / ``color:N`` colours exported nothing.
+- ``to_latex`` escapes ``|``, ``<`` and ``>``.
+
+### Tests
+- Regression tests for every fix above and behaviour tests for exporters,
+  readers and colour helpers (coverage 87% -> 90%).
+
 ## [2.0.18] - 2026-10-31
 
 ### Fixed
