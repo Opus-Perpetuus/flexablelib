@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.0.20] - 2026-11-02
+
+### Fixed
+- ``column_min_width`` and ``column_max_width`` are checked when set. A
+  non-integer entry raised a bare ``int()`` error only at print time, and a
+  cap of ``0`` or below silently trimmed every cell to ``.``. Both now raise
+  ``ValueError`` naming the option; ``None`` still means no bound.
+- ``from_html`` with a negative ``index`` past the first table raised a bare
+  ``list index out of range``; it now gives the same message as a positive
+  index that is out of range.
+
+### Tests
+- Reader coverage: CSV without header and ragged rows, dialect plus
+  delimiter, numeric-looking text, Markdown from bytes and paths, HTML from
+  paths, records with dict rows and generator input.
+
 ## [2.0.19] - 2026-11-01
 
 ### Fixed
