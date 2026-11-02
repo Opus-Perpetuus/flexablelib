@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [Unreleased]
+
+### Fixed
+- ``plain`` style: the blank line under the header was one column shorter
+  than the rows (no junction between columns), so ``compose()`` output was
+  not rectangular.
+
+### Tests
+- Every style renders lines of equal terminal width with CJK / emoji
+  headers and ``column_max_width``. Pins that ``*_eheader`` styles draw the
+  header row without column separators by design.
+
 ## [2.0.20] - 2026-11-02
 
 ### Fixed
