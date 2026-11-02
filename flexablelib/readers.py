@@ -376,7 +376,7 @@ def from_html(table_class, source, index: int = 0, parse_numbers: bool = True,
 
     if not extractor.tables:
         raise ValueError('no <table> element found')
-    if index >= len(extractor.tables):
+    if not -len(extractor.tables) <= index < len(extractor.tables):
         raise IndexError(
             f'table index {index} out of range; '
             f'the document has {len(extractor.tables)}'

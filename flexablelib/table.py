@@ -1855,13 +1855,50 @@ class Table(object):
     def custom_format(self, value):
         self.__custom_format = value
 
+    @staticmethod
+    def __checked_width_bounds(value, name, minimum):
+        """
+        Validate a column_min_width / column_max_width value when it is set.
+
+        An int applies to every column, a list or tuple goes by position and a
+        dict by header (or position); ``None`` anywhere means no bound. Bad
+        entries used to be stored as given and only failed -- or, for a
+        negative cap, silently trimmed every cell to ``.`` -- at print time.
+        """
+        def check(bound):
+            if bound is None:
+                return None
+            try:
+                number = int(bound)
+            except (TypeError, ValueError):
+                raise ValueError(
+                    f'{name} entries must be integers or None, got {bound!r}'
+                ) from None
+            if number < minimum:
+                raise ValueError(
+                    f'{name} must be >= {minimum} or None, got {bound!r}'
+                )
+            return number
+
+        if value is None:
+            return None
+        if isinstance(value, dict):
+            return {key: check(bound) for key, bound in value.items()}
+        if is_some_instance(value, list, tuple):
+            return [check(bound) for bound in value]
+        return check(value)
+
     @column_min_width.setter
     def column_min_width(self, value):
-        self.__column_min_width = value
+        self.__column_min_width = self.__checked_width_bounds(
+            value, 'column_min_width', 0
+        )
 
     @column_max_width.setter
     def column_max_width(self, value):
-        self.__column_max_width = value
+        self.__column_max_width = self.__checked_width_bounds(
+            value, 'column_max_width', 1
+        )
 
     @header_align.setter
     def header_align(self, value):
