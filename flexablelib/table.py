@@ -2357,17 +2357,30 @@ class Table(object):
             fill = sep.middle if sep.middle not in (None, '') else INVISIBLE_SEPARATOR
             return SeparatorLine(sep.left, fill, fill, sep.right)
 
+        def drop_verticals(sep):
+            """
+            Horizontal rule with no junctions and no corners (vrules none).
+
+            The rows lose their left and right borders in this mode, so a
+            rule that kept its corners came out two columns wider than every
+            row it framed.
+            """
+            sep = drop_intersections(sep)
+            if sep is None:
+                return None
+            return SeparatorLine(None, sep.middle, sep.intersection, None)
+
         if mode in ('none', 'n', 'off', 'false', '0'):
             return {
                 'vertical_header_lines': invisible,
                 'vertical_table_body_lines': invisible,
-                'superior_header_line': drop_intersections(base.superior_header_line),
-                'inferior_header_line': drop_intersections(base.inferior_header_line),
-                'superior_header_line_no_header': drop_intersections(
+                'superior_header_line': drop_verticals(base.superior_header_line),
+                'inferior_header_line': drop_verticals(base.inferior_header_line),
+                'superior_header_line_no_header': drop_verticals(
                     base.superior_header_line_no_header
                 ),
-                'table_body_line': drop_intersections(base.table_body_line),
-                'table_end_line': drop_intersections(base.table_end_line),
+                'table_body_line': drop_verticals(base.table_body_line),
+                'table_end_line': drop_verticals(base.table_end_line),
             }
         if mode in ('frame', 'f'):
             def frame_only(sep):
@@ -5988,9 +6001,20 @@ class Table(object):
                             for r in range(len(rows))]
             )
         style = options.pop('style_name', self.style_name)
+        keep_missing = 'missing_val' not in options
+        # Gaps carry this table's ``missing`` sentinel, which the new table
+        # does not recognise: it rendered as a blank instead of the missing
+        # value and the exports wrote its repr. Hand them over as the new
+        # table's own sentinel.
         out = type(self).from_records(
-            new_rows, headers=new_headers, style_name=style, **options
+            [], headers=new_headers, style_name=style, **options
         )
+        if keep_missing:
+            out.missing_value = self.__missing_value
+        placer = self.__value_placer
+        for row in new_rows:
+            out.add_row([out.missing if cell is placer else cell
+                         for cell in row])
         return out
 
     def rotate(self, **options):
