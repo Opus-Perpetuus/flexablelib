@@ -182,8 +182,15 @@ def fljust(string: str,
     right = pad_to_width(right_string, right_width, 'l', fill_char)
 
     # A number with no point leaves the point's own column blank, so it is
-    # still exactly as wide as the ones that have one.
-    return ''.join([left, point or fill_char, right])
+    # still exactly as wide as the ones that have one. When no number in the
+    # column has a point (a column of exponentials such as ``1e+20``) that
+    # column is zero wide, and padding it anyway made the cell one character
+    # wider than the column and pushed the right border out.
+    if not point:
+        point_width = (sides_widths[POINT_WIDTH_I]
+                       if len(sides_widths) > 2 else 1)
+        point = fill_char * point_width
+    return ''.join([left, point, right])
 
 
 def __fill_to(aligned: str, cell_length: int, fill_char: str) -> str:

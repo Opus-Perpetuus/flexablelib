@@ -27,6 +27,7 @@ from typing import Any, List, Optional, Sequence
 from .fast import strip_ansi
 from .colors import background_hex, foreground_hex, spec_to_css
 from .options import FLT_FILTER, INT_FILTER
+from .utils import to_roman
 
 
 
@@ -58,14 +59,37 @@ def _plain(value: Any) -> str:
 
 
 def _table_data(table, include_index: bool):
-    """(headers, rows) as plain strings, honouring the index setting."""
+    """
+    (headers, rows) honouring the index setting.
+
+    Gaps hold the table's ``missing`` sentinel -- short rows padded by the
+    table, NaN and NULL from the readers, ``table.missing`` placed by hand.
+    It is an internal marker with no printable form, and every export used
+    to write its ``repr`` (``<flexablelib.utils.ValuePlacer object at ...>``)
+    into the CSV field, the Markdown cell or the record. It leaves here as
+    ``None``, which every writer already turns into an empty cell.
+    """
+    missing = table.missing
+    headers = [str(header) for header in table.headers]
+    rows = [
+        [None if cell is missing else cell for cell in row]
+        for row in table.rows
+    ]
     if include_index:
-        headers = [str(header) for header in table.internal_headers]
-        rows = table.internal_rows
-    else:
-        headers = [str(header) for header in table.headers]
-        rows = table.rows
-    return headers, [[cell for cell in row] for row in rows]
+        # The stored index column holds a counter object that only the
+        # renderer knows how to read, so exports wrote its ``repr`` in every
+        # row -- and left the column out altogether when ``show_index`` was
+        # off, although the Excel writer already shifted merges for it.
+        # Number the rows here the way the rendered index does.
+        start, step = table.index_start, table.index_step
+        roman = table.roman_index
+        labels = []
+        for row_i in range(len(rows)):
+            label = start + row_i * step
+            labels.append(to_roman(label) if roman else label)
+        headers = [str(table.index_title)] + headers
+        rows = [[label] + row for label, row in zip(labels, rows)]
+    return headers, rows
 
 
 def _effective_region_color(table, region):
