@@ -16,6 +16,7 @@ The consequence is that a merged region never widens the table. Content longer
 than the span it was given is truncated, not accommodated.
 """
 
+import operator
 import re
 from typing import List, NamedTuple, Optional
 
@@ -99,6 +100,25 @@ def normalise(first_row, first_column, last_row, last_column, value, align,
     single cell, coordinates outside the table, an unknown alignment, or an
     overlap with a merge already in place.
     """
+    # Coordinates are indexes. ``operator.index`` accepts ints and integer
+    # types such as numpy's, and turns anything else -- a float, or a
+    # ``(row, column)`` pair given where a single number goes -- into a
+    # TypeError naming the argument, instead of a comparison error from
+    # deep inside the validation or the renderer.
+    coordinates = []
+    for name, coordinate in (('first_row', first_row),
+                             ('first_column', first_column),
+                             ('last_row', last_row),
+                             ('last_column', last_column)):
+        try:
+            coordinates.append(operator.index(coordinate))
+        except TypeError:
+            raise TypeError(
+                f'{name} must be an integer, not '
+                f'{type(coordinate).__name__} ({coordinate!r})'
+            ) from None
+    first_row, first_column, last_row, last_column = coordinates
+
     first_row, last_row = sorted((first_row, last_row))
     first_column, last_column = sorted((first_column, last_column))
 
