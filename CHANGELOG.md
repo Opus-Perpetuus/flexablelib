@@ -2,9 +2,27 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
-## [Unreleased]
+## [2.0.21] - 2026-11-03
 
 ### Fixed
+- Text exports (``to_csv``, ``to_markdown``, ``to_rst``, ``to_asciidoc``,
+  ``to_latex``, ``to_html``) and ``to_records`` wrote
+  ``<flexablelib.utils.ValuePlacer object at ...>`` for gaps -- short rows
+  padded by the table, NaN/NULL from the readers, ``table.missing``. Gaps
+  now export as empty cells (``None`` in records).
+- ``include_index=True`` wrote ``<...IndexCounter object at ...>`` in every
+  row, and left the index out when ``show_index`` was off. The index is now
+  numbered like the rendered one (``index_start``, ``index_step``,
+  ``index_title``, ``roman_index``).
+- A float column whose numbers have no decimal point (``1e+20``) rendered
+  one character wider than its border.
+- ``vrules='none'`` kept the corners of the horizontal rules, which made
+  them two columns wider than the rows.
+- ``transpose()`` / ``rotate()`` showed gaps blank instead of the missing
+  value and exported the sentinel's repr; the missing value is carried over.
+- ``merge_cells`` with a non-integer coordinate (a float, or a
+  ``(row, column)`` pair) raises a ``TypeError`` naming the argument instead
+  of a comparison error.
 - ``plain`` style: the blank line under the header was one column shorter
   than the rows (no junction between columns), so ``compose()`` output was
   not rectangular.
