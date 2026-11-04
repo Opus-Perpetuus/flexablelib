@@ -3617,7 +3617,7 @@ class Table(object):
                 )
                 self.__get_column_widths(semi=False)
             # Raise floors from column_min_width and re-assert max budgets.
-            self.__clamp_column_widths()
+            self.__clamp_column_widths(merge_floors=True)
             table_width = self.__get_string_table_width()
             # Grow first when asked, then shrink if still over budget.
             if self.__expand_to_window:
@@ -4164,13 +4164,51 @@ class Table(object):
             return None
         return int(bounds)
 
-    def __clamp_column_widths(self):
+    def __collapsed_merge_floors(self):
+        """
+        Width each drawn column needs for merges left with only that column.
+
+        A merge across several columns, with all but one of them in
+        ``hide_columns`` (or hidden as empty), shrinks to the column still
+        drawn -- the same thing the exports do. Its text then has that one
+        column to itself, so the column has to fit it, as it would an
+        ordinary cell; sized by its own content alone it printed ``.``.
+        Merges still spanning two or more drawn columns are untouched: a merge
+        never widens the table.
+        """
+        if not self.__merged_regions:
+            return {}
+        offset = 1 if self.__show_index else 0
+        hidden = set(self.__effective_hidden_columns(self.__show_index))
+        if not hidden:
+            return {}
+        floors = {}
+        for region in self.__merged_regions:
+            if region.value is None:
+                continue
+            columns = range(region.first_column + offset,
+                            region.last_column + offset + 1)
+            drawn = [c for c in columns if c not in hidden]
+            if len(drawn) != 1 or len(drawn) == len(columns):
+                continue
+            needed = max(
+                visible_width(strip_ansi(part))
+                for part in str(region.value).split('\n')
+            )
+            floors[drawn[0]] = max(floors.get(drawn[0], 0), needed)
+        return floors
+
+    def __clamp_column_widths(self, merge_floors=False):
         """
         Enforce column_min_width / column_max_width on the measured widths.
 
         Only the width numbers are changed here. Content that still exceeds a
         max is reduced by :meth:`__enforce_column_max_widths`, which walks the
         same wrap/trim path as a terminal fit.
+
+        ``merge_floors`` also widens a column holding a merge that hiding left
+        with that one column (:meth:`__collapsed_merge_floors`). Only the
+        first clamp does it, so a terminal fit can still narrow it afterwards.
         """
         if self.__show_index:
             headers = list(self.__headers_with_i)
@@ -4184,6 +4222,7 @@ class Table(object):
         if not widths:
             return
 
+        collapsed = self.__collapsed_merge_floors() if merge_floors else {}
         for column_i, header in enumerate(headers):
             # Index column (position 0 with show_index) is not user-facing.
             user_i = None if (self.__show_index and column_i == 0) else (
@@ -4203,6 +4242,8 @@ class Table(object):
             # clamping the number anyway drew a frame narrower than the text.
             content = widths[column_i]
             width = content
+            if merge_floors and column_i in collapsed:
+                width = max(width, collapsed[column_i])
             if lo is not None:
                 width = max(width, int(lo))
             if hi is not None:
