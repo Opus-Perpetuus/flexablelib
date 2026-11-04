@@ -850,6 +850,9 @@ class Table(object):
         # Filled during compose so filter/sort and empty-row hiding share
         # the same row indices for the current render.
         self.__compose_empty_row_indexes = None
+        # Stored row behind each display row of the current render, or None
+        # when no filter/sort reordered them. color_rule reads values by it.
+        self.__compose_row_order = None
         # +--------------------------+ STYLE +---------------------------+
         # HEADER STYLES: None, l, u, t, c
         #   None: unmodified
@@ -2145,10 +2148,10 @@ class Table(object):
     @index_title.setter
     def index_title(self, value):
         label = I_COL_TIT if value is None else str(value)
-        new_title = IndexColumnTitle(label)
         old_title = self.__index_title
-        if new_title is old_title:
+        if label == str(old_title):
             return
+        new_title = IndexColumnTitle(label)
         for mapping in (
             self.__columns_with_i,
             self.__cell_types_with_i,
@@ -2160,7 +2163,16 @@ class Table(object):
             self.__semi_processed_columns_with_i,
         ):
             if old_title in mapping:
-                mapping[new_title] = mapping.pop(old_title)
+                # Rebuild in place, keeping the index key where it was. A
+                # pop-and-reinsert moved it to the end, and every structure
+                # read positionally (alignments, widths) then shifted by one
+                # column: renaming the index realigned the data columns.
+                items = [
+                    (new_title if key is old_title else key, value)
+                    for key, value in mapping.items()
+                ]
+                mapping.clear()
+                mapping.update(items)
         if self.__headers_with_i and self.__headers_with_i[0] is old_title:
             self.__headers_with_i[0] = new_title
         self.__index_title = new_title
@@ -3071,6 +3083,13 @@ class Table(object):
         except IndexError:
             return None
         source = self.__columns_with_i if self.__show_index else self.__columns
+        # row_i counts display rows. After a sort or filter they are no longer
+        # in stored order, and the rule was handed another row's value.
+        order = self.__compose_row_order
+        if order is not None:
+            if not 0 <= row_i < len(order):
+                return None
+            row_i = order[row_i]
         try:
             return source[title][row_i]
         except (KeyError, IndexError):
@@ -3559,6 +3578,7 @@ class Table(object):
         # Cleared every render; set after the display rows are materialised
         # so filter/sort and empty-row hiding agree on the same indices.
         self.__compose_empty_row_indexes = None
+        self.__compose_row_order = None
         if len(self.__columns) != 0:
             # Refuse to render into a space where the result would be
             # illegible, if the caller asked to be told -- issue #14.
@@ -4471,6 +4491,7 @@ class Table(object):
             if old_i in empty_stored
         ]
         if order != list(range(len(rows))):
+            self.__compose_row_order = list(order)
             rows = [rows[i] for i in order]
             rows_with_i = [rows_with_i[i] for i in order]
             # Index was consumed in stored order; renumber visible rows so
@@ -5896,6 +5917,11 @@ class Table(object):
         Requires headers (or existing columns) so widths can be measured
         before the first streamed row.
 
+        Lines look as ``compose()`` would draw them: formats, alignment,
+        colours, ``row_filter``, dividers and merges carry over. ``sort_by``
+        does not -- a sorted row could land above lines already yielded --
+        so rows stream in the order they arrive.
+
         Parameters
         ----------
         rows : iterable
@@ -5987,42 +6013,81 @@ class Table(object):
             n += 1
         return n
 
-    def __display_clone(self, include_rows=True):
-        """Shallow display copy used by stream/paginate helpers."""
-        headers = list(self.headers)
-        rows = []
-        if include_rows:
-            for row_i in range(self.__real_row_count):
-                row = []
-                for header in headers:
-                    col = self.__columns.get(header, [])
-                    if row_i < len(col):
-                        cell = col[row_i]
-                        if isinstance(cell, ValuePlacer):
-                            cell = self.__missing_value
-                        row.append(cell)
-                    else:
-                        row.append(self.__missing_value)
-                rows.append(row)
-        out = type(self).from_records(
+    # Display settings a derived table (stream, paginate) takes from its
+    # parent. Each is global or keyed by column, so it means the same thing
+    # on any subset of the rows. Row-keyed settings are handled by the caller.
+    _DISPLAY_SETTINGS = (
+        'title', 'caption', 'show_headers', 'show_index', 'header_color',
+        'border_color', 'use_colors', 'footer_color', 'cell_padding',
+        'overflow', 'auto_wrap', 'valign', 'col_valign', 'panel', 'shadow',
+        'str_align', 'int_align', 'float_align', 'bool_align', 'col_alignment',
+        'header_align', 'max_width', 'max_table_width', 'table_align',
+        'hide_columns', 'index_title', 'roman_index', 'number_columns',
+        'strip_cells', 'hrules', 'vrules', 'index_start', 'index_step',
+        'leading_zeros', 'float_format', 'int_format', 'custom_format',
+        'column_min_width', 'column_max_width', 'column_colors',
+        'expand_to_window', 'justify', 'suppress_empty', 'show_margin',
+        'show_empty_rows', 'show_empty_columns', 'parse_str_numbers',
+        'too_narrow_message',
+    )
+
+    def __copy_display_settings(self, out):
+        """Give ``out`` this table's row-independent display settings."""
+        for attr in self._DISPLAY_SETTINGS:
+            try:
+                setattr(out, attr, getattr(self, attr))
+            except (AttributeError, TypeError, ValueError):
+                pass
+        out.__border_texts = [dict(entry) for entry in self.__border_texts]
+
+    def __stored_row(self, row_i, headers):
+        """One stored row with gaps turned into the missing value."""
+        row = []
+        for header in headers:
+            col = self.__columns.get(header, [])
+            cell = col[row_i] if row_i < len(col) else self.__missing_value
+            if isinstance(cell, ValuePlacer):
+                cell = self.__missing_value
+            row.append(cell)
+        return row
+
+    def __derived_table(self, rows, headers):
+        """A table of ``rows`` styled like this one, values kept as stored."""
+        # parse_numbers=False: the cells are already typed. Parsing them again
+        # turned the text '1e3' into 1000.0 and '007' into 7 on every page.
+        return type(self).from_records(
             rows,
             headers=headers if headers else None,
+            parse_numbers=False,
             style_name=self.style_name,
             missing_val=self.__missing_value,
         )
-        for attr in (
-            'title', 'caption', 'show_headers', 'show_index', 'header_color',
-            'border_color', 'use_colors', 'zebra', 'footer_rows', 'footer_color',
-            'cell_padding', 'overflow', 'auto_wrap', 'valign', 'col_valign',
-            'panel', 'shadow', 'col_alignment', 'header_align', 'max_width',
-            'table_align', 'hide_columns', 'index_title', 'roman_index',
-            'number_columns', 'strip_cells', 'hrules', 'vrules',
-            'index_start', 'index_step',
-        ):
-            try:
-                setattr(out, attr, getattr(self, attr))
-            except Exception:
-                pass
+
+    def __display_clone(self, include_rows=True):
+        """Display copy used by ``stream``: same rows, same settings."""
+        headers = list(self.headers)
+        rows = []
+        if include_rows:
+            rows = [
+                self.__stored_row(row_i, headers)
+                for row_i in range(self.__real_row_count)
+            ]
+        out = self.__derived_table(rows, headers)
+        self.__copy_display_settings(out)
+        out.zebra = self.__zebra
+        out.footer_rows = self.__footer_rows
+        if include_rows:
+            # The clone holds the same rows in the same order, so row-keyed
+            # settings carry over as they are.
+            out.row_colors = self.__row_colors
+            out.cell_colors = self.__cell_colors
+            out.cell_valign = self.__cell_valign
+            out.color_rule = self.__color_rule
+            # A filter only drops rows, so lines already streamed stay put.
+            # sort_by is left out: it would move them.
+            out.row_filter = self.__row_filter
+            out.__dividers = set(self.__dividers)
+            out.__merged_regions = list(self.__merged_regions)
         return out
 
     def __lookup_width_map(self, spec, header, index):
@@ -6093,44 +6158,96 @@ class Table(object):
         headers repeat on every page; with False, only the first page shows
         them. ``page_label`` adds ``page k/n`` to each page title.
         Returns a list of strings. ``page_length`` must be >= 1.
+
+        Pages hold the rows in the order ``compose()`` shows them --
+        ``sort_by`` and ``row_filter`` applied, empty rows left out when
+        ``show_empty_rows`` is off -- with the same formats and colours. The
+        index keeps counting across pages, and row-keyed settings
+        (``row_colors``, ``cell_colors``, ``cell_valign``, ``color_rule``,
+        ``zebra``, ``footer_rows``, dividers, merges) follow their rows; a
+        merge split by a page break is dropped.
         Inspired by PrettyTable ``paginate`` / go-pretty.
         """
         page_length = int(page_length)
         if page_length < 1:
             raise ValueError('page_length must be >= 1')
         headers = list(self.headers)
-        n = self.row_count
+        stored = [
+            self.__stored_row(row_i, headers)
+            for row_i in range(self.__real_row_count)
+        ]
+        # Display positions, as compose() numbers them for row_colors and
+        # friends, and the stored row shown at each one.
+        order = self.__display_row_order(stored)
+        hidden = (
+            set() if self.__show_empty_rows else set(self.__empty_row_indexes)
+        )
+        positions = [p for p, row_i in enumerate(order) if row_i not in hidden]
+        n = len(positions)
         if n == 0:
             return [self.compose()]
         total_pages = (n + page_length - 1) // page_length
+        footer_from = len(order) - int(self.__footer_rows or 0)
         pages = []
         for page_num, start in enumerate(range(0, n, page_length), start=1):
-            end = min(start + page_length, n)
-            slice_rows = []
-            for row_i in range(start, end):
-                row = []
-                for header in headers:
-                    col = self.__columns.get(header, [])
-                    row.append(col[row_i] if row_i < len(col) else self.__missing_value)
-                slice_rows.append(row)
-            page = type(self).from_records(
-                slice_rows, headers=headers, style_name=self.style_name,
-                missing_val=self.__missing_value,
+            visible = positions[start:start + page_length]
+            # Hidden empty rows travel with the page they fall inside (the
+            # first and last pages take the ones before and after every
+            # visible row), so the page types its columns as the table does.
+            first_p = 0 if start == 0 else visible[0]
+            last_p = (
+                len(order) - 1 if start + page_length >= n else visible[-1]
             )
-            # Copy common display settings so pages look like the parent.
-            for attr in (
-                'title', 'caption', 'show_headers', 'show_index', 'header_color',
-                'border_color', 'use_colors', 'zebra', 'footer_rows', 'footer_color',
-                'cell_padding', 'overflow', 'auto_wrap', 'valign', 'col_valign',
-                'panel', 'shadow', 'col_alignment', 'header_align', 'max_width',
-                'column_min_width', 'column_max_width', 'table_align',
-                'hide_columns', 'index_title', 'roman_index', 'number_columns',
-                'strip_cells', 'hrules', 'vrules', 'index_start', 'index_step',
-            ):
-                try:
-                    setattr(page, attr, getattr(self, attr))
-                except Exception:
-                    pass
+            page_positions = list(range(first_p, last_p + 1))
+            local = {p: j for j, p in enumerate(page_positions)}
+            page = self.__derived_table(
+                [stored[order[p]] for p in page_positions], headers
+            )
+            self.__copy_display_settings(page)
+            page.sort_by = None
+            page.row_filter = None
+            # The index carries on from the previous page.
+            page.index_start = self.__i_start + start * self.__i_step
+            page.footer_rows = sum(1 for p in page_positions if p >= footer_from)
+            zebra = self.__zebra
+            if zebra and page_positions[0] % 2:
+                # Stripes are by row parity; an odd first row swaps them.
+                if isinstance(zebra, (list, tuple)) and len(zebra) >= 2:
+                    zebra = (zebra[1], zebra[0])
+                else:
+                    zebra = (zebra, None)
+            page.zebra = zebra
+            page.row_colors = {
+                local[r]: spec for r, spec in self.__row_colors.items()
+                if r in local
+            }
+            for name, mapping in (('cell_colors', self.__cell_colors),
+                                  ('cell_valign', self.__cell_valign)):
+                remapped = {
+                    (local[key[0]], key[1]): spec
+                    for key, spec in mapping.items()
+                    if isinstance(key, tuple) and key[0] in local
+                }
+                if remapped:
+                    setattr(page, name, remapped)
+            if self.__color_rule is not None:
+                rule = self.__color_rule
+                page.color_rule = (
+                    lambda value, row, column, _rule=rule, _pos=page_positions:
+                    _rule(value, _pos[row] if 0 <= row < len(_pos) else row,
+                          column)
+                )
+            last = visible[-1]
+            for after in self.__dividers:
+                if after in local and after != last:
+                    page.add_divider(local[after])
+            for region in self.__merged_regions:
+                first, final = region.first_row, region.last_row
+                if (first in local and final in local
+                        and local[final] - local[first] == final - first):
+                    page.__merged_regions.append(region._replace(
+                        first_row=local[first], last_row=local[final],
+                    ))
             if not freeze_header and page_num > 1:
                 page.show_headers = False
             if page_label:
@@ -6139,14 +6256,6 @@ class Table(object):
                 page.title = (
                     '{0} ({1})'.format(existing, label) if existing else label
                 )
-            if self.__cell_colors:
-                # Remap absolute row indexes into the page's local indexes.
-                remapped = {}
-                for (r, c), spec in self.__cell_colors.items():
-                    if isinstance(r, int) and start <= r < end:
-                        remapped[(r - start, c)] = spec
-                if remapped:
-                    page.cell_colors = remapped
             pages.append(page.compose())
         return pages
 
