@@ -360,6 +360,25 @@ table.to_html('report.html', paginate=25)
 table.to_excel('report.xlsx')
 ```
 
+Since 2.2.0 every export writes the table as `print(table)` shows it: rows in
+`sort_by` order (with `sort_reverse` and callables), `row_filter` applied,
+`hide_columns` left out, and the text formats (`to_csv`, `to_markdown`,
+`to_html`, `to_rst`, `to_asciidoc`, `to_latex`) hold the formatted strings —
+`float_format`, `int_format`, `leading_zeros`, `custom_format`, `strip_cells` —
+without padding or colour. Empty cells are empty strings.
+
+```python
+table.sort_by, table.sort_reverse = 'Uptime', True
+table.row_filter = lambda row: row[1] < 99.9
+table.float_format = '.1f'
+table.to_markdown()                  # same rows, order and numbers as print(table)
+```
+
+`to_records()` keeps the stored Python values (numbers stay numbers, gaps are
+`None`) in display order; `to_records(formatted=True)` gives the printed
+strings. `to_excel()` writes numbers as numbers and turns simple format specs
+(`',d'`, `'.2f'`, `'.1%'`, `'{:,.2f}'`…) into the cell's Excel number format.
+
 `to_html` writes one self-contained file — the stylesheet and the sorting,
 filtering and pagination script are inline — so it works offline and from a
 `file://` URL.
@@ -374,8 +393,9 @@ table.parse_str_numbers = True
 
 Values with leading zeros are left alone, so `'007'` stays a string.
 
-`table.rows` is a copy of the data, with `None` in empty cells (the same values
-as `to_records()`), so editing it does not change the table. Use `add_row` and
+`table.rows` is a copy of the stored data, in insertion order and with `None`
+in empty cells (sorting, filtering and formats do not touch it), so editing it
+does not change the table. Use `add_row` and
 `set_cell` instead:
 
 ```python

@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.2.0] - 2026-11-04
+
+### Changed (breaking)
+- Exports now write the table as ``compose()`` shows it. ``to_csv``,
+  ``to_markdown``, ``to_html``, ``to_rst``, ``to_asciidoc``, ``to_latex``,
+  ``to_excel``, ``to_records`` and ``_repr_html_`` follow ``sort_by``
+  (``sort_reverse``, callables) and ``row_filter``, leave out
+  ``hide_columns`` (and empty rows/columns when ``show_empty_rows`` /
+  ``show_empty_columns`` are off), and number the index by display position.
+  Before, they wrote every stored row in insertion order.
+- The text exports (CSV, Markdown, HTML, RST, AsciiDoc, LaTeX) hold the
+  formatted strings ``compose()`` prints -- ``float_format``,
+  ``int_format``, ``leading_zeros``, ``custom_format``, ``strip_cells`` --
+  without padding or ANSI codes. Before, they wrote ``str()`` of the raw
+  value. Gaps stay empty strings. Reading such an export back gives the
+  printed text (``'1,200'`` stays a string).
+- ``to_records()`` keeps the stored Python values (numbers stay numbers, gaps
+  ``None``) but in display order, filtered, without hidden columns.
+- ``to_excel()`` keeps numbers numeric; other cells hold the displayed text.
+- Merges keep their display position, as in ``compose()``; a merge split by
+  ``show_empty_rows=False`` is dropped and one over hidden columns shrinks.
+- ``Table.rows`` is unchanged: the stored data in insertion order.
+
+### Added
+- ``to_records(formatted=True)`` returns the displayed strings.
+- ``to_excel()`` turns simple ``int_format`` / ``float_format`` /
+  ``custom_format`` specs and ``leading_zeros`` into Excel number formats
+  (``',d'`` -> ``#,##0``, ``'.2f'`` -> ``0.00``, ``'.1%'`` -> ``0.0%``,
+  ``'$ {:,.2f}'`` -> ``"$ "#,##0.00``).
+- ``to_html()`` sorts numeric columns on the stored number, so formatted
+  values such as ``1,200`` sort correctly in the browser.
+
 ## [2.1.1] - 2026-11-04
 
 ### Fixed

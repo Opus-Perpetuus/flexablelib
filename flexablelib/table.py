@@ -6150,6 +6150,127 @@ class Table(object):
         """Alias of :meth:`transpose` (tabled naming)."""
         return self.transpose(**options)
 
+    def _export_view(self, include_index=False):
+        """
+        What the writers export: the rows ``compose()`` shows, as data.
+
+        Rows come in display order -- ``row_filter`` and ``sort_by`` (with
+        ``sort_reverse`` and callables) applied, empty rows left out when
+        ``show_empty_rows`` is off. Columns in ``hide_columns`` are left out,
+        and so are empty columns when ``show_empty_columns`` is off.
+
+        Returns a namespace with:
+
+        - ``headers``: header names (``index_title`` first with the index).
+        - ``raw``: cell values as stored, ``None`` in the gaps.
+        - ``text``: the strings ``compose()`` prints for each cell --
+          ``int_format``, ``float_format``, ``leading_zeros``,
+          ``custom_format`` and ``strip_cells`` applied, colour stripped, no
+          padding -- ``''`` in the gaps.
+        - ``merges``: ``merged_regions`` in export coordinates (data columns,
+          index excluded); merges broken up by the filter, or covering only
+          hidden columns, are dropped.
+        - ``index``: whether the first column is the index.
+
+        ``Table.rows`` stays the stored copy; this is only for writers.
+        """
+        from types import SimpleNamespace
+
+        headers = list(self.__headers)
+        n_rows = self.__real_row_count
+        stored = [self.__stored_row(row_i, headers) for row_i in range(n_rows)]
+
+        def is_gap(cell):
+            return cell is None or isinstance(cell, ValuePlacer)
+
+        # Raw values, gaps as None -- both the padding marker and the cells
+        # filled with ``missing_value`` above.
+        raw_rows = []
+        for row_i in range(n_rows):
+            row = []
+            for header in headers:
+                col = self.__columns.get(header, [])
+                cell = col[row_i] if row_i < len(col) else None
+                row.append(None if is_gap(cell) else cell)
+            raw_rows.append(row)
+
+        order = self.__display_row_order(stored)
+        hidden_rows = (
+            set() if self.__show_empty_rows else set(self.__empty_row_indexes)
+        )
+        # Display position (what merges are keyed on) -> exported row.
+        position_to_row = {}
+        kept = []
+        for position, row_i in enumerate(order):
+            if row_i in hidden_rows:
+                continue
+            position_to_row[position] = len(kept)
+            kept.append(row_i)
+
+        hidden_cols = set(self.__user_hidden_column_indexes(False))
+        if not self.__show_empty_columns:
+            for column_i in range(len(headers)):
+                if all(
+                    is_empty_cell(raw_rows[row_i][column_i], self.__value_placer)
+                    for row_i in range(n_rows)
+                ):
+                    hidden_cols.add(column_i)
+        visible = [i for i in range(len(headers)) if i not in hidden_cols]
+        column_to_export = {c: j for j, c in enumerate(visible)}
+
+        out_headers = [str(headers[c]) for c in visible]
+        out_raw = []
+        out_text = []
+        for row_i in kept:
+            raw_row = raw_rows[row_i]
+            out_raw.append([raw_row[c] for c in visible])
+            texts = []
+            for c in visible:
+                value = raw_row[c]
+                if value is None:
+                    texts.append('')
+                    continue
+                shown = self.__format_display_value(value, headers[c], c)
+                texts.append('' if shown is None else strip_ansi(str(shown)))
+            out_text.append(texts)
+
+        merges = []
+        for region in self.__merged_regions:
+            rows_span = range(region.first_row, region.last_row + 1)
+            mapped_rows = [position_to_row.get(p) for p in rows_span]
+            if any(r is None for r in mapped_rows):
+                continue
+            if mapped_rows[-1] - mapped_rows[0] != len(mapped_rows) - 1:
+                continue
+            cols = [
+                column_to_export[c]
+                for c in range(region.first_column, region.last_column + 1)
+                if c in column_to_export
+            ]
+            if not cols:
+                continue
+            merges.append(region._replace(
+                first_row=mapped_rows[0], last_row=mapped_rows[-1],
+                first_column=cols[0], last_column=cols[-1],
+            ))
+
+        if include_index:
+            start, step = self.index_start, self.index_step
+            labels = []
+            for export_i in range(len(kept)):
+                label = start + export_i * step
+                labels.append(to_roman(label) if self.roman_index else label)
+            out_headers = [str(self.index_title)] + out_headers
+            out_raw = [[label] + row for label, row in zip(labels, out_raw)]
+            out_text = [
+                [str(label)] + row for label, row in zip(labels, out_text)
+            ]
+
+        return SimpleNamespace(
+            headers=out_headers, raw=out_raw, text=out_text,
+            merges=merges, index=bool(include_index),
+        )
+
     def paginate(self, page_length=20, freeze_header=True, page_label=False):
         """
         Split the table into composed string pages of ``page_length`` body rows.
@@ -6271,10 +6392,17 @@ class Table(object):
         from .readers import from_markdown
         return from_markdown(cls, source, parse_numbers=parse_numbers, **options)
 
-    def to_records(self, include_index=False):
-        """The table as a list of dicts, one per row."""
+    def to_records(self, include_index=False, formatted=False):
+        """
+        The table as a list of dicts, one per row, in display order.
+
+        ``sort_by`` and ``row_filter`` are applied and ``hide_columns`` left
+        out, like every export since 2.2.0. Values stay the stored Python
+        objects (numbers remain numbers); ``formatted=True`` returns the
+        strings ``compose()`` shows instead. Gaps are ``None``.
+        """
         from .writers import to_records
-        return to_records(self, include_index)
+        return to_records(self, include_index, formatted)
 
     def to_csv(self, target=None, include_index=False, delimiter=',',
                encoding='utf-8', dialect=None, quoting=None, quotechar=None,
