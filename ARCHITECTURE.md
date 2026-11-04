@@ -257,7 +257,10 @@ unusual for a Python package and worth knowing before you cut a release:
 - `setup.py` reads it at build time: `version = read_json('./package.json')['version']`.
 - To release: bump `version` in `package.json`, add the `CHANGELOG.md` entry by hand, merge
   `dev-yael` into `main`, then push a `vX.Y.Z` tag. The `wheels` workflow builds the sdist and
-  the cibuildwheel wheels (CPython 3.8–3.14) and publishes them to PyPI.
+  the cibuildwheel wheels (CPython 3.8–3.14 on Linux, Windows and macOS arm64: 28 wheels) and
+  publishes all 29 files to PyPI once every one is built. The tag push is the only trigger
+  that publishes; the GitHub release is notes only. If a build job fails, "Re-run failed
+  jobs" on that run completes the upload (`skip-existing`).
 - To install a local build: `python3 -m pip install .` from the repository root.
 
 So `setup.py` must be run from the repository root — it resolves `./package.json` relative to
