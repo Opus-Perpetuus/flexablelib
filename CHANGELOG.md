@@ -25,6 +25,11 @@ All notable changes to this project will be documented in this file. See [standa
   (Linux manylinux + musllinux, Windows, macOS arm64; CPython 3.8-3.14) and
   the sdist, checks the count and that the tag matches ``package.json``, and
   is safe to re-run. One run per ref (``concurrency``).
+- The real reason the macOS job never started: GitHub's hosted macOS arm64
+  runners are short of capacity, and a job no runner picks up is cancelled
+  after ~15 minutes. A new ``wheels-retry`` workflow re-runs the failed or
+  cancelled jobs of a tag run (up to three more attempts), so publishing
+  finishes on its own.
 - Actions moved off Node 20: ``checkout@v5``, ``setup-python@v6``,
   ``upload-artifact@v6``, ``download-artifact@v7``.
 
