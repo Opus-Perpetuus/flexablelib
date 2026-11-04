@@ -374,6 +374,15 @@ table.parse_str_numbers = True
 
 Values with leading zeros are left alone, so `'007'` stays a string.
 
+`table.rows` is a copy of the data, with `None` in empty cells (the same values
+as `to_records()`), so editing it does not change the table. Use `add_row` and
+`set_cell` instead:
+
+```python
+table.set_cell(0, 'Uptime', 98.2)    # row position, column position or header
+table.set_cell(1, 2, table.missing)  # empty a cell
+```
+
 ## Merging cells
 
 Render a rectangular block as a single cell, across columns, down rows, or
