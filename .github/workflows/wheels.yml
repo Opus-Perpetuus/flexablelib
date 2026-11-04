@@ -5,6 +5,8 @@ name: wheels
 # does not trigger a build -- a second run fired by `release: published`
 # used to queue a second macOS job next to the tag's, the tag run's macOS job
 # never got a runner, and the tag run published without the macOS wheels.
+# When the macOS arm64 pool is short of capacity GitHub cancels a job no runner
+# picked up after ~15 minutes; wheels-retry.yml then re-runs the failed jobs.
 on:
   push:
     tags: ['v*']
