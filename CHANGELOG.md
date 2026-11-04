@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.1.0] - 2026-11-03
+
+### Changed (breaking)
+- ``Table.rows`` returns a copy (new outer list and new row lists) with
+  ``None`` in empty or missing cells, the same values ``to_records`` gives;
+  editing it no longer changes the table. Code that edited ``t.rows`` in place
+  should use ``add_row`` and the new ``set_cell(row, column, value)``.
+
+### Added
+- ``Table.set_cell(row, column, value)``: replace one cell by row position and
+  column position or header (``table.missing`` empties it). It keeps the row
+  and column stores in sync, which editing ``t.rows`` never did.
+
 ## [2.0.21] - 2026-11-03
 
 ### Fixed

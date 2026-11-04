@@ -69,12 +69,9 @@ def _table_data(table, include_index: bool):
     into the CSV field, the Markdown cell or the record. It leaves here as
     ``None``, which every writer already turns into an empty cell.
     """
-    missing = table.missing
     headers = [str(header) for header in table.headers]
-    rows = [
-        [None if cell is missing else cell for cell in row]
-        for row in table.rows
-    ]
+    # ``table.rows`` is already a copy with ``None`` in the gaps.
+    rows = table.rows
     if include_index:
         # The stored index column holds a counter object that only the
         # renderer knows how to read, so exports wrote its ``repr`` in every
