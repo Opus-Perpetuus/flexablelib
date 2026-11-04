@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.1.1] - 2026-11-04
+
+### Fixed
+- ``paginate()`` and ``stream()`` dropped most of the table's settings:
+  ``float_format``, ``int_format``, ``custom_format``, ``leading_zeros``,
+  ``str_align``/``int_align``/``float_align``/``bool_align``,
+  ``column_colors``, ``max_table_width``, ``show_empty_rows`` and border
+  texts, among others. They now render like ``compose()``.
+- ``paginate()`` and ``stream()`` re-parsed text cells, so ``'1e3'`` printed
+  as ``1000.0``. Values are kept as stored.
+- ``paginate()`` ignored ``sort_by`` and ``row_filter``, and with
+  ``show_empty_rows=False`` a page could lose visible rows. Pages now hold
+  the rows in display order, the index keeps counting across pages, and
+  ``row_colors``, ``cell_colors``, ``cell_valign``, ``color_rule``,
+  ``zebra``, ``footer_rows``, dividers and merges follow their rows (a merge
+  split by a page break is dropped).
+- ``stream()`` now honours ``row_filter``, ``row_colors``, ``cell_colors``,
+  ``color_rule``, dividers and merges. ``sort_by`` is still not applied while
+  streaming (documented).
+- ``color_rule`` received another row's value after ``sort_by`` or
+  ``row_filter`` reordered the body, so it painted the wrong cells.
+- Setting ``index_title`` (even to its current value) shifted the column
+  alignments and widths by one column.
+
 ## [2.1.0] - 2026-11-03
 
 ### Changed (breaking)
