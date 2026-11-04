@@ -1153,9 +1153,22 @@ class Table(object):
     @property
     def rows(self) -> List[list]:
         """
-        The data of the table as rows.
+        A copy of the table's data as rows.
+
+        Each call returns a new outer list with new row lists, so changing it
+        never changes the table; use :meth:`add_row` and :meth:`set_cell` for
+        that. Empty or missing cells come back as ``None``, the same value
+        :meth:`to_records` and the exports use.
         """
-        return self.__rows
+        width = len(self.__headers)
+        copied = []
+        for row in self.__rows:
+            values = [None if isinstance(cell, ValuePlacer) else cell
+                      for cell in row]
+            if len(values) < width:
+                values.extend([None] * (width - len(values)))
+            copied.append(values)
+        return copied
     
     @property
     def internal_rows(self) -> List[list]:
@@ -3334,6 +3347,57 @@ class Table(object):
         self.__transpose_row_to_columns(data)
         self.__adjust_columns_to_row_count(rows_added_before=True)
         
+    def set_cell(self, row: int, column: Union[int, str], value) -> None:
+        """
+        Replace the value of one cell.
+
+        ``row`` is the row position (negative counts from the end) and
+        ``column`` is the column position or its header. Pass
+        :attr:`missing` to empty the cell.
+
+        Example::
+
+            table = Table(rows=[['api', 99.9]], headers=['Service', 'Uptime'])
+            table.set_cell(0, 'Uptime', 98.2)
+        """
+        if isinstance(row, bool) or not isinstance(row, int):
+            raise TypeError(
+                f'set_cell: row must be an int, got {type(row).__name__}'
+            )
+        row_count = len(self.__rows)
+        if not -row_count <= row < row_count:
+            raise IndexError(
+                f'set_cell: row {row} out of range for {row_count} rows'
+            )
+        row %= row_count
+        if isinstance(column, str):
+            if column not in self.__headers:
+                raise KeyError(f'set_cell: no column named {column!r}')
+            column_i = self.__headers.index(column)
+        elif isinstance(column, bool) or not isinstance(column, int):
+            raise TypeError(
+                'set_cell: column must be an int or a header, '
+                f'got {type(column).__name__}'
+            )
+        else:
+            column_count = len(self.__headers)
+            if not -column_count <= column < column_count:
+                raise IndexError(
+                    f'set_cell: column {column} out of range for '
+                    f'{column_count} columns'
+                )
+            column_i = column % column_count
+        if self.__parse_str_numbers and isinstance(value, str):
+            from .readers import parse_value
+            value = parse_value(value, True)
+        header = self.__headers[column_i]
+        # Both orientations hold the same data and both are read while
+        # rendering, so all four stores change together.
+        self.__rows[row][column_i] = value
+        self.__rows_with_i[row][column_i + 1] = value
+        self.__columns[header][row] = value
+        self.__columns_with_i[header][row] = value
+
     def __adjust_headers_to_data_length(self, data: Union[list, tuple]) -> None:
         if data is None:
             headers_to_add = 0
