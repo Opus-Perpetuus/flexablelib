@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.2.1] - 2026-11-04
+
+### Fixed
+- A merge on the first or last drawn row -- often where ``sort_by`` or
+  ``row_filter`` puts it -- rewrote the whole border next to it: the top
+  border under a ``title`` (with ``show_headers=False``) came out as an inner
+  rule (``├───┴───┼───┤``), the bottom border above a ``caption`` lost its
+  corners, ``markdown``/``orgtbl`` header separators turned into ``+---+``,
+  and ``*_eheader`` header separators kept a junction over the merged span.
+  Only the junctions over the merge change now, and each keeps the arms the
+  lines around it really have.
+- A merge covering a column in ``hide_columns`` (or a hidden empty column)
+  that is left with a single drawn column printed ``.``: the column was sized
+  without the merge text. It now shrinks to that column and the column fits
+  the text, as the exports already did.
+
+### CI
+- Wheels: one path to PyPI. Only the ``vX.Y.Z`` tag push builds and
+  publishes; publishing the GitHub release no longer starts a second, duplicate
+  build that competed for the macOS runner. Publishing waits for all 28 wheels
+  (Linux manylinux + musllinux, Windows, macOS arm64; CPython 3.8-3.14) and
+  the sdist, checks the count and that the tag matches ``package.json``, and
+  is safe to re-run. One run per ref (``concurrency``).
+- Actions moved off Node 20: ``checkout@v5``, ``setup-python@v6``,
+  ``upload-artifact@v6``, ``download-artifact@v7``.
+
 ## [2.2.0] - 2026-11-04
 
 ### Changed (breaking)

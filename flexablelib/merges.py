@@ -509,8 +509,44 @@ def _looks_like_rule(line: str, h_glyph: str = None) -> bool:
     )
 
 
+# Glyphs that carry a vertical arm out of their bottom / top edge.
+_VERTICALS = set('|¦:│┃║┊┋┆┇╎╏')
+_NO_DOWN = set('┴└┘╰╯╨╩╧╙╜╚╝╘╛┸┷┻┖┚┗┛')
+_NO_UP = set('┬┌┐╭╮╥╦╤╓╖╔╗╒╕┰┯┳┎┒┏┓')
+
+
+# Light verticals meeting a heavy dash ('╍', '━'): keep the rule's weight.
+_HEAVY_H = set('╍━┅┉')
+_LIGHT_TO_HEAVY_H = {
+    '┼': '┿', '├': '┝', '┤': '┥', '┬': '┯', '┴': '┷',
+    '┌': '┍', '┐': '┑', '└': '┕', '┘': '┙',
+}
+
+
+def _has_arm(line, x, down):
+    """
+    True when the glyph at ``x`` in a neighbouring line reaches this rule.
+
+    ``down`` asks about the line above (does its glyph continue downwards);
+    otherwise about the line below. Text, spaces and dashes do not reach it,
+    which is what tells a top border under a title, or a bottom border over
+    a caption, that it has no arm on that side.
+    """
+    if line is None:
+        return False
+    g = _glyph(_char_at(line, x))
+    if not g or g.isspace() or g in _H_CHARS:
+        return False
+    if g in _VERTICALS or g == '+':
+        return True
+    if g in _JUNCTIONS:
+        return g not in (_NO_DOWN if down else _NO_UP)
+    return False
+
+
 def _repair_rule_junctions(line, layout, composition, h_glyph, missing_south=None, missing_north=None,
-                          no_south=False, no_north=False):
+                          no_south=False, no_north=False, above=False, below=False,
+                          only=None):
     """
     Rebuild every junction on a horizontal rule from the arms that remain.
 
@@ -519,6 +555,16 @@ def _repair_rule_junctions(line, layout, composition, h_glyph, missing_south=Non
 
     ``no_south`` / ``no_north`` force every junction to drop that arm — used for
     the table's outer end/start rules, which never continue past the border.
+
+    ``above`` / ``below``, when not False, are the lines next to this rule (None
+    past either end of the table). An arm is then kept only where that line
+    really reaches the rule, so a top border under a title, a bottom border
+    over a caption, or a header separator under a header drawn without
+    column rules keep their own shape. A junction drawn as a plain vertical
+    (markdown's ``|---|``) stays as it is unless it becomes a pure dash.
+
+    ``only``, when given, limits the rewrite to those x positions; every other
+    junction keeps the style's own glyph (corners such as ``O`` or ``╔``).
     """
     missing_south = missing_south or set()
     missing_north = missing_north or set()
@@ -531,6 +577,8 @@ def _repair_rule_junctions(line, layout, composition, h_glyph, missing_south=Non
     for x, v_glyph in _junction_positions(layout, composition):
         if visible_width(rewritten) <= x:
             continue
+        if only is not None and x not in only:
+            continue
         here = _char_at(rewritten, x)
         # Interior of a multi-column vertical blank: junction was wiped to space.
         if _glyph(here) in ('', ' '):
@@ -541,10 +589,23 @@ def _repair_rule_junctions(line, layout, composition, h_glyph, missing_south=Non
         east = _is_h(right)
         north = (not no_north) and (x not in missing_north)
         south = (not no_south) and (x not in missing_south)
+        if above is not False:
+            north = north and _has_arm(above, x, down=True)
+        if below is not False:
+            south = south and _has_arm(below, x, down=False)
         glyph = _pick_junction(
             v_glyph, h_glyph, north, south, east, west,
             round_corners=round_corners,
         )
+        if h_glyph in _HEAVY_H and glyph in _LIGHT_TO_HEAVY_H:
+            glyph = _LIGHT_TO_HEAVY_H[glyph]
+        if (above is not False and _glyph(here) in _VERTICALS
+                and (north or south)):
+            glyph = here
+        if only is not None and south and not north and _glyph(here) in _NO_UP:
+            glyph = here  # already has no arm upwards, e.g. a header box top
+        if only is not None and north and not south and _glyph(here) in _NO_DOWN:
+            glyph = here  # already closed below, e.g. ╚═══╩═══╝
         rewritten = _repaint(rewritten, x, x + 1, glyph)
     return rewritten
 
@@ -769,8 +830,10 @@ def apply(lines, row_line_map, regions, column_widths, composition,
             line, layout, composition, line_h,
             missing_south=missing_south_by_line.get(line_index),
             missing_north=missing_north_by_line.get(line_index),
-            no_south=(line_index >= len(lines) - 1),
-            no_north=(line_index == 0),
+            above=lines[line_index - 1] if line_index > 0 else None,
+            below=lines[line_index + 1] if line_index + 1 < len(lines) else None,
+            only=(missing_south_by_line.get(line_index, set())
+                  | missing_north_by_line.get(line_index, set())),
         )
 
     # --- Pass 4: synthetic caps for column-only styles ----------------------
@@ -798,8 +861,8 @@ def apply(lines, row_line_map, regions, column_widths, composition,
                     line, layout, composition, line_h,
                     missing_south=plan['s'] or None,
                     missing_north=plan['n'] or None,
-                    no_south=(existing >= len(lines) - 1),
-                    no_north=(existing == 0),
+                    above=lines[existing - 1] if existing > 0 else None,
+                    below=lines[existing + 1] if existing + 1 < len(lines) else None,
                 )
                 continue
 
