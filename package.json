@@ -1,6 +1,6 @@
 {
   "name": "flexablelib",
-  "version": "2.1.1",
+  "version": "2.2.0",
   "private": true,
   "description": "Flexible console and HTML tables for Python: styles, merges, colors, widths, decimal alignment.",
   "repository": {
