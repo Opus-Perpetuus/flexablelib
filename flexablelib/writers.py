@@ -22,6 +22,7 @@ import csv as _csv
 import html as _html
 import io as _io
 import json
+import re
 from typing import Any, List, Optional, Sequence
 
 from .fast import strip_ansi
@@ -58,35 +59,23 @@ def _plain(value: Any) -> str:
     return strip_ansi(str(value)) if value is not None else ''
 
 
-def _table_data(table, include_index: bool):
+def _view(table, include_index: bool):
     """
-    (headers, rows) honouring the index setting.
+    The rows, columns and cell texts ``compose()`` would show.
 
-    Gaps hold the table's ``missing`` sentinel -- short rows padded by the
-    table, NaN and NULL from the readers, ``table.missing`` placed by hand.
-    It is an internal marker with no printable form, and every export used
-    to write its ``repr`` (``<flexablelib.utils.ValuePlacer object at ...>``)
-    into the CSV field, the Markdown cell or the record. It leaves here as
-    ``None``, which every writer already turns into an empty cell.
+    Since 2.2.0 every writer exports the table as it is displayed:
+    ``row_filter`` and ``sort_by`` (``sort_reverse``, callables) applied,
+    ``hide_columns`` left out, and the configured formats (``int_format``,
+    ``float_format``, ``leading_zeros``, ``custom_format``, ``strip_cells``)
+    applied to the text. See :meth:`Table._export_view`.
     """
-    headers = [str(header) for header in table.headers]
-    # ``table.rows`` is already a copy with ``None`` in the gaps.
-    rows = table.rows
-    if include_index:
-        # The stored index column holds a counter object that only the
-        # renderer knows how to read, so exports wrote its ``repr`` in every
-        # row -- and left the column out altogether when ``show_index`` was
-        # off, although the Excel writer already shifted merges for it.
-        # Number the rows here the way the rendered index does.
-        start, step = table.index_start, table.index_step
-        roman = table.roman_index
-        labels = []
-        for row_i in range(len(rows)):
-            label = start + row_i * step
-            labels.append(to_roman(label) if roman else label)
-        headers = [str(table.index_title)] + headers
-        rows = [[label] + row for label, row in zip(labels, rows)]
-    return headers, rows
+    return table._export_view(include_index)
+
+
+def _table_data(table, include_index: bool):
+    """(headers, raw rows) in display order, ``None`` in the gaps."""
+    view = _view(table, include_index)
+    return view.headers, view.raw
 
 
 def _effective_region_color(table, region):
@@ -110,16 +99,20 @@ def _align_style(align: str) -> str:
     return {'l': 'left', 'r': 'right', 'c': 'center'}.get(align, 'center')
 
 
-def _html_body_with_merges(table, include_index: bool = False) -> str:
+def _html_body_with_merges(table, include_index: bool = False,
+                           view=None) -> str:
     """
     Build ``<tr>…</tr>`` rows that honour ``merged_regions`` via rowspan/colspan.
 
     Covered cells are omitted so the browser paints one merged cell. Merge
     coordinates address data columns; an optional index column shifts them by 1.
+    Cells hold the formatted text ``compose()`` shows, in display order.
     """
-    headers, rows = _table_data(table, include_index)
+    if view is None:
+        view = _view(table, include_index)
+    headers, rows = view.headers, view.text
     col_offset = 1 if include_index else 0
-    regions = list(getattr(table, 'merged_regions', []) or [])
+    regions = view.merges
 
     # Map every covered (row, col-in-output) cell -> owning region (or None for top-left).
     covered = {}
@@ -168,10 +161,26 @@ def _html_body_with_merges(table, include_index: bool = False) -> str:
 
 
 
-def to_records(table, include_index: bool = False) -> List[dict]:
-    """The table as a list of dicts, one per row."""
-    headers, rows = _table_data(table, include_index)
-    return [dict(zip(headers, row)) for row in rows]
+def to_records(table, include_index: bool = False,
+               formatted: bool = False) -> List[dict]:
+    """
+    The table as a list of dicts, one per row.
+
+    Rows come in the order ``compose()`` shows them (``sort_by`` and
+    ``row_filter`` applied) and ``hide_columns`` are left out. Values stay
+    the stored Python objects, so numbers remain numbers; ``formatted=True``
+    gives the displayed strings instead. Gaps are ``None`` either way.
+    """
+    view = _view(table, include_index)
+    if not formatted:
+        return [dict(zip(view.headers, row)) for row in view.raw]
+    return [
+        dict(zip(view.headers, [
+            None if raw is None else text
+            for raw, text in zip(raw_row, text_row)
+        ]))
+        for raw_row, text_row in zip(view.raw, view.text)
+    ]
 
 
 def to_simple_html(table, include_index: bool = False) -> str:
@@ -182,7 +191,8 @@ def to_simple_html(table, include_index: bool = False) -> str:
     and friends can embed the table in a cell output. Merged regions become
     ``rowspan`` / ``colspan`` attributes.
     """
-    headers, _rows = _table_data(table, include_index)
+    view = _view(table, include_index)
+    headers = view.headers
     parts = ['<table>']
     title = getattr(table, 'title', None)
     if title:
@@ -197,7 +207,7 @@ def to_simple_html(table, include_index: bool = False) -> str:
             )
         parts.append('</tr></thead>')
     parts.append('<tbody>')
-    parts.append(_html_body_with_merges(table, include_index))
+    parts.append(_html_body_with_merges(table, include_index, view))
     parts.append('</tbody></table>')
     return ''.join(parts)
 
@@ -217,7 +227,8 @@ def to_csv(table, target=None, include_index: bool = False,
     ``doublequote``, ``lineterminator``, ``skipinitialspace``, ``strict``,
     ``dialect``) are forwarded to ``csv.writer``.
     """
-    headers, rows = _table_data(table, include_index)
+    view = _view(table, include_index)
+    headers, rows = view.headers, view.text
     from .readers import _csv_reader_kwargs
     writer_kwargs = _csv_reader_kwargs(
         delimiter=delimiter, dialect=dialect, quoting=quoting,
@@ -310,7 +321,8 @@ def to_markdown(table, include_index: bool = False,
     """
     from .fast import visible_width, pad_to_width
 
-    headers, rows = _table_data(table, include_index)
+    view = _view(table, include_index)
+    headers, rows = view.headers, view.raw
     if not headers:
         return ''
 
@@ -318,7 +330,7 @@ def to_markdown(table, include_index: bool = False,
         return _plain(value).replace('|', '\\|').replace('\n', ' ')
 
     header_texts = [cell(header) for header in headers]
-    row_texts = [[cell(value) for value in row] for row in rows]
+    row_texts = [[cell(value) for value in row] for row in view.text]
 
     if align:
         widths = [
@@ -419,6 +431,8 @@ td.num { text-align: right; }
 _HTML_SCRIPT = """
 (function () {
   var rows = DATA.rows, cols = DATA.headers, numeric = DATA.numeric;
+  // Numeric columns sort on the stored number, not the formatted text.
+  rows.forEach(function (row, i) { row.keys = (DATA.keys || [])[i] || []; });
   var perPage = DATA.perPage, page = 0, sortCol = -1, sortDir = 0;
   var view = rows.slice();
 
@@ -433,7 +447,9 @@ _HTML_SCRIPT = """
   function compare(a, b) {
     var x = a[sortCol], y = b[sortCol];
     if (numeric[sortCol]) {
-      var nx = parseFloat(x), ny = parseFloat(y);
+      var kx = a.keys[sortCol], ky = b.keys[sortCol];
+      var nx = kx === null || kx === undefined ? NaN : kx;
+      var ny = ky === null || ky === undefined ? NaN : ky;
       // Blank and non-numeric cells sort last, whichever way the column goes.
       var bx = isNaN(nx), by = isNaN(ny);
       if (bx && by) return 0;
@@ -519,11 +535,12 @@ _HTML_SCRIPT = """
 def _to_html_merged(table, target, title: str, include_index: bool,
                     encoding: str) -> Optional[str]:
     """Static self-contained HTML page that preserves merged cells."""
-    headers, _rows = _table_data(table, include_index)
+    view = _view(table, include_index)
+    headers = view.headers
     head_cells = ''.join(
         f'<th>{_html.escape(_plain(h))}</th>' for h in headers
     )
-    body = _html_body_with_merges(table, include_index)
+    body = _html_body_with_merges(table, include_index, view)
     markup = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -576,32 +593,50 @@ def to_html(table, target=None, title: str = 'Table', paginate: int = 25,
     When the table has merged regions, a static ``rowspan``/``colspan`` table
     is written instead of the interactive grid (sort/filter would break merges).
     """
-    regions = list(getattr(table, 'merged_regions', []) or [])
-    if regions:
+    view = _view(table, include_index)
+    if view.merges:
         return _to_html_merged(table, target, title, include_index, encoding)
 
-    headers, rows = _table_data(table, include_index)
-    header_texts = [_plain(header) for header in headers]
-    row_texts = [[_plain(cell) for cell in row] for row in rows]
+    header_texts = [_plain(header) for header in view.headers]
+    row_texts = [list(row) for row in view.text]
 
     # A column is treated as numeric for sorting and alignment when every
-    # non-empty cell in it parses as a number.
+    # non-empty cell in it is a number -- judged on the stored value, so a
+    # formatted '1,234.50' or '12.5 %' still sorts as a number.
+    def sort_number(raw, text):
+        if isinstance(raw, bool):
+            return None
+        if isinstance(raw, (int, float)):
+            return None if raw != raw else raw
+        try:
+            return float(text)
+        except ValueError:
+            return None
+
     numeric_flags = []
     for index in range(len(header_texts)):
-        values = [row[index] for row in row_texts
-                  if index < len(row) and row[index].strip()]
-        numeric = bool(values)
-        for value in values:
-            try:
-                float(value)
-            except ValueError:
-                numeric = False
-                break
-        numeric_flags.append(numeric)
+        cells = [
+            (raw_row[index], text_row[index])
+            for raw_row, text_row in zip(view.raw, row_texts)
+            if index < len(text_row) and text_row[index].strip()
+        ]
+        numeric_flags.append(
+            bool(cells)
+            and all(sort_number(raw, text) is not None for raw, text in cells)
+        )
+
+    keys = [
+        [
+            sort_number(raw_row[i], text_row[i]) if numeric_flags[i] else None
+            for i in range(len(text_row))
+        ]
+        for raw_row, text_row in zip(view.raw, row_texts)
+    ]
 
     payload = {
         'headers': header_texts,
         'rows': row_texts,
+        'keys': keys,
         'numeric': numeric_flags,
         'perPage': max(0, int(paginate)),
     }
@@ -670,6 +705,84 @@ var DATA = {_script_safe_json(payload)};
     return None
 
 
+_EXCEL_SPEC = re.compile(
+    r'^(?P<comma>,)?(?:\.(?P<precision>\d+))?(?P<kind>[dfFeE%n]?)$'
+)
+
+
+def _excel_quote(text: str) -> str:
+    return '"{0}"'.format(text.replace('"', '')) if text else ''
+
+
+def _excel_from_spec(spec: str, is_int: bool) -> Optional[str]:
+    """
+    An Excel number format for a Python format spec, or None.
+
+    Covers the common shapes -- ``',d'``, ``'.2f'``, ``',.2f'``, ``'.1%'``,
+    ``'.3e'``, ``'{:,.2f}'``, ``'$ {:,.0f} MXN'`` -- so the spreadsheet shows
+    what the terminal shows while the cell stays a number. Anything else
+    (callables, padding, fill characters) leaves Excel's General format.
+    """
+    prefix = suffix = ''
+    if '{' in spec:
+        match = re.match(r'^([^{}]*)\{(?:0)?:?([^{}]*)\}([^{}]*)$', spec)
+        if not match:
+            return None
+        prefix, spec, suffix = match.groups()
+    match = _EXCEL_SPEC.match(spec)
+    if not match:
+        return None
+    comma = bool(match.group('comma'))
+    precision = match.group('precision')
+    kind = match.group('kind')
+    whole = '#,##0' if comma else '0'
+    if kind in ('', 'n'):
+        if precision is not None:
+            return None
+        body = whole if is_int else None
+        if body is None and not comma:
+            return None
+        body = body or '#,##0.##########'
+    elif kind == 'd':
+        if not is_int:
+            return None
+        body = whole
+    elif kind in ('f', 'F', '%'):
+        digits = int(precision) if precision is not None else 6
+        body = whole + ('.' + '0' * digits if digits else '')
+        if kind == '%':
+            body += '%'
+    else:  # e / E
+        digits = int(precision) if precision is not None else 6
+        body = '0' + ('.' + '0' * digits if digits else '') + 'E+00'
+    return _excel_quote(prefix) + body + _excel_quote(suffix)
+
+
+def _excel_number_format(table, value, header, column_i) -> Optional[str]:
+    """
+    The Excel number format matching how ``compose()`` prints ``value``.
+
+    ``int_format`` / ``float_format`` / ``leading_zeros`` first, then a
+    per-column string spec in ``custom_format`` when the type has none.
+    """
+    is_int = isinstance(value, int)
+    spec = table.int_format if is_int else table.float_format
+    if spec is None and is_int and getattr(table, 'leading_zeros', None):
+        return '0' * int(table.leading_zeros)
+    if spec is None:
+        custom = getattr(table, 'custom_format', None)
+        if isinstance(custom, dict):
+            spec = custom.get(header)
+            if spec is None:
+                spec = custom.get(column_i)
+    if not isinstance(spec, str):
+        return None
+    try:
+        return _excel_from_spec(spec, is_int)
+    except (TypeError, ValueError):
+        return None
+
+
 def to_excel(table, path, sheet_name: str = 'Sheet1',
              include_index: bool = False, autofit: bool = True,
              freeze_header: bool = True) -> None:
@@ -677,7 +790,11 @@ def to_excel(table, path, sheet_name: str = 'Sheet1',
     Write an .xlsx workbook.
 
     Numbers are written as numbers rather than text, so the spreadsheet can
-    compute with them, and are right-aligned to match. The header row is bold
+    compute with them, and are right-aligned to match. Rows follow the
+    displayed order (``sort_by``, ``row_filter``), ``hide_columns`` are left
+    out, simple ``int_format`` / ``float_format`` / ``custom_format`` specs
+    become the cells' Excel number format, and every other cell holds the
+    text ``compose()`` shows. The header row is bold
     and frozen, and column widths are fitted to the content.
     """
     try:
@@ -690,7 +807,10 @@ def to_excel(table, path, sheet_name: str = 'Sheet1',
             'Install it with: pip install flexablelib[excel]'
         )
 
-    headers, rows = _table_data(table, include_index)
+    view = _view(table, include_index)
+    headers, rows, texts = view.headers, view.raw, view.text
+    data_offset = 1 if include_index else 0
+    data_headers = list(table.headers)
 
     workbook = Workbook()
     worksheet = workbook.active
@@ -704,25 +824,37 @@ def to_excel(table, path, sheet_name: str = 'Sheet1',
         cell.fill = header_fill
         cell.alignment = Alignment(horizontal='left', vertical='center')
 
-    for row_index, row in enumerate(rows, start=2):
+    for row_index, (row, text_row) in enumerate(zip(rows, texts), start=2):
         for column_index, value in enumerate(row, start=1):
-            # Keep real numbers numeric so formulas and charts work; anything
-            # else goes in as its plain text.
+            # Keep real numbers numeric so formulas and charts work, with the
+            # table's number format carried over when Excel can express it;
+            # anything else goes in as the text compose() shows.
+            number_format = None
             if isinstance(value, bool) or not isinstance(value, (int, float)):
-                written = _plain(value)
+                written = text_row[column_index - 1]
             else:
                 written = value
+                header_i = column_index - 1 - data_offset
+                if header_i >= 0:
+                    number_format = _excel_number_format(
+                        table, value,
+                        data_headers[header_i] if header_i < len(data_headers)
+                        else None,
+                        header_i,
+                    )
             cell = worksheet.cell(row=row_index, column=column_index,
                                   value=written)
             if isinstance(written, (int, float)) and not isinstance(written, bool):
                 cell.alignment = Alignment(horizontal='right')
+                if number_format:
+                    cell.number_format = number_format
 
     if autofit:
         for column_index, header in enumerate(headers, start=1):
             longest = len(_plain(header))
-            for row in rows:
+            for row in texts:
                 if column_index - 1 < len(row):
-                    longest = max(longest, len(_plain(row[column_index - 1])))
+                    longest = max(longest, len(row[column_index - 1]))
             # A little padding, and a ceiling so one long cell cannot push a
             # column off the screen.
             worksheet.column_dimensions[get_column_letter(column_index)].width = (
@@ -735,7 +867,7 @@ def to_excel(table, path, sheet_name: str = 'Sheet1',
     # Mirror flexablelib merged regions as Excel merged cells. Table coordinates
     # ignore the optional index column and the header row lives on Excel row 1.
     col_offset = 2 if include_index else 1
-    for region in getattr(table, 'merged_regions', []):
+    for region in view.merges:
         start_row = region.first_row + 2
         end_row = region.last_row + 2
         start_col = region.first_column + col_offset
@@ -778,7 +910,8 @@ def to_rst(table, include_index: bool = False) -> str:
     """
     from .fast import visible_width, pad_to_width
 
-    headers, rows = _table_data(table, include_index)
+    view = _view(table, include_index)
+    headers = view.headers
     if not headers:
         return ''
 
@@ -786,7 +919,7 @@ def to_rst(table, include_index: bool = False) -> str:
         return _plain(value).replace('\n', ' ')
 
     header_texts = [cell(h) for h in headers]
-    row_texts = [[cell(v) for v in row] for row in rows]
+    row_texts = [[cell(v) for v in row] for row in view.text]
     widths = [
         max(
             [visible_width(header_texts[i])]
@@ -820,7 +953,8 @@ def to_asciidoc(table, include_index: bool = False) -> str:
     Column widths are left to the AsciiDoc processor; cells with newlines are
     flattened to spaces so a single logical row stays one source line.
     """
-    headers, rows = _table_data(table, include_index)
+    view = _view(table, include_index)
+    headers = view.headers
     if not headers:
         return ''
 
@@ -828,7 +962,7 @@ def to_asciidoc(table, include_index: bool = False) -> str:
         return _plain(value).replace('|', '\\|').replace('\n', ' ')
 
     lines = ['|===', '| ' + ' | '.join(cell(h) for h in headers)]
-    for row in rows:
+    for row in view.text:
         lines.append('| ' + ' | '.join(cell(v) for v in row))
     lines.append('|===')
     return '\n'.join(lines)
@@ -842,7 +976,8 @@ def to_latex(table, include_index: bool = False) -> str:
     (``l`` / ``c`` / ``r``); otherwise every column is left-aligned. Special
     TeX characters in cells are escaped.
     """
-    headers, rows = _table_data(table, include_index)
+    view = _view(table, include_index)
+    headers, rows = view.headers, view.raw
     if not headers:
         return ''
 
@@ -901,7 +1036,7 @@ def to_latex(table, include_index: bool = False) -> str:
         ' & '.join(escape_tex(h) for h in headers) + r' \\',
         r'\hline',
     ]
-    for row in rows:
+    for row in view.text:
         lines.append(' & '.join(escape_tex(v) for v in row) + r' \\')
     lines.append(r'\hline')
     lines.append(r'\end{tabular}')
