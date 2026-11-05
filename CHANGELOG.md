@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.2.2] - 2026-11-05
+
+### Fixed
+- ``zebra = True`` (and ``row_stripe = True``) raised ``ColourError: unknown
+  colour: 'true'`` when ``use_colors`` was on. ``True`` now enables a default
+  odd-row ``reverse`` stripe; ``False`` clears it. Other non-spec values raise
+  ``TypeError`` at assignment time instead of blowing up later in ``compose()``.
+- ``parse_str_numbers = True`` before ``add_column`` / ``add_row`` left digit
+  strings unparsed, contrary to the documented "order does not matter". New
+  cells are parsed on the way in, matching ``set_cell`` and the re-parse that
+  already ran when the flag was turned on after the data was there.
+
 ## [2.2.1] - 2026-11-04
 
 ### Fixed
