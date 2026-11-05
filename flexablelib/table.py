@@ -1455,7 +1455,8 @@ class Table(object):
         """
         Alternating body-row colours (Rich ``row_styles`` / zebra striping).
 
-        Accepts ``None`` (off), a single colour spec applied to odd rows
+        Accepts ``None`` / ``False`` (off), ``True`` (default striping:
+        odd rows in ``reverse``), a single colour spec applied to odd rows
         (1, 3, …), or a two-item sequence ``(even_spec, odd_spec)``. Empty
         / falsy specs leave that parity uncoloured. Alias: :attr:`row_stripe`.
         """
@@ -1945,11 +1946,21 @@ class Table(object):
 
     @zebra.setter
     def zebra(self, value):
+        if value is True:
+            # Common "just turn it on" request; reverse works on every terminal.
+            value = ('', 'reverse')
+        elif value is False:
+            value = None
+        elif value is not None and not isinstance(value, (str, list, tuple)):
+            raise TypeError(
+                'zebra must be None, False, True, a colour spec, or a '
+                f'(even_spec, odd_spec) pair, got {type(value).__name__}'
+            )
         self.__zebra = value
 
     @row_stripe.setter
     def row_stripe(self, value):
-        self.__zebra = value
+        self.zebra = value
 
     @footer_rows.setter
     def footer_rows(self, value):
@@ -2621,6 +2632,19 @@ class Table(object):
                     if isinstance(cell, str):
                         row[index] = parse_value(cell, True)
 
+    def __coerce_incoming_value(self, value):
+        """Parse a newly added cell when ``parse_str_numbers`` is on."""
+        if self.__parse_str_numbers and isinstance(value, str):
+            from .readers import parse_value
+            return parse_value(value, True)
+        return value
+
+    def __coerce_incoming_sequence(self, data):
+        """Copy ``data`` with ``__coerce_incoming_value`` applied to each cell."""
+        if data is None or not self.__parse_str_numbers:
+            return data
+        return [self.__coerce_incoming_value(cell) for cell in data]
+
     @property
     def missing(self):
         """
@@ -3142,6 +3166,7 @@ class Table(object):
         # top, which is right for a column that row had just created and
         # wrong for this one, and its values came out shifted down by one.
         is_new_column = checked_header not in self.__headers
+        data = self.__coerce_incoming_sequence(data)
         if is_new_column:
             self.__add_header(checked_header)
         self.__add_column_data(
@@ -3358,6 +3383,7 @@ class Table(object):
         ... | size 5   | 39865      |
         ... +----------+------------+
         """
+        data = self.__coerce_incoming_sequence(data)
         self.__columns_with_i[self.__index_title].append(self.__index_counter)
         added_to_column_count = self.__add_row_data(data)
         add_headers = True if added_to_column_count is not None else False
@@ -3406,9 +3432,7 @@ class Table(object):
                     f'{column_count} columns'
                 )
             column_i = column % column_count
-        if self.__parse_str_numbers and isinstance(value, str):
-            from .readers import parse_value
-            value = parse_value(value, True)
+        value = self.__coerce_incoming_value(value)
         header = self.__headers[column_i]
         # Both orientations hold the same data and both are read while
         # rendering, so all four stores change together.
