@@ -952,19 +952,39 @@ class Table(object):
                 self.__check_add_header_on_init(header)
         except TypeError:
             pass
+        if isinstance(rows, (str, bytes)):
+            raise TypeError(
+                'Table() rows must be a sequence of rows, not '
+                f'{type(rows).__name__}'
+            )
         try:
-            for row in rows:
+            rows_iter = iter(rows)
+        except TypeError:
+            rows_iter = None
+        if rows_iter is not None:
+            for row in rows_iter:
+                if isinstance(row, (str, bytes)):
+                    raise TypeError(
+                        'Table() row entries must be sequences of cells, not '
+                        f'{type(row).__name__}; wrap a single value in a list'
+                    )
                 try:
                     row.__iter__
-                    self.add_row(data=list(row))
                 except AttributeError:
-                    pass
-            empty_to_add = len(headers) - len(rows[0])
-            for _ in range(empty_to_add):
+                    continue
+                self.add_row(data=list(row))
+            # Activate any headers the rows did not already fill. Use the
+            # live column count, not len(rows[0]): a short first row followed
+            # by a wider one used to spawn a ghost "column N" because the
+            # padding arithmetic ignored later rows that had already claimed
+            # the remaining headers.
+            try:
+                n_headers = len(headers)
+            except TypeError:
+                n_headers = 0
+            for _ in range(max(0, n_headers - self.__real_column_count)):
                 self.add_column()
             return None
-        except (TypeError, IndexError):
-            pass
         try:
             for column in columns:
                 try:
@@ -2292,7 +2312,7 @@ class Table(object):
 
     @show_empty_columns.setter
     def show_empty_columns(self, value: bool):
-        self.__show_empty_columns = value
+        self.__show_empty_columns = bool(value)
 
     @property
     def hide_columns(self):
@@ -2640,8 +2660,20 @@ class Table(object):
         return value
 
     def __coerce_incoming_sequence(self, data):
-        """Copy ``data`` with ``__coerce_incoming_value`` applied to each cell."""
-        if data is None or not self.__parse_str_numbers:
+        """Copy ``data`` with ``__coerce_incoming_value`` applied to each cell.
+
+        ``str`` and ``bytes`` are rejected: both are iterable, so a bare
+        ``add_row('abc')`` or ``add_column('h', 'abc')`` used to expand into
+        one cell per character. Pass a list/tuple of cells instead.
+        """
+        if data is None:
+            return data
+        if isinstance(data, (str, bytes)):
+            raise TypeError(
+                'row/column data must be a sequence of cells, not '
+                f'{type(data).__name__}; wrap a single value in a list'
+            )
+        if not self.__parse_str_numbers:
             return data
         return [self.__coerce_incoming_value(cell) for cell in data]
 
@@ -3359,7 +3391,7 @@ class Table(object):
         Add a row to the table. Can be left empty to add
         an empty row.
 
-        ``data``: Data provided as any iterable.
+        ``data``: Sequence of cell values (list or tuple). Bare ``str``/``bytes`` are rejected.
         
         Example::
         

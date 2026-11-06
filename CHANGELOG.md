@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.2.3] - 2026-11-06
+
+### Fixed
+- ``Table(headers=..., rows=...)`` with a short first row and a wider later
+  row no longer invents a ghost ``column N``. Padding now uses the live
+  column count after every row is loaded, so later cells that already fill
+  the remaining headers are enough.
+- ``add_row`` / ``add_column`` reject bare ``str`` / ``bytes`` data with
+  ``TypeError`` instead of expanding them into one cell per character.
+  ``Table(rows=...)`` does the same for a string ``rows`` value or string
+  row entries. Wrap a single string cell in a list.
+- ``show_empty_columns`` coerces with ``bool(...)``, matching
+  ``show_empty_rows``.
+
 ## [2.2.2] - 2026-11-05
 
 ### Fixed
