@@ -20,7 +20,8 @@ All notable changes to this project will be documented in this file. See [standa
 - Regressions across all 56 styles, three missing-value displays and all
   render paths; raw/formatted exports, row round-trips and numeric wrapping.
 - The stress matrix now compares None, padding sentinels and row round-trips
-  in every style/theme and mode; stream budgets include decimal-axis width.
+  in every style/theme and mode; stream budgets include decimal-axis width
+  and a feasible terminal budget (narrow fits are covered outside stream).
 - README and ``docs/MISSING_VALUES.md`` explain the visible change.
 
 ## [2.2.4] - 2026-11-07
