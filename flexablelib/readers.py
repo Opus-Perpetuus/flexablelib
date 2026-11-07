@@ -177,7 +177,11 @@ def from_csv(table_class, source, parse_numbers: bool = True,
              lineterminator=None, skipinitialspace=None, strict=None,
              **options):
     """
-    Build from a CSV file path, or any open text handle.
+    Build from a CSV file path, an open text handle, or CSV text.
+
+    A string holding a line break that is not an existing file is read as
+    CSV text, so ``Table.from_csv(table.to_csv())`` round-trips the way
+    ``from_markdown`` and ``from_html`` already did with their writers.
 
     With ``has_header`` false, columns are named automatically.
 
@@ -192,6 +196,10 @@ def from_csv(table_class, source, parse_numbers: bool = True,
         doublequote=doublequote, lineterminator=lineterminator,
         skipinitialspace=skipinitialspace, strict=strict,
     )
+    if isinstance(source, str) and ('\n' in source or '\r' in source):
+        import os
+        if not os.path.isfile(source):
+            source = _io.StringIO(source, newline='')
     if hasattr(source, 'read'):
         reader = _csv.reader(source, **reader_kwargs)
         rows = [row for row in reader]

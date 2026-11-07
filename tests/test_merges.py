@@ -416,8 +416,10 @@ def test_a_divider_above_a_merge_does_not_shift_it():
     table.merge_cells(1, 0, last_row=2, value='Down')
 
     lines = str(table).splitlines()
+    # Since 2.2.4 the divider is drawn in the style's glyphs (+---+---+);
+    # skip the top frame, which looks the same.
     divider_index = next(i for i, line in enumerate(lines)
-                         if set(line) == {'-'})
+                         if i > 0 and set(line) == {'+', '-'})
 
     assert 'Down' in lines[divider_index + 2]
     assert 'Norte' in lines[divider_index - 1]
