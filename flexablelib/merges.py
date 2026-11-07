@@ -349,9 +349,13 @@ def _pick_junction(v_glyph: str, h_glyph: str, n: bool, s: bool, e: bool, w: boo
         if v_glyph in '|+' or (h_glyph and h_glyph in '-=~'):
             return h_glyph if h_glyph in '-=~' else '-'
         return h_glyph or '─'
-    if v_glyph in '|+' or (h_glyph and h_glyph in '-=') :
-        if v_glyph in '|+' and (h_glyph in '-=+' or not h_glyph):
-            return _ASCII.get(key, '+')
+    if v_glyph in '|+':
+        # ASCII column lines join with '+' whatever the dash ('-', '=', '~').
+        return _ASCII.get(key, '+')
+    if v_glyph and not ('\u2500' <= v_glyph <= '\u257f'):
+        # Other non-box column glyphs (``dots`` draws ':') are their own
+        # junction; a light box tee next to them is a foreign glyph.
+        return v_glyph
     if v_glyph == '║' and h_glyph == '═':
         return _DOUBLE.get(key, '║')
     if v_glyph == '║':
@@ -383,6 +387,14 @@ def _synthesize_body_rule(composition):
         h = end.middle
     elif header is not None and header.middle:
         h = header.middle
+    if not ('\u2500' <= v.middle <= '\u257f') and v.middle not in '|+':
+        # Non-box column glyphs (``dots`` draws ':') are their own junction.
+        return SeparatorLine(
+            left=v.left or None,
+            middle=h if h and not ('\u2500' <= h <= '\u257f') else '-',
+            intersection=v.middle,
+            right=v.right or None,
+        )
     if v.middle in '|+':
         return SeparatorLine(
             left='+' if v.left else None,
@@ -409,6 +421,53 @@ def _synthesize_body_rule(composition):
         middle=h or '─',
         intersection='┼',
         right=right,
+    )
+
+
+_FRAME_TEES = {
+    # vertical glyph -> (left tee, right tee) for a light horizontal
+    '│': ('├', '┤'), '┊': ('├', '┤'), '┆': ('├', '┤'), '╎': ('├', '┤'),
+    '┃': ('┠', '┨'), '║': ('╟', '╢'), '|': ('+', '+'),
+}
+_FRAME_TEES_DOUBLE_H = {
+    '│': ('╞', '╡'), '║': ('╠', '╣'), '|': ('+', '+'),
+}
+
+
+def _frame_only_body_rule(composition):
+    """Body rule for styles with outer verticals but no column lines.
+
+    ``*_ebody`` / ``*_empty`` styles frame the body without separating its
+    columns, so the rule runs edge to edge and only meets the frame.
+    Returns None when the body has no outer verticals either.
+    """
+    from .style_compositions import SeparatorLine
+    v = composition.vertical_table_body_lines
+    if v is None:
+        return None
+    left_v = _glyph(v.left or '')
+    right_v = _glyph(v.right or '')
+    if not (left_v.strip() or right_v.strip()):
+        return None
+    end = composition.table_end_line
+    h = _glyph(end.middle) if end is not None and end.middle else ''
+    if not h or h.isspace():
+        h = '-' if '|' in (left_v, right_v) else '─'
+    tees = _FRAME_TEES_DOUBLE_H if h == '═' else _FRAME_TEES
+    if '|' in (left_v, right_v) and h not in '-=~':
+        h = '-'
+
+    def tee(glyph, side):
+        if not glyph or glyph.isspace():
+            return None
+        pair = tees.get(glyph) or _FRAME_TEES.get(glyph)
+        return pair[side] if pair else glyph
+
+    return SeparatorLine(
+        left=tee(left_v, 0),
+        middle=h,
+        intersection=h,
+        right=tee(right_v, 1),
     )
 
 
