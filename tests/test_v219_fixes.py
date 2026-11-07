@@ -41,11 +41,12 @@ def test_max_width_trims_each_line_of_a_multiline_cell():
     assert len(_widths(table)) == 1
 
 
-def test_max_width_trims_none_cells_like_before():
+def test_max_width_renders_none_as_blank_since_v230():
     table = Table(rows=[[None], ['x']], headers=['c'])
     table.style_name = 'ascii'
     table.column_max_width = 3
-    assert '| ... |' in strip_ansi(table.compose()).splitlines()
+    assert '|   |' in strip_ansi(table.compose()).splitlines()
+    assert 'None' not in table.compose()
 
 
 @pytest.mark.parametrize('style', Table().possible_styles)
