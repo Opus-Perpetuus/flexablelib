@@ -2,6 +2,48 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.2.4] - 2026-11-07
+
+Found by a new stress matrix (``tools/stress_matrix.py``): every style and
+theme on a 30x50 table of mixed data (CJK, emoji, multi-line, ``None``),
+each feature alone, a pairwise covering set of all feature options, and
+"everything at once" combos, checking line widths, border junctions,
+visible rows, export order and determinism. A reduced version runs in the
+test suite (``tests/test_stress_matrix.py``).
+
+### Fixed
+- Fitting a table to the terminal (``max_width``) or capping one column
+  (``column_max_width``) left-aligned every other int column and the index,
+  even ones that were not shortened. Only a column that really loses
+  characters is turned into text now.
+- ``add_divider`` / ``divide_every`` in a style without inter-row rules drew
+  a run of ASCII ``-`` across the column lines (``│ a │`` / ``-------``). The
+  divider now uses the style's glyphs (``├───┼───┤``, ``╞═══╪═══╡``,
+  ``+---+``, ``|---|`` for markdown/pipes/orgtbl, edge to edge for
+  ``*_ebody`` styles), skipping hidden columns; styles with no column lines
+  keep the dashed line.
+- Merges in ``tilg_columns``, ``dots``, ``psql``/``presto`` and other
+  non-box styles got light box glyphs (``│ ├ ┴``) for their caps. ASCII
+  column lines now join with ``+`` and ``dots`` with ``:`` (dividers in
+  ``dots`` too).
+- ``expand_to_window`` with ``column_max_width`` pulled a column that was
+  already wider than its cap (numbers are never cut) back to the cap, so its
+  cells overflowed the rules and the frame broke (also on ``paginate`` pages).
+- ``stream()``:
+  - with ``show_index`` and ``column_min_width`` or ``column_max_width``
+    raised ``IndexError``; with ``show_index`` alone nothing was frozen and
+    the lines grew as rows arrived. The index width is now reserved for a
+    sized input (``len(rows)``), including roman numerals.
+  - with ``zebra`` or cell backgrounds lost every row and printed the bottom
+    border after the header and after each row.
+  - with ``show_headers=False`` on an empty table raised ``ValueError``
+    (``column_max_width must be >= 1``), and with ``panel`` / ``shadow`` on a
+    borderless style closed the panel after the first row.
+- ``title`` and ``caption`` were not centred on a table with no rows.
+- ``Table.from_csv`` accepts CSV text, so ``from_csv(table.to_csv())``
+  round-trips like ``from_markdown`` and ``from_html`` already did. Paths
+  and open handles work as before.
+
 ## [2.2.3] - 2026-11-06
 
 ### Fixed
