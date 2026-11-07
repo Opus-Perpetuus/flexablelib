@@ -366,7 +366,13 @@ def run_case(style, config, header_style=None):
             # stream freezes widths before rows arrive; numbers are never
             # cut (by design), so give every column room for its decimal axis too (including
             # a long integer alongside scientific notation).
+            # Numeric columns containing None now remain numeric. A caller's
+            # tiny cap/terminal budget cannot be kept as well as an uncut
+            # number: stream documents that frozen-width precondition. Test
+            # narrow fits in compose/paginate; use a feasible budget here.
             t2.column_min_width = 20
+            t2.column_max_width = 20
+            t2.max_width = BIG
             outs = ['\n'.join(t2.stream(make_rows()))]
         elif mode == 'transpose':
             outs = [t.transpose().compose()]
