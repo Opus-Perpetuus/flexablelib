@@ -282,6 +282,28 @@ print(new_table)
 ```
 The missing value aligns as if it was of the same type of the other data in the column.
 
+**Changed in 2.3.0:** an explicit `None` is a missing cell, just like a
+padding gap or `table.missing`. It displays `missing_value` (blank by default),
+not the text `"None"`. Set `table.missing_value = '?'` to show gaps explicitly.
+Use the string `"None"` if you want that literal text. This applies to printing,
+`compose()`, pagination, streaming, and transposition in every style.
+
+Missing cells do not turn numeric columns into text: numeric alignment and
+the decimal axis are preserved, and `overflow='wrap'` does not split floats
+because a column contains `None`. Raw `rows` and exports still represent gaps
+as `None`; rendering `Table(rows=table.rows)` reproduces the same cells (copy
+headers and display settings too if you changed them).
+
+```python
+table = Table(rows=[[924.87], [None], [1.25]])
+assert 'None' not in table.compose()
+assert Table(rows=table.rows).compose() == table.compose()
+table.missing_value = '?'  # changes the display, not stored None values
+```
+
+See [missing-cell semantics](docs/MISSING_VALUES.md) for migration details.
+
+
 This shows how to get the row and column count. If the index is shown, this count remains unaffected by that column, although, you can get the internal count.
 
 ### Code Example

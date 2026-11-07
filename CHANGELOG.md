@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.3.0] - 2026-11-07
+
+### Changed (visible behaviour)
+- Explicit ``None`` now displays ``missing_value`` (blank by default), just
+  like a padding gap or ``table.missing``. Previously it printed ``None``.
+  Use the string ``"None"`` to retain that literal output. Applies to every
+  style, printing/``compose``, pagination, streaming and transposition.
+- A numeric column containing ``None`` keeps its numeric type, alignment
+  and decimal axis; wrapping no longer splits its numbers as text.
+- Derived tables used for pagination/streaming preserve gaps as missing data
+  instead of converting the placeholder to text before inferring types.
+  ``Table(rows=t.rows)`` preserves the visible cells with matching settings.
+  Raw rows and export missing-value semantics are unchanged.
+
+### Tests and documentation
+- Regressions across all 56 styles, three missing-value displays and all
+  render paths; raw/formatted exports, row round-trips and numeric wrapping.
+- The stress matrix now compares None, padding sentinels and row round-trips
+  in every style/theme and mode; stream budgets include decimal-axis width
+  and a feasible terminal budget (narrow fits are covered outside stream).
+- README and ``docs/MISSING_VALUES.md`` explain the visible change.
+
 ## [2.2.4] - 2026-11-07
 
 Found by a new stress matrix (``tools/stress_matrix.py``): every style and

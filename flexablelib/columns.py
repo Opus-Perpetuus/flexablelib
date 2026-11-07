@@ -628,6 +628,9 @@ def _typify_column(column: Union[list, tuple],
         if index_column:
             # If it is the index column, it will be took in count as int.
             identified_types.append(int.__name__)
+        elif row is None:
+            # An explicit None is the same gap as the padding sentinel.
+            identified_types.append(TYPE_NAMES.value_placer_)
         elif row != '':
             # Get the type as long as is not an empty string.
             identified_types.append(type(row).__name__)
