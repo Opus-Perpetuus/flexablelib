@@ -364,8 +364,9 @@ def run_case(style, config, header_style=None):
                     continue
                 dict(FACTORS[name])[label](t2)
             # stream freezes widths before rows arrive; numbers are never
-            # cut (by design), so give every column room for the widest one.
-            t2.column_min_width = 14
+            # cut (by design), so give every column room for its decimal axis too (including
+            # a long integer alongside scientific notation).
+            t2.column_min_width = 20
             outs = ['\n'.join(t2.stream(make_rows()))]
         elif mode == 'transpose':
             outs = [t.transpose().compose()]
@@ -565,6 +566,50 @@ def stream_vs_compose():
     return n, bad
 
 
+def none_vs_missing(styles):
+    """None, an internal padding gap, and rows round-trip draw identically."""
+    bad, n = [], 0
+    for style in styles:
+        for missing in ('', '?', '欠測 😀'):
+            tables = []
+            for sentinel in (False, True):
+                t = Table(headers=['id', 'number', 'int'], missing_val=missing)
+                if style.startswith('theme:'):
+                    t.apply_theme(style[6:])
+                else:
+                    t.style_name = style
+                gap = t.missing if sentinel else None
+                for row in [['r0', 924.87, 31], ['r1', gap, gap],
+                            ['r2', -1.25, 2]]:
+                    t.add_row(row)
+                t.max_width = BIG
+                t.overflow = 'wrap'
+                t.column_max_width = 8
+                tables.append(t)
+            a, b = tables
+            clone = Table(rows=a.rows, headers=a.headers, missing_val=missing,
+                          style_name=a.style_name)
+            a._Table__copy_display_settings(clone)
+            clone.zebra = a.zebra
+            for label, render in (
+                ('compose', lambda t: t.compose()),
+                ('paginate', lambda t: t.paginate(2)),
+                ('paginate_nofreeze', lambda t: t.paginate(2, freeze_header=False)),
+                ('stream', lambda t: list(t.stream([]))),
+                ('transpose', lambda t: t.transpose().compose()),
+            ):
+                n += 1
+                try:
+                    expected = render(b)
+                    if render(a) != expected or render(clone) != expected:
+                        bad.append({'style': style, 'config': {'mode': label},
+                                    'problems': [('none-roundtrip', repr(missing))]})
+                except Exception as e:
+                    bad.append({'style': style, 'config': {'mode': label},
+                                'problems': [('exception', str(e))]})
+    return n, bad
+
+
 def main(argv=None):
     import argparse
     ap = argparse.ArgumentParser()
@@ -580,6 +625,10 @@ def main(argv=None):
     results, n = [], 0
     if a.mode in ('streamcmp', 'all'):
         n, results = stream_vs_compose()
+    if a.mode in ('nonecmp', 'all'):
+        count, failures = none_vs_missing(styles)
+        n += count
+        results.extend(failures)
     for style, config in iter_cases(a.mode, styles):
         n += 1
         probs = run_case(style, config)
