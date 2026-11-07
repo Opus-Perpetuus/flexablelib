@@ -1244,7 +1244,11 @@ class Table(object):
     @property
     def missing_value(self) -> Any:
         """
-        A placeholder for empty cells.
+        A placeholder for missing cells, including explicit None (since 2.3).
+
+        None does not turn a numeric column into text. Use the string
+        'None' to display that literal word. Raw rows and exports keep
+        missing cells as None, independently of this display placeholder.
 
         Default is::
 
@@ -2684,8 +2688,8 @@ class Table(object):
 
         A cell holding this renders as ``missing_value`` and does not affect
         the column's inferred type, so a numeric column with gaps stays
-        numeric and stays right-aligned. Assigning None or '' instead would
-        make the column textual.
+        numeric and stays right-aligned. None does the same; an empty string
+        would make the column textual.
 
         Used by the readers to represent NaN and NULL, and available for
         building tables with gaps by hand::
@@ -4592,20 +4596,16 @@ class Table(object):
             # For adding the missing value where the ValuePlacer
             # is used (in the rows with index).
             for column_i, column in enumerate(row):
-                if isinstance(column, ValuePlacer):
-                    rows_with_i[row_i][column_i] = column(
-                        self.__missing_value
-                    )
+                if column is None or isinstance(column, ValuePlacer):
+                    rows_with_i[row_i][column_i] = self.__missing_value
                 
         # For adding the missing value where the ValuePlacer
         # is used.
         rows = [list(row) for row in self.__rows]
         for row_i, row in enumerate(rows):
             for column_i, column in enumerate(row):
-                if isinstance(column, ValuePlacer):
-                    rows[row_i][column_i] = column(
-                        self.__missing_value
-                    )
+                if column is None or isinstance(column, ValuePlacer):
+                    rows[row_i][column_i] = self.__missing_value
 
         # Filter and sort the display copies together so the index column
         # stays aligned with its row.
@@ -6283,13 +6283,13 @@ class Table(object):
         out.__border_texts = [dict(entry) for entry in self.__border_texts]
 
     def __stored_row(self, row_i, headers):
-        """One stored row with gaps turned into the missing value."""
+        """One stored row with gaps kept as None for derived-table typing."""
         row = []
         for header in headers:
             col = self.__columns.get(header, [])
-            cell = col[row_i] if row_i < len(col) else self.__missing_value
+            cell = col[row_i] if row_i < len(col) else None
             if isinstance(cell, ValuePlacer):
-                cell = self.__missing_value
+                cell = None
             row.append(cell)
         return row
 

@@ -45,3 +45,10 @@ def test_render_invariants(case):
 @pytest.mark.parametrize('combo', range(len(matrix.EVERYTHING)))
 def test_exports_round_trip(style, combo):
     assert matrix.check_exports(style, matrix.EVERYTHING[combo]) == []
+
+
+def test_none_padding_and_raw_rows_roundtrip_matrix():
+    count, failures = matrix.none_vs_missing(['rounded', 'grid', 'plain',
+                                            'theme:mono', 'theme:report'])
+    assert count == 75
+    assert failures == []
