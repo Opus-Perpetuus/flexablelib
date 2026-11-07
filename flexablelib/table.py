@@ -4047,6 +4047,19 @@ class Table(object):
         
         return header_to_trim, col_to_trim
     
+    def __column_exceeds(self, column_i, columns, new_width) -> bool:
+        """True when the header or any cell of the column is wider than
+        ``new_width`` on some line, i.e. trimming would change it."""
+        headers = self.__headers_with_i if self.show_index else self.__headers
+        cells = [headers[column_i]] + list(columns[column_i])
+        for cell in cells:
+            if cell is None:
+                continue
+            for line in str(cell).split('\n'):
+                if visible_width(line) > new_width:
+                    return True
+        return False
+
     def __wrap_or_trim_data(self, 
                             column_i: int, 
                             new_width: int, 
@@ -4077,6 +4090,18 @@ class Table(object):
                 new_width=new_width,
             )
         else:
+            # Only a column that really loses characters turns into text.
+            # Every column passes through here, including the ones a fit
+            # or a column_max_width elsewhere left at full width, and
+            # resetting those flipped right-aligned ints and the index to
+            # the left.
+            if not self.__column_exceeds(column_i, columns, new_width):
+                return self.__trim_column(
+                    column_i=column_i,
+                    columns=columns,
+                    new_width=new_width,
+                    index=True
+                )
             if index:
                 self.__column_alignments_with_i[
                     column_title
@@ -4420,7 +4445,10 @@ class Table(object):
             )
             new_width = widths[column_i] + extra
             if hi is not None:
-                new_width = min(new_width, int(hi))
+                # Growing must never shrink: a column already past its cap
+                # holds content that could not be cut (numbers), and pulling
+                # it back to the cap leaves the cells wider than the rules.
+                new_width = max(widths[column_i], min(new_width, int(hi)))
             widths[column_i] = new_width
             store[headers[column_i]] = new_width
 
@@ -4982,6 +5010,39 @@ class Table(object):
         header_row = data_rows.header_row
         body_rows = data_rows.body_rows
         gap_separator = None
+        # Dividers in a style with no inter-row rule are drawn with that
+        # style's own glyphs (the same rule merges synthesise), so they join
+        # the column lines instead of crossing them as a run of ASCII dashes.
+        divider_rule = None
+        if self.__dividers and separators.table_body_line is None:
+            from .merges import _frame_only_body_rule, _synthesize_body_rule
+            composition = self.__style_composition
+            under_header = composition.inferior_header_line
+            if (under_header is not None and under_header.left == '|'
+                    and under_header.right == '|'):
+                # Markdown-like styles (markdown, pipes, orgtbl): a rule in
+                # the shape of their header rule, without alignment colons.
+                synthesized = SeparatorLine(
+                    left='|', middle='-',
+                    intersection=under_header.intersection or '|',
+                    right='|',
+                )
+            else:
+                synthesized = (
+                    _synthesize_body_rule(composition)
+                    or _frame_only_body_rule(composition)
+                )
+            if synthesized is not None:
+                divider_rule = _get_separators(
+                    self.__style_composition._replace(
+                        table_body_line=synthesized
+                    ),
+                    column_widths_list,
+                    self.__empty_column_indexes,
+                    self.__show_empty_columns,
+                    column_alignments_list,
+                    user_hidden,
+                ).table_body_line
         if colors_on:
             separators, gap_separator = self.__colour_horizontal_rules(
                 separators,
@@ -5021,10 +5082,21 @@ class Table(object):
         # line through the middle of a table with no rows.
         body, body_line_map = self.__join_body_rows(
             body_rows, body_line, separators.table_body_line,
-            gap_separator=gap_separator,
+            gap_separator=gap_separator, divider_rule=divider_rule,
         )
-        title_line = self.__title_line(column_widths_list, table_with_i)
-        caption_line = self.__caption_line(column_widths_list, table_with_i)
+        # Centre title and caption on the lines actually drawn: the computed
+        # width came out short for a table with no rows yet (an empty stream
+        # or query), which pushed both to the left.
+        drawn_width = max(
+            (visible_width(line)
+             for part in (superior_row, body, end_line) if part
+             for line in part.split('\n')),
+            default=None,
+        )
+        title_line = self.__title_line(column_widths_list, table_with_i,
+                                       drawn_width)
+        caption_line = self.__caption_line(column_widths_list, table_with_i,
+                                           drawn_width)
 
         # Where the body starts depends on which of the parts before it were
         # drawn at all: a title, a top rule, a header. Counting them off the
@@ -5065,7 +5137,7 @@ class Table(object):
         return self.__apply_table_align(table_string)
 
     def __join_body_rows(self, body_rows, body_line, separator_line,
-                         gap_separator=None):
+                         gap_separator=None, divider_rule=None):
         """
         Join body rows, inserting extra divider rules where requested.
 
@@ -5093,8 +5165,9 @@ class Table(object):
         cursor = 0
 
         # A style with no inter-row rule still gets the dividers ``add_divider``
-        # asked for, drawn as a dashed line. A style that rules between every
-        # row already shows them.
+        # asked for: ``divider_rule`` in the style's glyphs when it has column
+        # lines to join, otherwise a dashed line. A style that rules between
+        # every row already shows them.
         explicit_dividers = (
             self.__dividers if (self.__dividers and separator_line is None)
             else set()
@@ -5104,10 +5177,14 @@ class Table(object):
             # Measure one physical line: a wrapped first row holds several,
             # and measuring the whole string drew a rule as wide as all of
             # them put together.
-            rule = '-' * max(
+            row_width = max(
                 max(visible_width(line) for line in body_rows[0].split('\n')),
                 1,
             )
+            if divider_rule and visible_width(divider_rule) == row_width:
+                rule = divider_rule
+            else:
+                rule = '-' * row_width
 
         separator_lines = body_line.count('\n') if separator_line is not None else 0
 
@@ -5130,11 +5207,11 @@ class Table(object):
 
         return '\n'.join(pieces), line_map
 
-    def __title_line(self, column_widths_list, table_with_i):
+    def __title_line(self, column_widths_list, table_with_i, drawn_width=None):
         """Centre the title over the full table width, if any."""
         if not self.__title:
             return None
-        table_width = self.__get_string_table_width()
+        table_width = drawn_width or self.__get_string_table_width()
         title = self.__title
         title_width = visible_width(title)
         if title_width >= table_width:
@@ -5269,11 +5346,11 @@ class Table(object):
         return chr(10).join(out)
 
 
-    def __caption_line(self, column_widths_list, table_with_i):
+    def __caption_line(self, column_widths_list, table_with_i, drawn_width=None):
         """Centre the caption under the full table width, if any."""
         if not self.__caption:
             return None
-        table_width = self.__get_string_table_width()
+        table_width = drawn_width or self.__get_string_table_width()
         caption = self.__caption
         caption_width = visible_width(caption)
         if caption_width >= table_width:
@@ -6012,7 +6089,9 @@ class Table(object):
         ``overflow`` (truncate/wrap).
 
         Requires headers (or existing columns) so widths can be measured
-        before the first streamed row.
+        before the first streamed row. With ``show_index`` the index column
+        is sized for every row when ``rows`` has a length (a list, say); a
+        plain generator sizes it from the rows already in the table.
 
         Lines look as ``compose()`` would draw them: formats, alignment,
         colours, ``row_filter``, dividers and merges carry over. ``sort_by``
@@ -6043,7 +6122,17 @@ class Table(object):
         # Measure natural widths, then pin min=max so later rows cannot
         # widen the table (beautifultable stream contract).
         work.compose()
-        widths = list(work.__column_widths_as_list)
+        # By header, not the positional list: with show_index the data-only
+        # list is left empty (the index layout fills the *_with_i one), and
+        # the floors below indexed it by data column -- IndexError.
+        width_map = (
+            work.__column_widths_with_i if work.show_index
+            else work.__column_widths
+        )
+        # An empty table with show_headers off measures 0; a cap of 0 is
+        # invalid (ValueError), and a column needs at least one cell.
+        widths = [max(1, int(width_map.get(header, 0) or 0))
+                  for header in work.headers]
         # Honour caller floors already set on self.
         if self.__column_min_width is not None:
             for i, header in enumerate(work.headers):
@@ -6059,13 +6148,44 @@ class Table(object):
                 )
                 if ceil is not None:
                     widths[i] = min(widths[i], int(ceil))
-        work.column_min_width = list(widths)
-        work.column_max_width = list(widths)
+        bounds = list(widths)
+        if work.show_index:
+            # The index column grows as rows arrive (9 -> 10 -> 100), so
+            # reserve the widest label when the number of rows is known.
+            # Unpinned it widened the lines after the first nine rows.
+            index_width = max(1, int(width_map.get(work.__index_title, 0) or 0))
+            try:
+                total = work.__real_row_count + len(rows)
+            except TypeError:
+                total = None
+            if total:
+                labels = [work.index_start + work.index_step * k
+                          for k in (0, total - 1)]
+                if work.roman_index:
+                    labels = [work.index_start + work.index_step * k
+                              for k in range(total)]
+                    labels = [to_roman(label) for label in labels]
+                index_width = max(
+                    [index_width] + [visible_width(str(label))
+                                     for label in labels]
+                )
+            bounds = dict(zip(work.headers, widths))
+            bounds[work.__index_title] = index_width
+        work.column_min_width = bounds
+        work.column_max_width = bounds
 
-        n_close = self.__stream_closing_line_count(work, widths)
+        n_close, closing = self.__stream_closing_lines(bounds)
         before = work.compose().splitlines()
-        open_part = before[:-n_close] if n_close else before
-        for line in open_part:
+        # The open part of the empty table is yielded first, but only when
+        # it ends in the same closing lines as a table with rows. A style or
+        # setting that draws nothing for an empty body (no headers, no
+        # frame) renders '' -- and its closing lines must not be assumed.
+        tail = [strip_ansi(line) for line in before[len(before) - n_close:]]
+        if n_close and (len(before) < n_close or tail != closing):
+            yielded = 0
+        else:
+            yielded = len(before) - n_close
+        for line in before[:yielded]:
             yield line
 
         streamed = []
@@ -6074,41 +6194,66 @@ class Table(object):
             streamed.append(row)
             work.add_row(row)
             after = work.compose().splitlines()
-            open_after = after[:-n_close] if n_close else after
-            open_before_len = len(before) - n_close if n_close else len(before)
-            for line in open_after[open_before_len:]:
+            open_end = max(0, len(after) - n_close)
+            for line in after[yielded:open_end]:
                 yield line
+            yielded = max(yielded, open_end)
             before = after
 
-        for line in (before[-n_close:] if n_close else []):
+        for line in before[yielded:]:
             yield line
 
         if append and streamed:
             for row in streamed:
                 self.add_row(row)
 
-    def __stream_closing_line_count(self, template, widths):
+    def __stream_closing_lines(self, widths):
         """
-        How many trailing lines are shared by empty-body and one-row tables
-        (bottom border + caption). Those are deferred until stream ends.
+        ``(n, lines)``: the trailing lines a one-row and a two-row table
+        share (bottom border, caption, panel and shadow), compared without
+        colour. They are deferred until the stream ends.
+
+        Measured on tables that have rows: an empty one can render nothing
+        at all, and zebra or cell backgrounds paint the rule under the last
+        row, so comparing against the empty table (as this did) deferred
+        either every line or none -- the bottom border then came out after
+        the header and again after every row.
         """
-        empty = self.__display_clone(include_rows=False)
-        one = self.__display_clone(include_rows=False)
-        empty.column_min_width = list(widths)
-        empty.column_max_width = list(widths)
-        one.column_min_width = list(widths)
-        one.column_max_width = list(widths)
-        placeholders = ['' for _ in empty.headers] or ['']
-        if empty.headers:
-            one.add_row(placeholders)
-        else:
-            return 0
-        la = empty.compose().splitlines()
-        lb = one.compose().splitlines()
+        def remap(table):
+            # Dict bounds name the index column by its title object, which
+            # is per table: translate it to this clone's own.
+            if not isinstance(widths, dict):
+                return list(widths)
+            out = {}
+            for key, value in widths.items():
+                if isinstance(key, IndexColumnTitle):
+                    key = table.__index_title
+                out[key] = value
+            return out
+
+        renders = []
+        for count in (1, 2):
+            probe = self.__display_clone(include_rows=False)
+            if not probe.headers:
+                return 0, []
+            probe.column_min_width = remap(probe)
+            probe.column_max_width = remap(probe)
+            # Callables written for the caller's data may not accept the
+            # placeholder; they do not change the frame being measured.
+            probe.row_filter = None
+            probe.color_rule = None
+            probe.custom_format = None
+            for _ in range(count):
+                probe.add_row(['x' for _ in probe.headers])
+            renders.append(
+                [strip_ansi(line) for line in probe.compose().splitlines()]
+            )
+        one, two = renders
         n = 0
-        while n < len(la) and n < len(lb) and la[-(n + 1)] == lb[-(n + 1)]:
+        while (n < len(one) - 1 and n < len(two)
+               and one[-(n + 1)] == two[-(n + 1)]):
             n += 1
-        return n
+        return n, one[len(one) - n:]
 
     # Display settings a derived table (stream, paginate) takes from its
     # parent. Each is global or keyed by column, so it means the same thing
