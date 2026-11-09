@@ -1,11 +1,6 @@
 import os
 import json
 import shutil
-from typing import Iterable, Union
-
-
-def float_format(number, decimal_spaces):
-    return ''.join(['{:.', str(decimal_spaces), 'f}']).format(number)
 
 
 def get_window_size():
@@ -30,30 +25,6 @@ def get_window_size():
         size = shutil.get_terminal_size(fallback=(80, 24))
 
     return size.columns, size.lines
-
-
-def is_list(piece):
-    return isinstance(piece, list)
-
-
-def is_tuple(piece):
-    return isinstance(piece, tuple)
-
-
-def is_dict(piece):
-    return isinstance(piece, dict)
-
-
-def is_set(piece):
-    return isinstance(piece, set)
-
-
-def is_str(piece):
-    return isinstance(piece, str)
-
-
-def is_bytes(piece):
-    return isinstance(piece, bytes)
 
 
 def is_some_instance(piece, *instances):
@@ -104,50 +75,9 @@ def is_multi_row(row):
     return all(isinstance(cell, (list, tuple)) for cell in row)
 
 
-def length_of_elements(element_list, index=0, lengths=None):
-    """
-    Returns the length of each row (sub-array) in a single array
-    """
-    if lengths is None:
-        lengths = []
-    # Will only calculate len if index is lower than the len of the array.
-    # If it isn't less, will return the final array of lengths.
-    if index < len(element_list):
-
-        # Appends the length of the current element using the
-        # "index" param, which starts as 0.
-        lengths.append(len(element_list[index]))
-
-        # For each time it appends a length, calls again the function, sending
-        # the listOfElements, the lengths array with the previous value\s and the
-        # index plus 1, last one so looks for the next element
-        length_of_elements(element_list, index + 1, lengths)
-
-    return lengths
-
-
-def flatten(list_to_flatten, i=0, c=0):
-    """
-    Flatten a list containing lists that could also contain lists,
-    and so on
-    """
-    c += 1
-    if i < len(list_to_flatten):
-        if is_list(list_to_flatten[i]):
-            temp = list_to_flatten.pop(i)
-            for x in range(len(temp)):
-                list_to_flatten.insert(i + x, temp[x])
-            return flatten(list_to_flatten, i, c)
-        else:
-            return flatten(list_to_flatten, i + 1, c)
-    else:
-        return list_to_flatten
-
-
 def read_json(file):
     with open(file) as json_file:
         data = json.load(json_file)
-    json_file.close()
     return data
 
 
@@ -161,16 +91,6 @@ def read_file(filename):
     """
     with open(filename, 'r', encoding='utf-8') as file:
         return file.read()
-
-
-def delete_repetitions(iterable: Iterable, 
-                      ) -> Union[list, tuple]:
-    cleansed_list = []
-    for element in iterable:
-        if element not in cleansed_list:
-            cleansed_list.append(element)
-    
-    return cleansed_list
 
 
 class IndexColumnTitle(str):
