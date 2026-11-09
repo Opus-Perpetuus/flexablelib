@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [Unreleased]
+
+### Internal
+- Removed unused helpers from ``flexablelib.utils`` (``float_format``,
+  ``is_list``/``is_tuple``/``is_dict``/``is_set``/``is_str``/``is_bytes``,
+  ``length_of_elements``, ``flatten``, ``delete_repetitions``). None were
+  part of the public API or called anywhere in the package.
+- Tests for alignment indicators on ``pipes`` and ``sticks``: centred and
+  right markers, wide characters, one-character and zero-width columns.
+
 ## [2.3.0] - 2026-11-07
 
 ### Changed (visible behaviour)
