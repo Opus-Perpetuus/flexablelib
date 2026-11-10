@@ -638,7 +638,7 @@ def to_html(table, target=None, title: str = 'Table', paginate: int = 25,
         'rows': row_texts,
         'keys': keys,
         'numeric': numeric_flags,
-        'perPage': max(0, int(paginate)),
+        'perPage': max(0, int(paginate or 0)),
     }
 
     head_cells = ''.join(
