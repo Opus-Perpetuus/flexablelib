@@ -2,7 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
-## [Unreleased]
+## [2.3.1] - 2026-11-10
+
+### Fixed
+- ``to_html(paginate=None)`` raised ``TypeError``; ``None`` now means no
+  paging, like ``0``.
+- ``index_start = None`` / ``index_step = None`` raised ``TypeError``;
+  they now fall back to the defaults (``0`` and ``1``), as non-numeric
+  strings already did.
 
 ### Internal
 - Removed unused helpers from ``flexablelib.utils`` (``float_format``,
@@ -11,6 +18,10 @@ All notable changes to this project will be documented in this file. See [standa
   part of the public API or called anywhere in the package.
 - Tests for alignment indicators on ``pipes`` and ``sticks``: centred and
   right markers, wide characters, one-character and zero-width columns.
+- Behaviour tests for public edge paths: `add_dividers` with one iterable,
+  `hrules=True`, invalid `hrules`/`vrules`/`border_text` arguments,
+  `clear_border_texts`, non-callable `row_filter`/`color_rule`, and
+  out-of-range `hide_columns`.
 
 ## [2.3.0] - 2026-11-07
 
