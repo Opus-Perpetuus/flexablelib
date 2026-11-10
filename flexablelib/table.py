@@ -2170,14 +2170,18 @@ class Table(object):
     def index_start(self, value: int):
         try:
             self.__i_start = int(value)
-        except ValueError:
+        except (TypeError, ValueError):
+            # None or any non-numeric value falls back to the default,
+            # the same way a non-numeric string always has.
             self.__i_start = 0
     
     @index_step.setter
     def index_step(self, value: int):
         try:
             self.__i_step = int(value)
-        except ValueError:
+        except (TypeError, ValueError):
+            # None or any non-numeric value falls back to the default,
+            # the same way a non-numeric string always has.
             self.__i_step = 1
 
     @index_title.setter
@@ -6698,8 +6702,8 @@ class Table(object):
         Write a self-contained HTML page with sorting, filtering and paging.
 
         Everything is inline -- no external requests -- so the file works
-        offline and from a file:// URL. ``paginate`` is the page size; 0 puts
-        every row on one page. Returns the markup when no target is given.
+        offline and from a file:// URL. ``paginate`` is the page size; 0,
+        False or None put every row on one page. Returns the markup when no target is given.
         """
         from .writers import to_html
         return to_html(self, target, title, paginate, include_index,
