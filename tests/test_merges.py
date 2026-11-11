@@ -295,12 +295,11 @@ def test_a_merge_works_across_styles(style):
     rendered = str(table)
 
     assert 'span' in rendered
-    # Column-only styles no longer grow a synthetic cap (that blanked
-    # neighbour cells). Every line must still share the width, and the
-    # table must not gain a line.
+    # Column-only styles may grow a width-clamped cap; every line must
+    # still share the width.
     after = [len(line) for line in rendered.splitlines()]
     assert set(after) == set(before)
-    assert len(after) == len(before)
+    assert len(after) >= len(before)
 
 
 # +-------------------------------------------------------------------------+
@@ -564,13 +563,14 @@ def test_horizontal_merge_caps_become_tees_above_and_below():
     assert '├────┬────┼────┤' in below
 
 
-def test_column_only_style_does_not_insert_synthetic_cap():
+def test_column_only_style_caps_are_clamped_to_the_merge():
     """double_horizontal has column lines but no row lines.
 
-    A synthetic cap would blank neighbour cells on a new line and make
-    them look merged. The multi-column span is shown by dropping the
-    internal vertical; the table stays the same height and stays square.
+    A multi-column merge gets a cap only across its width, with tees that
+    do not send a horizontal arm through neighbour C. The neighbour stays
+    visible on the merge row and the table stays square.
     """
+    from flexablelib.box_topology import new_breaks
     table = Table(style_name='double_horizontal')
     table.add_column('A', ['a1', 'a2', 'a3'])
     table.add_column('B', ['b1', 'b2', 'b3'])
@@ -580,11 +580,10 @@ def test_column_only_style_does_not_insert_synthetic_cap():
     rendered = str(table)
     lines = rendered.splitlines()
     assert any('AB' in line for line in lines)
-    assert len(lines) == len(before.splitlines())
     assert len({visible_width(line) for line in lines}) == 1
-    # Neighbour C stays a normal cell on the merged row, not a blank.
     ab_line = next(line for line in lines if 'AB' in line)
     assert 'c2' in ab_line
+    assert new_breaks(lines, before.splitlines()) == []
 
 
 def test_block_merge_header_and_footer_caps():
@@ -678,12 +677,13 @@ def _looks_like_rule_line(line: str) -> bool:
     return re.search(r'[─━═┄┅┈┉╌╍▬−\-~=]{2,}', line) is not None
 
 
-def test_multi_column_merge_in_column_only_style_does_not_add_a_cap():
-    """A 2D merge in a column-only style keeps the original line count.
+def test_multi_column_merge_in_column_only_style_clamps_the_cap():
+    """A 2D merge in a column-only style gets a width-clamped cap.
 
-    Neighbour cells on the same rows stay visible; no synthetic rule is
-    inserted between them. Existing header/end rules keep their own dash.
+    Neighbour cells on the same rows stay visible; the cap does not send
+    H through column A. Existing header/end rules keep their own dash.
     """
+    from flexablelib.box_topology import new_breaks
     table = Table(style_name='rounded_double_underline')
     table.add_column('A', ['a1', 'a2', 'a3', 'a4'])
     table.add_column('B', ['b1', 'b2', 'b3', 'b4'])
@@ -694,14 +694,12 @@ def test_multi_column_merge_in_column_only_style_does_not_add_a_cap():
     rendered = str(table)
     lines = rendered.splitlines()
     assert any('BC' in line for line in lines)
-    assert len(lines) == len(before.splitlines())
     assert len({visible_width(line) for line in lines}) == 1
-    # Neighbour A stays a normal cell beside the merge, not a blank.
     bc_line = next(line for line in lines if 'BC' in line)
     assert 'a2' in bc_line or 'a3' in bc_line
-    # Existing outer rules keep ─ (or ═ under the header), never a foreign dash.
     bottom = lines[-1]
     assert '┄' not in bottom
+    assert new_breaks(lines, before.splitlines()) == []
 
 
 def test_dashes_style_bottom_under_merge_keeps_dotted_glyph_not_solid():
@@ -748,8 +746,9 @@ def test_round_edges_end_corners_survive_last_row_horizontal_merge():
 
 
 def test_crossing_vertical_merge_is_not_cut_by_a_synthetic_cap():
-    """A 2D block beside a continuing vertical merge must not insert a cap
-    that draws a horizontal through the vertical merge."""
+    """A 2D block beside a continuing vertical merge must not draw a
+    horizontal through the vertical merge. Caps stay inside the 2D span."""
+    from flexablelib.box_topology import new_breaks
     table = Table(style_name='rounded_double_underline')
     table.add_column('Cat', [''] * 6)
     table.add_column('Item', [f'i{r}' for r in range(6)])
@@ -762,21 +761,22 @@ def test_crossing_vertical_merge_is_not_cut_by_a_synthetic_cap():
     rendered = str(table)
     lines = rendered.splitlines()
     assert 'ALL' in rendered and 'BOX' in rendered
-    assert len(lines) == len(before.splitlines())
-    # No body rule is introduced; existing header/end stay the only rules
-    # with a horizontal run besides the header underline.
-    body_caps = [
-        line for line in lines
-        if _looks_like_rule_line(line)
-        and '═' not in line
-        and not line.startswith('╭')
-        and not line.startswith('╰')
-    ]
-    assert body_caps == []
+    # Body caps flanking BOX must start with │ (the ALL column continues)
+    # and must not run H through ALL.
+    for line in lines:
+        if not _looks_like_rule_line(line):
+            continue
+        if '═' in line or line.startswith('╭') or line.startswith('╰'):
+            continue
+        if '┬' in line or '┴' in line:
+            assert line.startswith('│'), line
+            assert '├──────┼' not in line, line
+    assert new_breaks(lines, before.splitlines()) == []
 
 def test_column_only_merge_does_not_draw_a_cap_into_neighbours():
-    """A multi-column merge in a column-only style must not insert a rule
-    that blanks or draws H through neighbour columns."""
+    """A multi-column merge in a column-only style must not draw H through
+    neighbour columns. A width-clamped cap is allowed."""
+    from flexablelib.box_topology import new_breaks
     table = Table(style_name='ascii_double_underline_open_header')
     for c in range(4):
         table.add_column(f'C{c}', [f'r{r}c{c}' for r in range(4)])
@@ -787,17 +787,15 @@ def test_column_only_merge_does_not_draw_a_cap_into_neighbours():
     rendered = str(table)
     lines = rendered.splitlines()
     assert 'HSPAN' in rendered
-    assert len(lines) == len(before.splitlines())
     hspan = next(line for line in lines if 'HSPAN' in line)
-    # The unmerged last column stays visible on the merge row.
     assert 'r0c3' in hspan
-    # No mid-table cap line after the merge text.
-    below = lines[lines.index(hspan) + 1]
-    assert not _looks_like_rule_line(below), below
+    assert len({visible_width(line) for line in lines}) == 1
+    assert new_breaks(lines, before.splitlines()) == []
 
 
 def test_column_only_merge_does_not_bleed_h_through_unrelated_column():
     """Item column next to a V|N merge must not gain a horizontal run."""
+    from flexablelib.box_topology import new_breaks
     table = Table(style_name='rounded_double_underline')
     table.add_column('Cat', [''] * 6)
     table.add_column('Item', [f'i{r}' for r in range(6)])
@@ -810,10 +808,16 @@ def test_column_only_merge_does_not_bleed_h_through_unrelated_column():
     rendered = str(table)
     lines = rendered.splitlines()
     assert 'ALL' in rendered and 'BOX' in rendered
-    assert len(lines) == len(before.splitlines())
     box_line = next(line for line in lines if 'BOX' in line)
-    # The Item column beside BOX stays body text, not a blank cap.
     assert 'i1' in box_line or 'i2' in box_line or 'i3' in box_line
+    for line in lines:
+        if not _looks_like_rule_line(line):
+            continue
+        if '═' in line or line.startswith('╭') or line.startswith('╰'):
+            continue
+        if '┬' in line or '┴' in line:
+            assert '├──────┼' not in line, line
+    assert new_breaks(lines, before.splitlines()) == []
 
 
 def test_invisible_vertical_style_keeps_plain_dash_rules():
