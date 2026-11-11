@@ -48,7 +48,7 @@ def test_a_tab_in_a_cell_does_not_break_the_border():
     alone it measured as nothing and then pushed the border along by however
     far the terminal moved the cursor.
     """
-    table = Table(style_name='thin_borderline')
+    table = Table(style_name='single_double_underline_rows')
     table.add_column('a\tb', ['x\ty', 'zz'])
 
     rendered = str(table)
@@ -64,7 +64,7 @@ def test_a_hyperlink_costs_only_the_width_of_its_text():
     """
     assert visible_width(OSC8_LINK) == len('click')
 
-    table = Table(style_name='thin_borderline')
+    table = Table(style_name='single_double_underline_rows')
     table.add_column('link', [OSC8_LINK, 'plain'])
     table.add_column('n', [1, 2])
 
@@ -83,7 +83,7 @@ def test_an_emoji_presentation_selector_makes_its_character_wide():
     assert visible_width('⚠') == 1           # the bare sign
     assert visible_width('⚠️') == 2     # asked for as an emoji
 
-    table = Table(style_name='thin_borderline')
+    table = Table(style_name='single_double_underline_rows')
     table.add_column('status', ['⚠️', '✅', 'ok'])
     table.add_column('note', ['warn', 'good', 'x'])
 
@@ -98,7 +98,7 @@ def test_a_double_width_column_wraps_by_columns_not_by_characters():
     ``textwrap`` counts characters, so twelve ideographs looked like twelve
     columns and occupied twenty-four.
     """
-    table = Table(style_name='thin_borderline')
+    table = Table(style_name='single_double_underline_rows')
     table.add_column('name', ['alpha', 'beta'])
     table.add_column('text', ['日本語のテキスト'
                               'がとても長い', 'short'])
@@ -162,7 +162,7 @@ def test_a_table_with_headers_and_no_rows_renders():
     a crash on a table that has columns but no data. A query that came back
     empty is the most ordinary thing in the world.
     """
-    table = Table(style_name='thin_borderline')
+    table = Table(style_name='single_double_underline_rows')
     table.add_column('name', [])
     table.add_column('value', [])
 
@@ -179,7 +179,7 @@ def test_a_table_with_headers_and_no_rows_survives_a_narrow_terminal(terminal):
     combination of no rows and a width limit.
     """
     terminal(10)
-    table = Table(style_name='thin_borderline')
+    table = Table(style_name='single_double_underline_rows')
     table.add_column('a rather long header', [])
 
     assert str(table).startswith('┌')
@@ -191,7 +191,7 @@ def test_two_named_empty_columns_stay_two_columns():
     rows handed it the first header instead of its own, so every column after
     the first vanished into the first one.
     """
-    table = Table(style_name='thin_borderline')
+    table = Table(style_name='single_double_underline_rows')
     table.add_column('a', [])
     table.add_column('b', [])
 
@@ -213,7 +213,7 @@ def test_exponential_numbers_sit_on_the_decimal_axis():
     they fell through to the text branch and were right-aligned beside
     numbers that were not.
     """
-    table = Table(style_name='thin_borderline')
+    table = Table(style_name='single_double_underline_rows')
     table.add_column('n', [1.5e-5, 2.25, 300.0])
 
     rendered = str(table)
@@ -231,7 +231,7 @@ def test_a_float_with_no_point_keeps_the_column_width():
     ``1e+16`` is a float and has no decimal point at all. Splitting on the
     point and indexing the second half raised IndexError.
     """
-    table = Table(style_name='thin_borderline')
+    table = Table(style_name='single_double_underline_rows')
     table.add_column('n', [1e16, 2.25])
 
     assert rendered_widths(str(table)) == {len('│ 10000000000000000.00 │')} or True
@@ -243,7 +243,7 @@ def test_a_very_large_integer_is_not_reformatted():
     tabulate #213 -- integers from a dataframe turned into floats and lost
     precision. Nothing here converts an integer.
     """
-    table = Table(style_name='thin_borderline')
+    table = Table(style_name='single_double_underline_rows')
     table.add_column('n', [10 ** 30, 1])
 
     assert str(10 ** 30) in str(table)
@@ -255,7 +255,7 @@ def test_nan_and_infinity_do_not_disturb_the_decimal_axis():
     axis, so they align as the text they print as, and the numbers around
     them keep their own alignment.
     """
-    table = Table(style_name='thin_borderline')
+    table = Table(style_name='single_double_underline_rows')
     table.add_column('n', [1.5, float('nan'), float('inf'), 2.25])
 
     rendered = str(table)
@@ -281,7 +281,7 @@ def test_a_table_shrinks_around_any_kind_of_cell(terminal, value):
     measured.
     """
     terminal(20)
-    table = Table(style_name='thin_borderline')
+    table = Table(style_name='single_double_underline_rows')
     table.add_column('v', [value, value])
     table.add_column('s', ['a very long string that will have to give way', 'x'])
     table.auto_wrap = True
@@ -295,7 +295,7 @@ def test_line_breaks_inside_a_cell_survive_the_fitting_pass(terminal):
     A newline the caller put there is a hard break and stays one.
     """
     terminal(30)
-    table = Table(style_name='thin_borderline')
+    table = Table(style_name='single_double_underline_rows')
     table.add_column('a', ['one\ntwo', 'x'])
     table.add_column('b', ['a very long piece of text that forces a shrink', 'y'])
     table.auto_wrap = True
@@ -317,12 +317,12 @@ def test_the_table_never_exceeds_the_width_it_was_given(width):
     is added", and prettytable #288 and #272, the same complaint about
     max_table_width and max_width.
 
-    Widths below the structural minimum (three thin_borderline columns at
+    Widths below the structural minimum (three single_double_underline_rows columns at
     MIN_COLUMN_SIZE is 19) are issue #14 territory: the table floors every
     column and may still be wider than the budget. Those cases are covered
     there; here the budget is always enough to fit at the floor.
     """
-    table = Table(style_name='thin_borderline')
+    table = Table(style_name='single_double_underline_rows')
     table.add_column('name', ['alpha', 'beta', 'gamma'])
     table.add_column('note', ['a long note that will not fit', 'x', 'y'])
     table.add_column('value', [9.651, 3, 245.7])
@@ -337,7 +337,7 @@ def test_the_trimming_marker_is_inside_the_budget():
     Trimming to N produced N + 3, because the marker was appended after the
     cut rather than counted as part of it.
     """
-    table = Table(style_name='thin_borderline')
+    table = Table(style_name='single_double_underline_rows')
     table.add_column('s', ['abcdefghijklmnopqrstuvwxyz', 'x'])
     table.auto_wrap = False
     table.max_width = 16

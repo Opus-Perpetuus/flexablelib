@@ -11,7 +11,7 @@ from flexablelib import Table
 
 
 def _simple_table():
-    table = Table(style_name='simple')
+    table = Table(style_name='lines_ascii')
     table.add_column('name', ['zeta', 'alpha', 'mu'])
     table.add_column('value', [3.14159, 2.5, 10.0])
     table.add_column('count', [7, 42, 3])
@@ -31,7 +31,7 @@ def test_float_format_shapes_rendered_numbers():
 
 
 def test_int_format_and_leading_zeros():
-    table = Table(style_name='plain')
+    table = Table(style_name='borderless_compact_header_gap')
     table.add_column('n', [7, 42])
     table.int_format = '04d'
 
@@ -44,7 +44,7 @@ def test_int_format_and_leading_zeros():
 
 
 def test_custom_format_per_column():
-    table = Table(style_name='plain')
+    table = Table(style_name='borderless_compact_header_gap')
     table.add_column('name', ['a'])
     table.add_column('value', [1.5])
     table.custom_format = {'value': lambda v: 'USD {0}'.format(v)}
@@ -55,7 +55,7 @@ def test_custom_format_per_column():
 def test_column_min_and_max_width():
     from flexablelib.fast import visible_width
 
-    table = Table(style_name='plain')
+    table = Table(style_name='borderless_compact_header_gap')
     table.add_column('name', ['ab'])
     table.add_column('note', ['abcdefghijklmnop'])
     table.column_min_width = {'name': 8}
@@ -79,7 +79,7 @@ def test_column_min_and_max_width():
         assert visible_width(line) <= 15, repr(line)
 
     # Direct single-column case: body cell cannot exceed the cap.
-    tight = Table(style_name='plain')
+    tight = Table(style_name='borderless_compact_header_gap')
     tight.add_column('note', ['abcdefghijklmnop'])
     tight.column_max_width = 6
     tight.auto_wrap = False
@@ -95,7 +95,7 @@ def test_column_min_and_max_width():
 
 
 def test_header_align_independent_of_body():
-    table = Table(style_name='simple')
+    table = Table(style_name='lines_ascii')
     table.add_column('name', ['a'])
     table.add_column('n', [1])
     table.header_align = 'r'
@@ -111,7 +111,7 @@ def test_header_align_independent_of_body():
 
 
 def test_add_divider_inserts_rule_on_plain_style():
-    table = Table(style_name='plain')
+    table = Table(style_name='borderless_compact_header_gap')
     table.add_column('a', [1, 2, 3])
     table.add_column('b', ['x', 'y', 'z'])
     table.add_divider(after_row=0)
@@ -178,7 +178,7 @@ def test_repr_html_is_a_bare_table():
 
 
 def test_table_align_pads_to_available_width():
-    table = Table(style_name='plain')
+    table = Table(style_name='borderless_compact_header_gap')
     table.add_column('a', [1])
     table.max_width = 40
     table.table_align = 'r'
@@ -190,7 +190,7 @@ def test_table_align_pads_to_available_width():
 
 
 def test_expand_to_window_widens_the_table():
-    table = Table(style_name='plain')
+    table = Table(style_name='borderless_compact_header_gap')
     table.add_column('a', ['x'])
     table.add_column('b', ['y'])
     table.max_width = 30
@@ -275,7 +275,7 @@ def test_html_export_preserves_merged_cells():
 
 
 def test_merged_region_color_fills_ansi():
-    table = Table(style_name='pretty_grid')
+    table = Table(style_name='double_horizontal_rows')
     table.use_colors = True
     table.add_column('A', ['alpha-0', 'alpha-1', 'alpha-2'])
     table.add_column('B', ['bravo-0', 'bravo-1', 'bravo-2'])
@@ -289,7 +289,7 @@ def test_merged_region_color_fills_ansi():
 
 
 def test_merged_region_inherits_column_color():
-    table = Table(style_name='pretty_grid')
+    table = Table(style_name='double_horizontal_rows')
     table.use_colors = True
     # Wide unmerged content so the merge span can hold the label.
     table.add_column('A', ['alpha-0', 'alpha-1'])
@@ -304,7 +304,7 @@ def test_merged_region_inherits_column_color():
 
 
 def test_html_and_excel_carry_merge_fill(tmp_path):
-    table = Table(style_name='pretty_grid')
+    table = Table(style_name='double_horizontal_rows')
     table.use_colors = True
     table.add_column('A', ['a0', 'a1'])
     table.add_column('B', ['b0', 'b1'])
@@ -320,7 +320,7 @@ def test_html_and_excel_carry_merge_fill(tmp_path):
 def test_horizontal_rules_carry_cell_bg():
     """H-rule dash runs inherit the cell-above background (no dark band)."""
     import re
-    table = Table(style_name='pretty_grid')
+    table = Table(style_name='double_horizontal_rows')
     table.use_colors = True
     table.add_column('A', ['a0', 'a1'])
     table.add_column('B', ['b0', 'b1'])
@@ -343,7 +343,7 @@ def test_border_color_foreground_on_modern_and_ascii():
     import os
     os.environ['FORCE_COLOR'] = '1'
     os.environ.pop('NO_COLOR', None)
-    for style in ('modern', 'ascii'):
+    for style in ('single_rows', 'ascii_rows'):
         table = Table(style_name=style)
         table.use_colors = True
         table.border_color = 'cyan'
@@ -358,7 +358,7 @@ def test_border_text_on_top_rule_with_color():
     import os
     os.environ['FORCE_COLOR'] = '1'
     os.environ.pop('NO_COLOR', None)
-    table = Table(style_name='ascii')
+    table = Table(style_name='ascii_rows')
     table.use_colors = True
     table.border_color = 'blue'
     table.add_column('name', ['C', 'Go'])
@@ -376,7 +376,7 @@ def test_border_text_on_top_rule_with_color():
 
 
 def test_border_text_left_vertical():
-    table = Table(style_name='ascii')
+    table = Table(style_name='ascii_rows')
     table.add_column('A', ['1', '2'])
     table.border_text('AB', where='left', offset=1)
     import re
@@ -390,7 +390,7 @@ def test_blocks_style_still_works_with_colors():
     import os
     os.environ['FORCE_COLOR'] = '1'
     os.environ.pop('NO_COLOR', None)
-    table = Table(style_name='blocks')
+    table = Table(style_name='borderless')
     table.use_colors = True
     table.header_color = 'bold white on blue'
     table.column_colors = {'A': 'black on green'}

@@ -41,7 +41,7 @@ def test_top_border_under_title_survives_first_row_merge(name, order):
 
 @pytest.mark.parametrize('name,order', ORDERINGS)
 def test_bottom_border_over_caption_survives_last_row_merge(name, order):
-    table = make(style_name='modern', caption='cap')
+    table = make(style_name='single_rows', caption='cap')
     order(table)
     last = 3 if name != 'row_filter' else 2
     table.merge_cells(last, 0, last_column=1, value='M')
@@ -50,7 +50,7 @@ def test_bottom_border_over_caption_survives_last_row_merge(name, order):
 
 
 def test_eheader_separator_drops_junction_over_first_row_merge():
-    table = make(sort_by='V')  # default grid_eheader
+    table = make(sort_by='V')  # default ascii_double_underline_open_header
     table.merge_cells(0, 0, last_column=1, value='M')
     lines = table.compose().split('\n')
     assert lines[2] == '+=======+===+'
@@ -102,7 +102,7 @@ def test_merge_over_hidden_column_shows_its_text(hidden):
 
 
 def test_merge_over_hidden_column_matches_export():
-    table = make(hide_columns=['T'], style_name='ascii')
+    table = make(hide_columns=['T'], style_name='ascii_rows')
     table.merge_cells(0, 1, last_column=2, value='Merged')
     (region,) = table._export_view().merges
     assert (region.first_column, region.last_column) == (1, 1)

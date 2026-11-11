@@ -26,7 +26,7 @@ def test_index_title_and_roman_index():
     t = Table.from_records(
         [['a', 1], ['b', 2]],
         headers=['N', 'V'],
-        style_name='sharp',
+        style_name='single',
     )
     t.show_index = True
     t.index_title = '#'
@@ -44,7 +44,7 @@ def test_number_columns_and_strip_cells():
     t = Table.from_records(
         [['  x  ', ' y '], ['z', 'w']],
         headers=['Name', 'Val'],
-        style_name='sharp',
+        style_name='single',
     )
     t.number_columns = True
     t.strip_cells = True
@@ -58,7 +58,7 @@ def test_suppress_empty():
     t = Table.from_records(
         [['a', 1], ['', ''], ['b', 2]],
         headers=['N', 'V'],
-        style_name='simple',
+        style_name='lines_ascii',
     )
     t.suppress_empty = True
     assert t.show_empty_rows is False
@@ -70,7 +70,7 @@ def test_suppress_empty():
 
 
 def test_hrules_and_vrules():
-    t = Table.from_records([[1, 2]], headers=['A', 'B'], style_name='pretty_grid')
+    t = Table.from_records([[1, 2]], headers=['A', 'B'], style_name='double_horizontal_rows')
     t.hrules = 'none'
     out = bare(t.compose())
     # no horizontal box lines
@@ -90,11 +90,11 @@ def test_divide_every_and_add_dividers():
     t = Table.from_records(
         [[i, i] for i in range(6)],
         headers=['a', 'b'],
-        style_name='presto',
+        style_name='psql',
     )
     t.divide_every(2)
     out = bare(t.compose())
-    # presto body separators are dashes
+    # psql body separators are dashes
     assert out.count('----') >= 2 or out.count('-') > 10
     t.clear_dividers()
     t.add_dividers(0, 3)

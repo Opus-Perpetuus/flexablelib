@@ -32,7 +32,7 @@ Columns: **Already?** = covered by flexablelib 2.0.12 in spirit; **Candidate?** 
 | 19 | Python | `textual` | https://github.com/Textualize/textual | DataTable widget; reactive TUI; sort/filter UI | none interactive | no |
 | 20 | Python | `csvkit` | https://github.com/wireservice/csvkit | csvlook ASCII tables; CLI CSV toolkit | to_csv | partial |
 | 21 | Python | `petl` | https://github.com/petl-developers/petl | ETL tables; look() pretty print; transforms | from_records | no |
-| 22 | Python | `flexablelib (self)` | https://github.com/Opus-Perpetuus/flexablelib | 56 styles; merges; border_text; border_color; blocks; decimal align; colors; IO | baseline 2.0.12 | — |
+| 22 | Python | `flexablelib (self)` | https://github.com/Opus-Perpetuus/flexablelib | 54 styles; merges; border_text; border_color; blocks; decimal align; colors; IO | baseline 2.0.12 | — |
 | 23 | Rust | `tabled` | https://github.com/zhiburt/tabled | derive macros; Style presets; LineText borders; span; panel; color; width/height control; rotate | styles,border_text,border_color,merges | yes |
 | 24 | Rust | `comfy-table` | https://github.com/Nukesor/comfy-table | dynamic width arrange; constraints; presets+modifiers; padding; ANSI attrs; content wrapping | max_width,padding partial,colors | yes |
 | 25 | Rust | `cli-table` | https://github.com/cli-table/cli-table | derive; CSV feature; simple Style | styles,CSV | no |

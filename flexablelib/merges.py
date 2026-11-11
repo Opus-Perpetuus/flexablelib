@@ -353,7 +353,7 @@ def _pick_junction(v_glyph: str, h_glyph: str, n: bool, s: bool, e: bool, w: boo
         # ASCII column lines join with '+' whatever the dash ('-', '=', '~').
         return _ASCII.get(key, '+')
     if v_glyph and not ('\u2500' <= v_glyph <= '\u257f'):
-        # Other non-box column glyphs (``dots`` draws ':') are their own
+        # Other non-box column glyphs (``dotted_rows`` draws ':') are their own
         # junction; a light box tee next to them is a foreign glyph.
         return v_glyph
     if v_glyph == '║' and h_glyph == '═':
@@ -388,7 +388,7 @@ def _synthesize_body_rule(composition):
     elif header is not None and header.middle:
         h = header.middle
     if not ('\u2500' <= v.middle <= '\u257f') and v.middle not in '|+':
-        # Non-box column glyphs (``dots`` draws ':') are their own junction.
+        # Non-box column glyphs (``dotted_rows`` draws ':') are their own junction.
         return SeparatorLine(
             left=v.left or None,
             middle=h if h and not ('\u2500' <= h <= '\u257f') else '-',
