@@ -23,6 +23,7 @@ Widths are always visible columns: ANSI escapes count zero, emoji and CJK
 count two.
 """
 
+import inspect
 import re
 
 from .colors import RESET, parse_spec, supports_color
@@ -1011,13 +1012,287 @@ class Card(object):
 # +---------------------------------------------------------------------------+
 # Grid
 
-class GridCell(object):
-    """A grid child that spans ``span`` columns."""
+_VALIGNS = {'t': 't', 'top': 't', 'm': 'm', 'middle': 'm', 'center': 'm',
+            'centre': 'm', 'c': 'm', 'b': 'b', 'bottom': 'b'}
 
-    def __init__(self, child, span=1, align='l'):
+
+def _valign(value, default='t'):
+    if value is None:
+        return default
+    try:
+        return _VALIGNS[str(value).lower()]
+    except KeyError:
+        raise ValueError(
+            "valign must be 'top', 'middle' or 'bottom', got {0!r}".format(
+                value))
+
+
+# Glyphs for collapsed grid borders, indexed by which of (up, down, left,
+# right) meet at a point.
+_BORDER_SETS = {
+    'single':  dict(h='─', v='│', tl='┌', tr='┐', bl='└', br='┘', lt='├',
+                    rt='┤', tt='┬', bt='┴', x='┼'),
+    'rounded': dict(h='─', v='│', tl='╭', tr='╮', bl='╰', br='╯', lt='├',
+                    rt='┤', tt='┬', bt='┴', x='┼'),
+    'double':  dict(h='═', v='║', tl='╔', tr='╗', bl='╚', br='╝', lt='╠',
+                    rt='╣', tt='╦', bt='╩', x='╬'),
+    'heavy':   dict(h='━', v='┃', tl='┏', tr='┓', bl='┗', br='┛', lt='┣',
+                    rt='┫', tt='┳', bt='┻', x='╋'),
+    'ascii':   dict(h='-', v='|', tl='+', tr='+', bl='+', br='+', lt='+',
+                    rt='+', tt='+', bt='+', x='+'),
+}
+_BORDER_ALIASES = {'true': 'single', '1': 'single', 'sharp': 'single',
+                   'bold': 'heavy', 'thick': 'heavy'}
+
+
+def _border_set(border):
+    if border is None or border is False:
+        return None
+    if border is True:
+        return _BORDER_SETS['single']
+    name = str(border).lower()
+    name = _BORDER_ALIASES.get(name, name)
+    try:
+        return _BORDER_SETS[name]
+    except KeyError:
+        raise ValueError('border must be one of {0}, got {1!r}'.format(
+            ', '.join(sorted(_BORDER_SETS)), border))
+
+
+def _junction(glyphs, up, down, left, right):
+    """The glyph where the given border arms meet."""
+    key = (up, down, left, right)
+    table = {
+        (1, 1, 1, 1): 'x', (0, 1, 1, 1): 'tt', (1, 0, 1, 1): 'bt',
+        (1, 1, 0, 1): 'lt', (1, 1, 1, 0): 'rt', (0, 1, 0, 1): 'tl',
+        (0, 1, 1, 0): 'tr', (1, 0, 0, 1): 'bl', (1, 0, 1, 0): 'br',
+        (1, 1, 0, 0): 'v', (0, 0, 1, 1): 'h', (1, 0, 0, 0): 'v',
+        (0, 1, 0, 0): 'v', (0, 0, 1, 0): 'h', (0, 0, 0, 1): 'h',
+    }
+    name = table.get(tuple(int(bool(k)) for k in key))
+    return glyphs[name] if name else ' '
+
+
+_TRACK_RE = re.compile(r'^\s*(\d+(?:\.\d+)?)\s*(fr|%|\*)?\s*$')
+
+
+class _Track(object):
+    """One column (or row) size: fixed, fraction, percentage or auto."""
+
+    def __init__(self, spec):
+        low = high = None
+        if isinstance(spec, (tuple, list)):
+            if len(spec) != 3:
+                raise ValueError(
+                    'a track bound is (size, min, max), got {0!r}'.format(
+                        spec))
+            spec, low, high = spec
+        self.low = None if low is None else max(0, int(low))
+        self.high = None if high is None else max(1, int(high))
+        if self.low is not None and self.high is not None and \
+                self.low > self.high:
+            raise ValueError('track min {0} is above its max {1}'.format(
+                self.low, self.high))
+        self.kind, self.value = self._parse(spec)
+
+    @staticmethod
+    def _parse(spec):
+        if spec is None or (isinstance(spec, str) and
+                            spec.strip().lower() == 'auto'):
+            return 'auto', 0
+        if isinstance(spec, bool):
+            raise ValueError('a track size cannot be a bool')
+        if isinstance(spec, int):
+            if spec < 1:
+                raise ValueError('a fixed track must be >= 1, got {0}'.format(
+                    spec))
+            return 'fixed', spec
+        if isinstance(spec, float):
+            if spec <= 0:
+                raise ValueError('a fraction must be > 0, got {0}'.format(
+                    spec))
+            return 'fr', spec
+        match = _TRACK_RE.match(str(spec).lower())
+        if not match:
+            raise ValueError(
+                "track size must be an int, 'auto', 'Nfr', 'N%' or a float, "
+                'got {0!r}'.format(spec))
+        number, unit = float(match.group(1)), match.group(2)
+        if unit in ('fr', '*'):
+            if number <= 0:
+                raise ValueError('a fraction must be > 0')
+            return 'fr', number
+        if unit == '%':
+            return 'pct', number
+        if number < 1 or number != int(number):
+            raise ValueError('a fixed track must be a whole number >= 1')
+        return 'fixed', int(number)
+
+    def clamp(self, size):
+        if self.low is not None:
+            size = max(size, self.low)
+        if self.high is not None:
+            size = min(size, self.high)
+        return size
+
+    @property
+    def minimum(self):
+        if self.kind == 'fixed':
+            return self.clamp(self.value)
+        return self.low if self.low is not None else 1
+
+
+def _distribute(total, weights):
+    """Split ``total`` integer units by ``weights`` (largest remainder)."""
+    if total <= 0 or not weights:
+        return [0] * len(weights)
+    whole = float(sum(weights))
+    exact = [total * w / whole for w in weights]
+    sizes = [int(e) for e in exact]
+    order = sorted(range(len(weights)), key=lambda i: exact[i] - sizes[i],
+                   reverse=True)
+    for i in order[:total - sum(sizes)]:
+        sizes[i] += 1
+    return sizes
+
+
+def solve_tracks(tracks, available, natural=None):
+    """
+    Sizes for ``tracks`` sharing ``available`` columns (or lines).
+
+    Fixed and percentage tracks take their size, ``auto`` tracks their
+    ``natural`` size, then fraction tracks share what is left by weight. Every
+    track honours its ``(size, min, max)`` bounds. Returns the sizes, or
+    ``None`` when even the minimums do not fit.
+    """
+    natural = natural or [0] * len(tracks)
+    if sum(t.minimum for t in tracks) > available:
+        return None
+    sizes = [0] * len(tracks)
+    for i, t in enumerate(tracks):
+        if t.kind == 'fixed':
+            sizes[i] = t.clamp(t.value)
+        elif t.kind == 'pct':
+            sizes[i] = t.clamp(max(1, int(available * t.value / 100.0)))
+        elif t.kind == 'auto':
+            sizes[i] = t.clamp(max(1, natural[i]))
+    flexible = [i for i, t in enumerate(tracks) if t.kind == 'fr']
+    # Auto and percentage tracks give way first when they overflow.
+    over = sum(sizes) + sum(tracks[i].minimum for i in flexible) - available
+    if over > 0:
+        shrinkable = [i for i, t in enumerate(tracks)
+                      if t.kind in ('auto', 'pct')]
+        while over > 0 and shrinkable:
+            room = [sizes[i] - tracks[i].minimum for i in shrinkable]
+            if sum(room) <= 0:
+                break
+            cut = _distribute(min(over, sum(room)), room)
+            for i, c in zip(shrinkable, cut):
+                sizes[i] -= c
+            over -= sum(cut)
+    if not flexible:
+        return sizes if sum(sizes) <= available else None
+    fixed = set(range(len(tracks))) - set(flexible)
+    pinned = {}
+    while True:
+        free = [i for i in flexible if i not in pinned]
+        left = available - sum(sizes[i] for i in fixed) - sum(pinned.values())
+        shares = _distribute(max(0, left), [tracks[i].value for i in free])
+        clash = False
+        for i, share in zip(free, shares):
+            bounded = tracks[i].clamp(max(1, share))
+            if bounded != share:
+                pinned[i] = bounded
+                clash = True
+                break
+        if not clash:
+            for i, share in zip(free, shares):
+                sizes[i] = share
+            break
+        if len(pinned) == len(flexible):
+            break
+    for i, size in pinned.items():
+        sizes[i] = size
+    if sum(sizes) > available:
+        return None
+    return sizes
+
+
+def _track_sets(value, name, allow_empty=False):
+    """
+    ``[(min_width, [tracks])]`` from a list of sizes or a responsive dict
+    ``{min_width: [sizes]}``, sorted by ``min_width``.
+    """
+    if value is None:
+        return []
+    if isinstance(value, dict):
+        items = []
+        for key, sizes in value.items():
+            key = int(key)
+            if key < 0:
+                raise ValueError('{0} breakpoints must be >= 0'.format(name))
+            if isinstance(sizes, dict):
+                raise TypeError('{0} breakpoints cannot nest'.format(name))
+            items.append((key, _track_sets(sizes, name, allow_empty)[0][1]))
+        if not items:
+            raise ValueError('{0} needs at least one layout'.format(name))
+        return sorted(items, key=lambda kv: kv[0])
+    if isinstance(value, (str, int, float)):
+        raise TypeError('{0} must be a list of sizes or a dict of '
+                        'lists'.format(name))
+    sizes = list(value)
+    if not sizes and not allow_empty:
+        raise ValueError('{0} needs at least one size'.format(name))
+    return [(0, [_Track(spec) for spec in sizes])]
+
+
+def _pick(track_sets, width):
+    """The tracks for the widest breakpoint ``width`` reaches, or None."""
+    chosen = None
+    for minimum, tracks in track_sets:
+        if width >= minimum:
+            chosen = tracks
+    return chosen
+
+
+def _accepts_height(child):
+    render = getattr(child, 'render', None)
+    if not callable(render):
+        return False
+    try:
+        params = inspect.signature(render).parameters
+    except (TypeError, ValueError):  # pragma: no cover - C callables
+        return False
+    return 'height' in params or any(
+        p.kind == p.VAR_KEYWORD for p in params.values())
+
+
+class GridCell(object):
+    """
+    A grid child with placement options.
+
+    ``span`` columns and ``row_span`` rows; ``align`` / ``valign`` place the
+    child inside its slot when it is narrower or shorter; ``title`` is set
+    into the cell's top border when the grid draws borders; ``color`` paints
+    the cell's background; ``stretch=True`` renders the child at the slot's
+    full height (cards always stretch in an ``equal_height`` grid);
+    ``hide_below`` hides the cell when the grid is narrower than that.
+    """
+
+    def __init__(self, child, span=1, align='l', row_span=1, valign=None,
+                 title=None, title_align='l', color=None, stretch=None,
+                 padding=None, hide_below=None):
         self.child = child
         self.span = max(1, int(span))
+        self.row_span = max(1, int(row_span))
         self.align = _align(align)
+        self.valign = None if valign is None else _valign(valign)
+        self.title = None if title is None else str(title)
+        self.title_align = _align(title_align)
+        self.color = color
+        self.stretch = stretch
+        self.padding = None if padding is None else max(0, int(padding))
+        self.hide_below = None if hide_below is None else int(hide_below)
 
 
 class Grid(object):
@@ -1032,26 +1307,50 @@ class Grid(object):
     Parameters
     ----------
     children : list
-        Cards, tables, strings, grids, or ``GridCell(child, span=n)`` /
-        ``(child, span)`` for an item that spans ``n`` columns.
+        Cards, tables, strings, grids, widgets, or ``GridCell(child, span=n,
+        row_span=m)`` / ``(child, span)``.
     columns : 'auto' or int
         ``'auto'`` fits as many columns of ``min_width`` as the width allows.
         An int is the most columns to use; with ``min_width`` the grid still
         drops to fewer when they would be narrower than that.
+    column_widths : list, optional
+        One size per column: an int (fixed), ``'auto'`` (widest child),
+        ``'2fr'`` / ``2.0`` (a share of what is left), ``'30%'``, or
+        ``(size, min, max)``. Sets the number of columns. Default: equal
+        columns.
+    row_heights : list, optional
+        One size per row (``int``, ``'auto'``, ``'Nfr'``); fraction rows
+        share the lines left when the grid is given a ``height``.
     gap, row_gap : int
-        Spaces between columns, blank lines between rows.
+        Spaces between columns, blank lines between rows (ignored between
+        cells when ``border`` is set: the border separates them).
     min_width : int, optional
         Narrowest a column may be. Default for ``'auto'``: the widest
         child's natural width.
-    width : int, optional
-        Fixed total width (default: the terminal width).
+    width, height : int, optional
+        Fixed total size (default width: the terminal; default height: as
+        tall as the content).
     equal_height : bool
         Stretch cards in one row to the same height.
+    border : str or bool, optional
+        Draw one shared frame around and between the cells -- ``'single'``,
+        ``'rounded'``, ``'double'``, ``'heavy'``, ``'ascii'`` or ``True`` --
+        with proper junctions (``┬ ┼ ┴``) wherever cells meet.
+    padding : int, optional
+        Spaces inside each bordered cell (default 1 with a border, else 0).
+    collapse_below : int, optional
+        Below this width stack every child in one column.
+    valign : str
+        ``'top'`` (default), ``'middle'`` or ``'bottom'`` for children
+        shorter than their row.
     """
 
     def __init__(self, children=None, columns='auto', gap=2, row_gap=1,
                  min_width=None, max_width=None, width=None,
-                 equal_height=True, align='l'):
+                 equal_height=True, align='l', column_widths=None,
+                 row_heights=None, height=None, border=None,
+                 border_color=None, title_color='bold', padding=None,
+                 collapse_below=None, valign='top', use_colors=None):
         self.children = []
         for child in children or []:
             self.add(child)
@@ -1061,8 +1360,18 @@ class Grid(object):
         self.min_width = min_width
         self.max_width = max_width
         self.width = width
+        self.height = height
         self.equal_height = bool(equal_height)
         self.align = _align(align)
+        self.column_widths = column_widths
+        self.row_heights = row_heights
+        self.border = border
+        self.border_color = border_color
+        self.title_color = title_color
+        self.padding = padding
+        self.collapse_below = collapse_below
+        self.valign = _valign(valign)
+        self.use_colors = use_colors
 
     @property
     def columns(self):
@@ -1078,100 +1387,508 @@ class Grid(object):
             raise ValueError("columns must be 'auto' or >= 1")
         self.__columns = value
 
-    def add(self, child, span=1):
-        """Append a child (optionally spanning columns); returns ``self``."""
+    @property
+    def column_widths(self):
+        return self.__column_widths
+
+    @column_widths.setter
+    def column_widths(self, value):
+        self.__track_sets = _track_sets(value, 'column_widths')
+        self.__column_widths = value
+
+    @property
+    def row_heights(self):
+        return self.__row_heights
+
+    @row_heights.setter
+    def row_heights(self, value):
+        self.__row_sets = _track_sets(value, 'row_heights', allow_empty=True)
+        self.__row_heights = value
+
+    @property
+    def border(self):
+        return self.__border
+
+    @border.setter
+    def border(self, value):
+        self.__glyphs = _border_set(value)
+        self.__border = value
+
+    def add(self, child, span=1, **options):
+        """
+        Append a child; returns ``self``.
+
+        ``options`` are :class:`GridCell` options (``row_span``, ``title``,
+        ``valign``, ``color``...).
+        """
         if isinstance(child, GridCell):
             self.children.append(child)
         elif isinstance(child, tuple) and len(child) == 2 and \
                 isinstance(child[1], int):
-            self.children.append(GridCell(child[0], child[1]))
+            self.children.append(GridCell(child[0], child[1], **options))
         else:
-            self.children.append(GridCell(child, span))
+            self.children.append(GridCell(child, span, **options))
         return self
+
+    # -- measurement -------------------------------------------------------
+
+    def _bordered(self):
+        return self.__glyphs is not None
+
+    def _cell_padding(self, cell):
+        if cell.padding is not None:
+            return cell.padding
+        if self.padding is not None:
+            return max(0, int(self.padding))
+        return 1 if self._bordered() else 0
+
+    def _separator(self):
+        """Columns between two tracks."""
+        return 1 if self._bordered() else self.gap
+
+    def _frame_columns(self, n):
+        return (n + 1) if self._bordered() else self.gap * (n - 1)
 
     def natural_width(self):
         if self.width is not None:
             return int(self.width)
-        widths = [_natural_width(c.child) for c in self.children] or [0]
-        if self.columns == 'auto':
-            n = len(self.children) or 1
+        if self.__track_sets:
+            tracks = self.__track_sets[-1][1]
+            n = len(tracks)
+            natural = self._natural_tracks(n, None)
+            total = 0
+            for t, nat in zip(tracks, natural):
+                if t.kind == 'fixed':
+                    total += t.clamp(t.value)
+                else:
+                    total += t.clamp(max(1, nat))
+            total += self._frame_columns(n)
         else:
-            n = min(self.columns, max(1, len(self.children)))
-        col = max(widths)
-        if self.min_width is not None:
-            col = max(col, int(self.min_width))
-        total = n * col + self.gap * (n - 1)
+            widths = [_natural_width(c.child) + 2 * self._cell_padding(c)
+                      for c in self.children] or [0]
+            if self.columns == 'auto':
+                n = len(self.children) or 1
+            else:
+                n = min(self.columns, max(1, len(self.children)))
+            col = max(widths)
+            if self.min_width is not None:
+                col = max(col, int(self.min_width))
+            total = n * col + self._frame_columns(n)
         if self.max_width is not None:
             total = min(total, int(self.max_width))
         return total
 
-    def column_count(self, width=None):
-        """How many columns the grid uses at ``width``."""
+    def _resolve_width(self, width):
         width = render_width(width if width is not None else self.width)
         if self.max_width is not None:
             width = min(width, int(self.max_width))
-        spans = sum(c.span for c in self.children) or 1
+        return width
+
+    def _natural_tracks(self, n, placed, children=None):
+        """Natural width of each column from its single-column children."""
+        natural = [0] * n
+        if placed is None:
+            placed = self._place(n, children)
+        for cell, _, c, _, cs in placed:
+            if cs == 1:
+                natural[c] = max(natural[c], _natural_width(cell.child) +
+                                 2 * self._cell_padding(cell))
+        return natural
+
+    def visible_children(self, width=None):
+        """The children shown at ``width`` (``hide_below`` applied)."""
+        width = self._resolve_width(width)
+        return [c for c in self.children
+                if c.hide_below is None or width >= c.hide_below]
+
+    def _layout(self, width, children=None):
+        """``(columns, track widths, stacked)`` for ``width``."""
+        stacked = (self.collapse_below is not None and
+                   width < int(self.collapse_below))
+        if not stacked and self.__track_sets:
+            tracks = _pick(self.__track_sets, width)
+            if tracks is not None:
+                n = len(tracks)
+                avail = width - self._frame_columns(n)
+                if avail >= n:
+                    sizes = solve_tracks(tracks, avail, self._natural_tracks(
+                        n, None, children))
+                    if sizes is not None:
+                        return n, sizes, False
+            stacked = True
+        if stacked:
+            return 1, [max(1, width - self._frame_columns(1))], True
+        n = self.column_count(width)
+        avail = width - self._frame_columns(n)
+        if self._bordered() and avail >= n:
+            # A frame should reach the full width: hand out the remainder.
+            return n, _distribute(avail, [1] * n), False
+        col_w = max(1, avail // n)
+        return n, [col_w] * n, False
+
+    def column_count(self, width=None):
+        """How many columns the grid uses at ``width``."""
+        width = self._resolve_width(width)
+        if self.collapse_below is not None and \
+                width < int(self.collapse_below):
+            return 1
+        children = self.visible_children(width)
+        if self.__track_sets:
+            return self._layout(width, children)[0]
+        spans = sum(c.span for c in children) or 1
         if self.min_width is not None:
             min_w = int(self.min_width)
         else:
-            min_w = max([min(_natural_width(c.child), width)
-                         for c in self.children if c.span == 1] or [1])
+            min_w = max([min(_natural_width(c.child) +
+                             2 * self._cell_padding(c), width)
+                         for c in children if c.span == 1] or [1])
         min_w = max(1, min_w)
-        fit = max(1, (width + self.gap) // (min_w + self.gap))
+        sep = self._separator()
+        room = width - (2 if self._bordered() else 0) + (
+            0 if self._bordered() else sep)
+        fit = max(1, (room + (sep if self._bordered() else 0)) //
+                  (min_w + sep))
         if self.columns == 'auto':
             return max(1, min(fit, spans))
         if self.min_width is not None:
             return max(1, min(self.columns, fit))
         return self.columns
 
+    def _place(self, n, children=None):
+        """
+        Auto-place the children on an ``n``-column grid.
+
+        Returns ``(cell, row, column, row_span, column_span)`` tuples. The
+        cursor only moves forward (CSS "sparse" placement), skipping slots a
+        row-spanning cell above already holds.
+        """
+        taken = set()
+        placed = []
+        row, col = 0, 0
+        for cell in (self.children if children is None else children):
+            span = min(cell.span, n)
+            rows = cell.row_span
+            while True:
+                if col + span > n:
+                    row, col = row + 1, 0
+                    continue
+                if any((row + dr, col + dc) in taken
+                       for dr in range(rows) for dc in range(span)):
+                    col += 1
+                    continue
+                break
+            for dr in range(rows):
+                for dc in range(span):
+                    taken.add((row + dr, col + dc))
+            placed.append((cell, row, col, rows, span))
+            col += span
+        return placed
+
+    # -- rendering -----------------------------------------------------------
+
     def __str__(self):
         return self.render()
 
-    def render(self, width=None):
-        """Draw the grid into ``width`` columns (default: terminal width)."""
-        width = render_width(width if width is not None else self.width)
-        if self.max_width is not None:
-            width = min(width, int(self.max_width))
-        if not self.children:
+    def render(self, width=None, height=None):
+        """
+        Draw the grid into ``width`` columns (default: terminal width).
+
+        ``height`` (or the grid's own ``height``) makes the grid exactly that
+        many lines: fraction rows (``row_heights``) take the spare lines,
+        otherwise the last row does. When the content is taller, rows give
+        up lines from the bottom up (fraction rows first) so a bordered grid
+        keeps its frame closed.
+        """
+        width = self._resolve_width(width)
+        if height is None:
+            height = self.height
+        children = self.visible_children(width)
+        if not children:
+            if height:
+                return '\n'.join([''] * int(height))
             return ''
-        n = self.column_count(width)
-        gap = self.gap
-        col_w = max(1, (width - gap * (n - 1)) // n)
+        n, tracks, stacked = self._layout(width, children)
+        if stacked:
+            placed = [(cell, i, 0, 1, 1)
+                      for i, cell in enumerate(children)]
+        else:
+            placed = self._place(n, children)
+        bordered = self._bordered()
+        sep = self._separator()
+        painter = _Painter(supports_color() if self.use_colors is None
+                           else bool(self.use_colors))
 
-        # Flow the children into rows.
-        rows, row, used = [], [], 0
-        for cell in self.children:
-            span = min(cell.span, n)
-            if used + span > n:
-                rows.append(row)
-                row, used = [], 0
-            row.append((cell, span))
-            used += span
-        if row:
-            rows.append(row)
+        def span_width(c, cs):
+            return sum(tracks[c:c + cs]) + sep * (cs - 1)
 
-        out = []
-        for r_i, row in enumerate(rows):
-            blocks = []
-            for cell, span in row:
-                cell_w = col_w * span + gap * (span - 1)
-                blocks.append([cell, span, cell_w,
-                               _render_child(cell.child, cell_w)])
-            if self.equal_height:
-                tallest = max(b[3].count('\n') + 1 for b in blocks)
-                for b in blocks:
-                    child = b[0].child
-                    if isinstance(child, Card) and \
-                            b[3].count('\n') + 1 < tallest:
-                        b[3] = child.render(width=b[2], height=tallest)
-            height = max(b[3].count('\n') + 1 for b in blocks)
-            for k in range(height):
-                parts = []
-                for b_i, (cell, span, cell_w, text) in enumerate(blocks):
-                    lines = text.split('\n')
-                    line = lines[k] if k < len(lines) else ''
-                    parts.append(_fit_line(line, cell_w, cell.align))
-                out.append((' ' * gap).join(parts).rstrip(' '))
-            if r_i < len(rows) - 1:
-                out.extend([''] * self.row_gap)
+        # Natural render of every child at its slot width.
+        blocks = []
+        for cell, r, c, rs, cs in placed:
+            pad = self._cell_padding(cell)
+            inner = max(1, span_width(c, cs) - 2 * pad)
+            text = _render_child(cell.child, inner)
+            blocks.append([cell, r, c, rs, cs, inner, text])
+
+        n_rows = max(r + rs for _, r, _, rs, _, _, _ in blocks)
+        row_sep = 1 if bordered else self.row_gap
+        heights = [0] * n_rows
+        for cell, r, c, rs, cs, inner, text in blocks:
+            if rs == 1:
+                heights[r] = max(heights[r], text.count('\n') + 1)
+        for cell, r, c, rs, cs, inner, text in blocks:
+            if rs > 1:
+                need = text.count('\n') + 1
+                have = sum(heights[r:r + rs]) + row_sep * (rs - 1)
+                if need > have:
+                    heights[r + rs - 1] += need - have
+
+        row_tracks = None if stacked else _pick(self.__row_sets, width)
+        fractions = {}
+        if row_tracks:
+            for i in range(n_rows):
+                if i >= len(row_tracks):
+                    break
+                t = row_tracks[i]
+                if t.kind == 'fixed':
+                    heights[i] = t.clamp(t.value)
+                elif t.kind == 'fr':
+                    fractions[i] = t.value
+                    heights[i] = t.clamp(heights[i]) if t.low or t.high \
+                        else heights[i]
+                else:
+                    heights[i] = t.clamp(heights[i])
+        frame_lines = (n_rows + 1) if bordered else row_sep * (n_rows - 1)
+        if height is not None:
+            target = int(height) - frame_lines
+            spare = target - sum(heights)
+            if spare > 0:
+                if not fractions:
+                    fractions = {n_rows - 1: 1.0}
+                # Fraction rows split everything the other rows leave, by
+                # weight; a row whose content needs more keeps its content
+                # height and the rest is split again.
+                pool = target - sum(h for i, h in enumerate(heights)
+                                    if i not in fractions)
+                free = dict(fractions)
+                while free:
+                    rows_ = sorted(free)
+                    shares = _distribute(pool, [free[i] for i in rows_])
+                    short = [i for i, share in zip(rows_, shares)
+                             if share < heights[i]]
+                    if not short:
+                        for i, share in zip(rows_, shares):
+                            heights[i] = share
+                        break
+                    for i in short:
+                        pool -= heights[i]
+                        del free[i]
+            elif spare < 0:
+                # Too tall: fraction rows give up lines first, then the
+                # others from the bottom up, each down to one line.
+                order = sorted(fractions, reverse=True) + [
+                    i for i in range(n_rows - 1, -1, -1)
+                    if i not in fractions]
+                for i in order:
+                    cut = min(-spare, heights[i] - 1)
+                    if cut > 0:
+                        heights[i] -= cut
+                        spare += cut
+                    if spare >= 0:
+                        break
+
+        def slot_height(r, rs):
+            return sum(heights[r:r + rs]) + row_sep * (rs - 1)
+
+        sized = height is not None or bool(row_tracks)
+        for b in blocks:
+            cell, r, c, rs, cs, inner, text = b
+            slot = slot_height(r, rs)
+            lines = text.count('\n') + 1
+            stretch = cell.stretch
+            if stretch is None:
+                # Cards line up in an equal-height row; other renderables
+                # that take a height fill a sized grid's slot unless the cell
+                # asks to be aligned inside it instead.
+                stretch = (isinstance(cell.child, Card) and
+                           self.equal_height) or (
+                               sized and cell.valign is None and
+                               not isinstance(cell.child, Card) and
+                               _accepts_height(cell.child))
+            if stretch and lines != slot and _accepts_height(cell.child):
+                if isinstance(cell.child, Card) and lines > slot:
+                    continue
+                b[6] = cell.child.render(width=inner, height=slot)
+
+        if bordered:
+            out = self._draw_bordered(blocks, tracks, heights, painter)
+        else:
+            out = self._draw_open(blocks, tracks, heights, painter, sep)
+        if height is not None:
+            out = out[:int(height)]
+            out.extend([''] * (int(height) - len(out)))
         return '\n'.join(out)
+
+    def _slot_lines(self, cell, text, inner, slot, painter):
+        """The child's lines aligned inside its slot, ``inner`` wide."""
+        lines = text.split('\n')[:slot]
+        free = slot - len(lines)
+        valign = cell.valign or self.valign
+        top = 0 if valign == 't' else (free if valign == 'b' else free // 2)
+        blank = [''] * free
+        lines = blank[:top] + lines + blank[top:]
+        fill = painter.prefix(cell.color)
+        out = []
+        for line in lines:
+            fitted = _fit_line(line, inner, cell.align)
+            if fill:
+                fitted = fill + fitted.replace(RESET, RESET + fill) + RESET
+            out.append(fitted)
+        return out
+
+    def _draw_open(self, blocks, tracks, heights, painter, gap):
+        n_rows = len(heights)
+        row_top = []
+        y = 0
+        for i, h in enumerate(heights):
+            row_top.append(y)
+            y += h + (self.row_gap if i < n_rows - 1 else 0)
+        # line -> {column: (x, text, width)}; a row-spanning cell keeps
+        # feeding lines into the rows below it.
+        canvas = [dict() for _ in range(y)]
+        x_of = [0]
+        for w in tracks:
+            x_of.append(x_of[-1] + w + gap)
+        for cell, r, c, rs, cs, inner, text in blocks:
+            pad = self._cell_padding(cell)
+            slot = sum(heights[r:r + rs]) + self.row_gap * (rs - 1)
+            lines = self._slot_lines(cell, text, inner, slot, painter)
+            for k, line in enumerate(lines):
+                canvas[row_top[r] + k][c] = (
+                    x_of[c], ' ' * pad + line + ' ' * pad,
+                    sum(tracks[c:c + cs]) + gap * (cs - 1))
+        out = []
+        for entries in canvas:
+            parts, x = [], 0
+            for col in sorted(entries):
+                start, text, w = entries[col]
+                if start > x:
+                    parts.append(' ' * (start - x))
+                parts.append(text)
+                x = start + w
+            out.append(''.join(parts).rstrip(' '))
+        return out
+
+    def _title_position(self, segment, label, align):
+        """Start column of `` label `` inside a plain border ``segment``."""
+        need = visible_width(label) + 2
+        runs = [(s, e) for s, e in _rule_runs(segment, self.__glyphs['h'])
+                if e - s >= need + 2]
+        if not runs:
+            return None
+        if align == 'l':
+            return runs[0][0] + 1
+        if align == 'r':
+            return runs[-1][1] - 1 - need
+        centre = len(segment) // 2
+        best = None
+        for s, e in runs:
+            pos = min(max(centre - need // 2, s + 1), e - 1 - need)
+            distance = abs(pos + need // 2 - centre)
+            if best is None or distance < best[0]:
+                best = (distance, pos)
+        return best[1]
+
+    def _draw_bordered(self, blocks, tracks, heights, painter):
+        g = self.__glyphs
+        xs = [0]
+        for w in tracks:
+            xs.append(xs[-1] + w + 1)
+        ys = [0]
+        for h in heights:
+            ys.append(ys[-1] + h + 1)
+        W, H = xs[-1] + 1, ys[-1] + 1
+        horiz, vert = set(), set()     # unit edges starting at (x, y)
+        for cell, r, c, rs, cs, inner, text in blocks:
+            x0, x1, y0, y1 = xs[c], xs[c + cs], ys[r], ys[r + rs]
+            for x in range(x0, x1):
+                horiz.add((x, y0))
+                horiz.add((x, y1))
+            for y in range(y0, y1):
+                vert.add((x0, y))
+                vert.add((x1, y))
+        grid = [[' '] * W for _ in range(H)]
+        for y in range(H):
+            for x in range(W):
+                left = (x - 1, y) in horiz
+                right = (x, y) in horiz
+                up = (x, y - 1) in vert
+                down = (x, y) in vert
+                if left or right or up or down:
+                    grid[y][x] = _junction(g, up, down, left, right)
+        # Titles go over each cell's own stretch of top border, never over a
+        # junction, so the cells above still meet the ones below.
+        titled = {}     # y -> list of [start, end)
+        for cell, r, c, rs, cs, inner, text in blocks:
+            if not cell.title:
+                continue
+            y, x0, x1 = ys[r], xs[c], xs[c + cs]
+            segment = ''.join(grid[y][x0:x1 + 1])
+            room = len(segment) - 6
+            if room < 1:
+                continue
+            label = cell.title
+            if visible_width(label) > room:
+                label = truncate_to_width(label, room, '…')
+            pos = self._title_position(segment, label, cell.title_align)
+            if pos is None:
+                continue
+            x = x0 + pos
+            start = x
+            for cluster, w in measured_clusters(' ' + label + ' '):
+                grid[y][x] = cluster
+                for k in range(1, w):
+                    grid[y][x + k] = ''
+                x += w
+            titled.setdefault(y, []).append((start + 1, x - 1))
+        border = painter.prefix(self.border_color)
+        title_prefix = painter.prefix(self.title_color)
+        content = {}
+        for cell, r, c, rs, cs, inner, text in blocks:
+            pad = self._cell_padding(cell)
+            slot_w = xs[c + cs] - xs[c] - 1
+            slot_h = ys[r + rs] - ys[r] - 1
+            inner_w = max(0, slot_w - 2 * pad)
+            lines = self._slot_lines(cell, text, inner_w, slot_h, painter)
+            fill = painter.prefix(cell.color)
+            edge = _paint(' ' * pad, fill) if fill else ' ' * pad
+            for k, line in enumerate(lines):
+                content[(ys[r] + 1 + k, xs[c] + 1)] = (edge + line + edge,
+                                                       slot_w)
+        out = []
+        for y in range(H):
+            spans = titled.get(y, [])
+            parts, x, run = [], 0, []
+
+            def flush():
+                if run:
+                    parts.append(_paint(''.join(run), border))
+                    del run[:]
+            while x < W:
+                if (y, x) in content:
+                    flush()
+                    text, w = content[(y, x)]
+                    parts.append(text)
+                    x += w
+                    continue
+                span = next((s for s in spans if s[0] == x), None)
+                if span is not None:
+                    flush()
+                    parts.append(_paint(''.join(grid[y][span[0]:span[1]]),
+                                        title_prefix))
+                    x = span[1]
+                    continue
+                run.append(grid[y][x])
+                x += 1
+            flush()
+            out.append(''.join(parts))
+        return out
