@@ -16,7 +16,7 @@ def _widths(text):
 ])
 def test_float_column_without_any_point_stays_rectangular(values):
     t = Table(rows=[[v] for v in values], headers=['x'])
-    t.style_name = 'grid'
+    t.style_name = 'ascii_double_underline_rows'
     out = t.compose()
     assert len(_widths(out)) == 1, out
     for v in values:
@@ -42,8 +42,8 @@ def test_exponent_column_next_to_other_columns_with_index():
 # --- vrules='none' -----------------------------------------------------------
 
 @pytest.mark.parametrize('style', [
-    'grid', 'rounded', 'pretty_grid', 'dashes', 'ascii_rounded',
-    'bold_header', 'pretty_columns', 'markdown',
+    'ascii_double_underline_rows', 'rounded', 'double_horizontal_rows', 'dashed', 'ascii_rounded',
+    'double_header_rows', 'double_horizontal', 'markdown',
 ])
 def test_vrules_none_rules_are_as_wide_as_the_rows(style):
     t = Table(rows=[[1, 'ab'], [2.5, '漢字']], headers=['A', 'B'])

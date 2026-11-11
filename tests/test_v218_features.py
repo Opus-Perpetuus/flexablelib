@@ -8,7 +8,7 @@ from flexablelib.text_width import strip_ansi as bare
 def _framed():
     table = Table(rows=[['alpha', 1], ['beta', 2], ['gamma', 3]],
                   headers=['name', 'n'])
-    table.style_name = 'modern'
+    table.style_name = 'single_rows'
     return table
 
 

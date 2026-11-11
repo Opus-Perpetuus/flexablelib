@@ -4,7 +4,7 @@
 
 <p align="center">
   <strong>Fast, dependency-free terminal tables for Python.</strong><br>
-  56 border styles · ANSI colours · cell merges · decimal alignment · width fitting · CSV / Markdown / HTML / Excel / LaTeX I/O
+  54 border styles · ANSI colours · cell merges · decimal alignment · width fitting · CSV / Markdown / HTML / Excel / LaTeX I/O
 </p>
 
 <p align="center">
@@ -51,7 +51,7 @@ table = Table(
     ],
     headers=["Service", "Region", "Uptime %", "RPS"],
 )
-table.style_name = "rounded"            # 56 styles, see style_examples.md
+table.style_name = "rounded"            # 54 styles, see style_examples.md
 table.header_color = "bold cyan"
 table.color_rule = lambda value, row, column: (
     "red" if column == "Uptime %" and value < 99.5 else None
@@ -84,7 +84,7 @@ Table.from_csv("sales.csv"); Table.from_markdown(md); Table.from_pandas(df)
 
 <table>
 <tr>
-<td width="50%"><b>Styles</b> — 56 presets, from <code>ascii</code> to <code>blocks</code><br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/styles.png" alt="Several border styles" width="260"></td>
+<td width="50%"><b>Styles</b> — 54 presets, from <code>ascii_rows</code> to <code>borderless</code><br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/styles.png" alt="Several border styles" width="260"></td>
 <td width="50%"><b>Themes</b> — <code>table.apply_theme("ocean")</code><br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/themes.png" alt="Theme presets" width="380"></td>
 </tr>
 <tr>
@@ -97,7 +97,7 @@ Table.from_csv("sales.csv"); Table.from_markdown(md); Table.from_pandas(df)
 </tr>
 </table>
 
-More: [all 56 styles](https://github.com/Opus-Perpetuus/flexablelib/blob/main/style_examples.md) ·
+More: [all 54 styles](https://github.com/Opus-Perpetuus/flexablelib/blob/main/style_examples.md) ·
 wrapping and ellipsis overflow · per-column / per-cell colour and alignment ·
 vertical alignment · `paginate()` · `stream()` for live rows · `transpose()` ·
 nested tables · `fit_terminal()` · `hide_columns` · `sort_by` · Roman / custom
@@ -113,7 +113,7 @@ not a claim that it is impossible there.
 | | flexablelib | tabulate | prettytable | rich |
 | --- | :---: | :---: | :---: | :---: |
 | Runtime dependencies | **none** | none | `wcwidth` | `markdown-it-py`, `pygments` |
-| Border style presets | 56 | many `tablefmt` | — (hrules/vrules toggles) | box styles |
+| Border style presets | 54 | many `tablefmt` | — (hrules/vrules toggles) | box styles |
 | Decimal-point alignment | ✓ | ✓ | — | — |
 | Row **and** column cell merges | ✓ | — | — | — |
 | ANSI colours (header, rows, cells, borders) | ✓ | — | — | ✓ |
@@ -151,7 +151,7 @@ one place.
   coloured text stay aligned.
 - **Windows.** Box-drawing styles need a UTF-8 console (`chcp 65001` or
   `PYTHONUTF8=1`; Windows Terminal is usually UTF-8 already). ASCII styles
-  (`ascii`, `grid`, `psql`, `markdown`, …) work on any code page.
+  (`ascii_rows`, `ascii_double_underline_rows`, `psql`, `markdown`, …) work on any code page.
 - **Typed.** Ships `py.typed` (PEP 561).
 - **Stability.** flexablelib follows [semantic versioning](https://semver.org):
   within 2.x, public `Table` attributes and methods are not removed or renamed
@@ -261,7 +261,7 @@ new_table.add_column('Test\nResults', [9.651, 3, 245.7])
 new_table.add_row(['Piotr\nBaltimore', 27, 3.5])
 new_table.add_row(['Sam', 21])
 new_table.show_index = True
-new_table.style_name = 'pretty_columns'
+new_table.style_name = 'double_horizontal'
 new_table.missing_value = '?'
 print(new_table)
 ```
@@ -455,7 +455,7 @@ flexablelib/                 # GitHub repository
 │   ├── __init__.py          public API: Table, TableComposition, SeparatorLine
 │   ├── table.py             the Table class — state and render orchestration
 │   ├── columns.py           type inference, alignment, column widths
-│   ├── style_compositions.py   the 56 border styles, as data
+│   ├── style_compositions.py   the 54 border styles, as data
 │   ├── table_strings.py     separator lines and data rows
 │   ├── cells.py             cell padding, justification, wrapping
 │   ├── options.py           constants and defaults
@@ -464,7 +464,7 @@ flexablelib/                 # GitHub repository
 ├── docs/                    issue history and design notes
 ├── logos/                   brand assets — see logos/README.md
 ├── ARCHITECTURE.md          how it all fits together
-├── style_examples.md        all 56 styles rendered
+├── style_examples.md        all 54 styles rendered
 ├── package.json             canonical version number (no npm deps)
 └── setup.py                 reads the version from package.json
 ```

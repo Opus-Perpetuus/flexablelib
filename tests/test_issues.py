@@ -23,7 +23,7 @@ import pytest
 from helpers import decimal_point_indexes, table_width, widths_from_border
 from flexablelib import Table
 
-INTERSECTION = '┬'   # thin_borderline's top border
+INTERSECTION = '┬'   # single_double_underline_rows's top border
 
 
 # +-------------------------------------------------------------------------+
@@ -49,7 +49,7 @@ def build_issue_22_table():
     table.add_row()
     table.add_column()
     table.missing_value = 'missing_value__'
-    table.style_name = 'thin_borderline'
+    table.style_name = 'single_double_underline_rows'
     table.show_empty_columns = False
     table.show_empty_rows = False
     return table
@@ -140,7 +140,7 @@ def build_issue_23_table():
     left of the decimal axis and the point and the three decimals were then
     added on top of it.
     """
-    table = Table(style_name='thin_borderline')
+    table = Table(style_name='single_double_underline_rows')
     table.add_column('name', ['alpha', 'beta', 'gamma'])
     table.add_column('value', [9.651, 3, 245.7])
     table.add_row(['delta'])
@@ -256,7 +256,7 @@ def test_issue_16_a_narrow_column_survives_a_shrink(terminal):
     # reducing every column in proportion, so a 4-wide column is left alone
     # while the 24-wide one absorbs the whole difference.
     terminal(20)
-    table = Table(style_name='thin_borderline')
+    table = Table(style_name='single_double_underline_rows')
     table.add_column('Name', ['Jade', 'John'])
     table.add_column('Comment', ['a very long comment here', 'short'])
     table.auto_wrap = True
@@ -276,7 +276,7 @@ def test_issue_16_a_narrow_column_survives_a_shrink(terminal):
 # +-------------------------------------------------------------------------+
 
 def build_issue_14_table():
-    table = Table(style_name='thin_borderline')
+    table = Table(style_name='single_double_underline_rows')
     table.add_column('Name', ['Jade', 'John'])
     table.add_column('Comment', ['a very long comment here', 'short'])
     table.auto_wrap = True
@@ -286,7 +286,7 @@ def build_issue_14_table():
 def test_issue_14_a_table_that_cannot_fit_shows_the_message(terminal):
     """
     The floor comes from the style: two columns at MIN_COLUMN_SIZE (3) plus
-    two margin characters each, plus the three vertical rules thin_borderline
+    two margin characters each, plus the three vertical rules single_double_underline_rows
     draws, is 13. Below that the table cannot be drawn legibly at all.
     """
     terminal(8)
@@ -309,13 +309,13 @@ def test_issue_14_the_message_is_not_used_when_the_table_can_be_squeezed(termina
 
 def test_issue_14_the_floor_is_lower_for_a_borderless_style(terminal):
     """
-    ``plain`` draws no vertical rules and has a margin of 0, so the same two
-    columns need only 2 * MIN_COLUMN_SIZE and fit where thin_borderline
+    ``borderless_compact_header_gap`` draws no vertical rules and has a margin of 0, so the same two
+    columns need only 2 * MIN_COLUMN_SIZE and fit where single_double_underline_rows
     does not.
     """
     terminal(8)
     table = build_issue_14_table()
-    table.style_name = 'plain'
+    table.style_name = 'borderless_compact_header_gap'
     table.too_narrow_message = 'needs {needed}, has {available}'
 
     rendered = str(table)
@@ -324,7 +324,7 @@ def test_issue_14_the_floor_is_lower_for_a_borderless_style(terminal):
     # Both columns sit at MIN_COLUMN_SIZE, so every cell is broken into
     # three-character fragments and no whole word survives on one line. What
     # this test asserts is that a table was rendered at all, where
-    # thin_borderline at the same width refuses.
+    # single_double_underline_rows at the same width refuses.
     assert 'Jad' in rendered
     assert len(rendered.splitlines()) > 4
 
@@ -407,7 +407,7 @@ def test_issue_1_a_console_that_is_not_a_tty_still_renders(monkeypatch):
 # +-------------------------------------------------------------------------+
 
 def build_indexed_table():
-    table = Table(style_name='thin_borderline')
+    table = Table(style_name='single_double_underline_rows')
     table.add_column('n', ['a', 'b', 'c'])
     table.show_index = True
     return table
@@ -459,7 +459,7 @@ def test_issue_2_the_index_does_not_change_the_public_counts():
 # +-------------------------------------------------------------------------+
 
 def build_table_with_empties():
-    table = Table(style_name='thin_borderline')
+    table = Table(style_name='single_double_underline_rows')
     table.add_column('n', ['a', '', 'c'])
     table.add_column('empty', ['', '', ''])
     return table
@@ -516,7 +516,7 @@ def test_issue_9_a_row_of_empty_strings_counts_as_empty():
     A column of ``''`` was empty but a row of ``''`` was not: rows only
     counted the padding placeholder. The two now agree.
     """
-    table = Table(style_name='thin_borderline')
+    table = Table(style_name='single_double_underline_rows')
     table.add_column('a', ['x', ''])
     table.add_column('b', ['y', ''])
     table.show_empty_rows = False
@@ -556,7 +556,7 @@ def test_issue_8_the_index_stays_contiguous_when_rows_are_hidden():
 # +-------------------------------------------------------------------------+
 
 def build_every_type_table():
-    table = Table(style_name='thin_borderline')
+    table = Table(style_name='single_double_underline_rows')
     table.add_column('s', ['a', 'bb'])
     table.add_column('i', [1, 22])
     table.add_column('f', [1.5, 22.25])
@@ -648,7 +648,7 @@ def test_issue_6_the_missing_value_can_be_set_after_the_data():
     It used to be stored as an ordinary cell when the data was added, so
     setting it afterwards showed nothing.
     """
-    table = Table(style_name='thin_borderline')
+    table = Table(style_name='single_double_underline_rows')
     table.add_column('a', ['x', 'y'])
     table.add_column('n', [1.5, 2.25])
     table.add_row(['z'])
@@ -666,7 +666,7 @@ def test_issue_6_the_missing_value_does_not_change_the_alignment():
     """
     It aligns as though it were the type of the column around it.
     """
-    table = Table(style_name='thin_borderline')
+    table = Table(style_name='single_double_underline_rows')
     table.add_column('n', [9.651, 245.7])
     table.add_row([])
     table.missing_value = '?'
@@ -681,7 +681,7 @@ def test_issue_6_the_missing_value_does_not_change_the_alignment():
 # +-------------------------------------------------------------------------+
 
 def build_wide_table():
-    table = Table(style_name='thin_borderline')
+    table = Table(style_name='single_double_underline_rows')
     table.add_column('n', [123456789012345, 2])
     table.add_column('s', ['abcdefghijklmno', 'z'])
     return table
@@ -759,7 +759,7 @@ def test_issue_17_wrapping_into_almost_no_room_does_not_raise(terminal):
     reduction used to hand out exactly that.
     """
     terminal(8)
-    table = Table(style_name='thin_borderline')
+    table = Table(style_name='single_double_underline_rows')
     table.add_column('Name', ['Jade', 'John'])
     table.add_column('Comment', ['a very long comment here', 'short'])
     table.auto_wrap = True

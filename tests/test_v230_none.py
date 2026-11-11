@@ -39,7 +39,7 @@ def test_none_matches_padding_sentinel_in_every_render_path(style, missing):
 @pytest.mark.parametrize('missing', ['', '?', 'missing'])
 @pytest.mark.parametrize('index', [False, True])
 def test_none_preserves_numeric_alignment_and_decimal_axis_with_wrap(missing, index):
-    t = make('ascii', missing)
+    t = make('ascii_rows', missing)
     t.show_index = index
     t.overflow = 'wrap'
     t.column_max_width = 7

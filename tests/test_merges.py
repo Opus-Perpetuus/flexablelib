@@ -18,7 +18,7 @@ from flexablelib.fast import strip_ansi, visible_width
 INTERSECTION = '┬'
 
 
-def build_table(style_name='thin_borderline'):
+def build_table(style_name='single_double_underline_rows'):
     table = Table(style_name=style_name)
     table.add_column('Region', ['Norte', 'Norte', 'Sur', 'Sur'])
     table.add_column('Month', ['Jan', 'Feb', 'Jan', 'Feb'])
@@ -92,7 +92,7 @@ def test_vertical_merge_on_last_column_turns_right_border_into_an_edge():
 
 
 def test_vertical_merge_vertices_follow_grid_ascii_style():
-    table = build_table('grid')
+    table = build_table('ascii_double_underline_rows')
     table.merge_cells(0, 0, last_row=1, value='Norte')
 
     sep = next(line for line in str(table).splitlines() if '+-------+' in line and line.startswith('|'))
@@ -101,7 +101,7 @@ def test_vertical_merge_vertices_follow_grid_ascii_style():
 
 
 def test_vertical_merge_vertices_follow_bold_borderline_style():
-    table = build_table('bold_borderline')
+    table = build_table('double_frame_rows')
     table.merge_cells(0, 0, last_row=1, value='Norte')
 
     sep = next(line for line in str(table).splitlines() if '├───────┼────────╢' in line)
@@ -282,11 +282,11 @@ def test_rendering_twice_with_a_merge_gives_the_same_string():
     assert str(table) == str(table)
 
 
-@pytest.mark.parametrize('style', ['grid', 'pretty_columns', 'simple', 'plain',
-                                   'thin_borderline', 'bold_borderline'])
+@pytest.mark.parametrize('style', ['ascii_double_underline_rows', 'double_horizontal', 'lines_ascii', 'borderless_compact_header_gap',
+                                   'single_double_underline_rows', 'double_frame_rows'])
 def test_a_merge_works_across_styles(style):
     # Compared against the same table unmerged rather than asserting one
-    # uniform width: 'plain' emits a short blank separator line of its own
+    # uniform width: 'borderless_compact_header_gap' emits a short blank separator line of its own
     # accord, with or without a merge, and that is not this feature's doing.
     before = [len(line) for line in str(build_table(style)).splitlines()]
 
@@ -295,7 +295,7 @@ def test_a_merge_works_across_styles(style):
     rendered = str(table)
 
     assert 'span' in rendered
-    # Column-only styles (pretty_columns, grid_eheader, …) grow by one synthetic
+    # Column-only styles (double_horizontal, ascii_double_underline_open_header, …) grow by one synthetic
     # row rule per multi-column merge; every line must still share the width.
     after = [len(line) for line in rendered.splitlines()]
     assert set(after) == set(before)
@@ -411,7 +411,7 @@ def test_a_divider_above_a_merge_does_not_shift_it():
     # add_divider inserts a physical line the old line map knew nothing about.
     # A style that already rules between every row shows the divider anyway;
     # the extra physical line only appears on a style that does not.
-    table = build_table('grid_eheader')
+    table = build_table('ascii_double_underline_open_header')
     table.add_divider(0)
     table.merge_cells(1, 0, last_row=2, value='Down')
 
@@ -496,7 +496,7 @@ def test_two_merges_in_one_table_both_land():
 
 def _ops_report():
     """Golden table from complex-merges/03_ops_report (H+V merges)."""
-    table = Table(style_name='bold_borderline')
+    table = Table(style_name='double_frame_rows')
     table.title = 'Weekly Ops Report'
     shifts, tickets, sla = [], [], []
     n = 0
@@ -550,7 +550,7 @@ def test_ops_report_site_only_separator_uses_single_tee():
 
 
 def test_horizontal_merge_caps_become_tees_above_and_below():
-    table = Table(style_name='pretty_grid')
+    table = Table(style_name='double_horizontal_rows')
     table.add_column('A', ['a1', 'a2', 'a3'])
     table.add_column('B', ['b1', 'b2', 'b3'])
     table.add_column('C', ['c1', 'c2', 'c3'])
@@ -564,12 +564,12 @@ def test_horizontal_merge_caps_become_tees_above_and_below():
 
 
 def test_column_only_style_inserts_horizontal_break_under_multi_column_merge():
-    """pretty_columns has column lines but no row lines; a multi-column merge
+    """double_horizontal has column lines but no row lines; a multi-column merge
     must insert a row rule so the grid does not break oddly.
 
-    Caps use the table's outer horizontal glyph (═ for pretty_columns).
+    Caps use the table's outer horizontal glyph (═ for double_horizontal).
     """
-    table = Table(style_name='pretty_columns')
+    table = Table(style_name='double_horizontal')
     table.add_column('A', ['a1', 'a2', 'a3'])
     table.add_column('B', ['b1', 'b2', 'b3'])
     table.add_column('C', ['c1', 'c2', 'c3'])
@@ -586,7 +586,7 @@ def test_column_only_style_inserts_horizontal_break_under_multi_column_merge():
 
 
 def test_block_merge_header_and_footer_caps():
-    table = Table(style_name='pretty_grid')
+    table = Table(style_name='double_horizontal_rows')
     table.add_column('A', ['a1', 'a2', 'a3'])
     table.add_column('B', ['b1', 'b2', 'b3'])
     table.add_column('C', ['c1', 'c2', 'c3'])
@@ -600,7 +600,7 @@ def test_block_merge_header_and_footer_caps():
 def test_last_row_horizontal_merge_uses_table_end_corners_not_header_tees():
     """A multi-column merge on the final data row must not rewrite the
     table_end_line as if it had south arms (that yields ╞/╪/╤/╡)."""
-    table = Table(style_name='pretty_grid')
+    table = Table(style_name='double_horizontal_rows')
     table.add_column('A', ['a1', 'a2', 'a3'])
     table.add_column('B', ['b1', 'b2', 'b3'])
     table.add_column('C', ['c1', 'c2', 'c3'])
@@ -619,7 +619,7 @@ def test_last_row_horizontal_merge_uses_table_end_corners_not_header_tees():
 
 def test_stress_last_row_merge_bottom_border_is_end_line():
     """Stress table from demos: H14 on the last row must keep ╘/╧/╛."""
-    table = Table(style_name='pretty_grid')
+    table = Table(style_name='double_horizontal_rows')
     headers = [f'C{c}' for c in range(8)]
     for c, h in enumerate(headers):
         table.add_column(h, [f'S{r}c{c}' for r in range(15)])
@@ -657,7 +657,7 @@ def test_hyphen_in_cell_text_does_not_block_column_only_caps():
     Column-only styles insert synthetic caps around multi-column merges; if
     'Beta-1' were treated as a rule, those caps would be skipped.
     """
-    table = Table(style_name='round_edges')
+    table = Table(style_name='rounded_double_underline')
     table.add_column('Cat', [''] * 5)
     table.add_column('Item', ['Alpha-1', 'Alpha-2', 'Beta-1', 'Beta-2', 'Beta-3'])
     table.add_column('V', [1, 2, 3, 4, 5])
@@ -688,7 +688,7 @@ def _looks_like_rule_line(line: str) -> bool:
 
 def test_multi_column_merge_in_column_only_style_gets_caps_matching_outer_dash():
     """Caps above/below a multi-column merge use the table end horizontal glyph."""
-    table = Table(style_name='round_edges')
+    table = Table(style_name='rounded_double_underline')
     table.add_column('A', ['a1', 'a2', 'a3', 'a4'])
     table.add_column('B', ['b1', 'b2', 'b3', 'b4'])
     table.add_column('C', ['c1', 'c2', 'c3', 'c4'])
@@ -706,7 +706,7 @@ def test_multi_column_merge_in_column_only_style_gets_caps_matching_outer_dash()
 
 def test_dashes_style_bottom_under_merge_keeps_dotted_glyph_not_solid():
     """Suppressing a bottom junction must extend the rule's own h glyph (┄), never ─."""
-    table = Table(style_name='dashes')
+    table = Table(style_name='dashed')
     for d, name in enumerate(['A', 'B', 'C', 'D']):
         table.add_column(name, [f'r{r}c{d}' for r in range(3)])
     table.merge_cells(2, 2, last_column=3, value='CD')
@@ -720,7 +720,7 @@ def test_dashes_style_bottom_under_merge_keeps_dotted_glyph_not_solid():
 
 def test_synthetic_rule_blanks_through_taller_crossing_merge():
     """A short multi-column merge must not leave ghost ┼ inside a taller 2D merge."""
-    table = Table(style_name='pretty_columns')
+    table = Table(style_name='double_horizontal')
     for c in range(6):
         table.add_column(f'C{c}', [f'r{r}c{c}' for r in range(5)])
     table.merge_cells(0, 0, 2, 2, value='TALL')
@@ -751,7 +751,7 @@ def test_synthetic_rule_blanks_through_taller_crossing_merge():
 
 def test_round_edges_end_corners_survive_last_row_horizontal_merge():
     """Repairing the end line must keep ╰/╯, not rewrite them as └/┘."""
-    table = Table(style_name='round_edges')
+    table = Table(style_name='rounded_double_underline')
     table.add_column('A', ['a1', 'a2', 'a3'])
     table.add_column('B', ['b1', 'b2', 'b3'])
     table.add_column('C', ['c1', 'c2', 'c3'])
@@ -766,7 +766,7 @@ def test_round_edges_end_corners_survive_last_row_horizontal_merge():
 def test_crossing_vertical_merge_keeps_edge_when_cap_inserted():
     """When a cap is inserted under a 2D block beside a continuing vertical
     merge, the vertical merge's column stays an edge (no horizontal through it)."""
-    table = Table(style_name='round_edges')
+    table = Table(style_name='rounded_double_underline')
     table.add_column('Cat', [''] * 6)
     table.add_column('Item', [f'i{r}' for r in range(6)])
     table.add_column('V', list(range(6)))
@@ -787,7 +787,7 @@ def test_crossing_vertical_merge_keeps_edge_when_cap_inserted():
 
 def test_synthetic_cap_h_stays_inside_merge_column_span():
     """Synthetic caps must not draw H into columns outside the merge span."""
-    table = Table(style_name='grid_eheader')
+    table = Table(style_name='ascii_double_underline_open_header')
     for c in range(4):
         table.add_column(f'C{c}', [f'r{r}c{c}' for r in range(4)])
     table.merge_cells(0, 0, last_row=2, value='V')
@@ -805,7 +805,7 @@ def test_synthetic_cap_h_stays_inside_merge_column_span():
 
 def test_synthetic_cap_does_not_bleed_through_unrelated_column():
     """Item column next to a V|N merge must not carry a horizontal run."""
-    table = Table(style_name='round_edges')
+    table = Table(style_name='rounded_double_underline')
     table.add_column('Cat', [''] * 6)
     table.add_column('Item', [f'i{r}' for r in range(6)])
     table.add_column('V', list(range(6)))
@@ -827,7 +827,7 @@ def test_synthetic_cap_does_not_bleed_through_unrelated_column():
 
 def test_invisible_vertical_style_keeps_plain_dash_rules():
     """Styles with spacer verticals (simple) must not gain ┴/┼ from merges."""
-    table = Table(style_name='simple')
+    table = Table(style_name='lines_ascii')
     for c in range(6):
         table.add_column(f'C{c}', [f'r{r}c{c}' for r in range(4)])
     table.merge_cells(0, 0, last_row=1, last_column=1, value='#0,0')

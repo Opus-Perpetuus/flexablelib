@@ -280,7 +280,7 @@ def __fit_indicator_line(line, target, check_set, align_indicator, middle,
     Keep an alignment-indicator segment exactly ``width + margin`` long.
 
     A column narrower than the indicator plus its margins (an index column
-    of one digit under ``sticks``) produced ``' ~>~ '`` over a three-column
+    of one digit under ``ascii_align_markers``) produced ``' ~>~ '`` over a three-column
     cell, so every separator overhung the rows below it. Drop the margins
     first; if the indicator alone still does not fit, draw a plain rule.
     """

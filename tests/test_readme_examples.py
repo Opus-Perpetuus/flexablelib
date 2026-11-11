@@ -42,7 +42,7 @@ def test_a_table_with_headers_and_no_rows_shows_its_headers():
     to raise ``IndexError`` -- transposing no rows gave no columns, and the
     assembly then indexed past the end of them.
     """
-    table = Table(style_name='thin_borderline')
+    table = Table(style_name='single_double_underline_rows')
     table.add_column('name', [])
     table.add_column('value', [])
 
@@ -152,7 +152,7 @@ def build_options_table():
     table.add_row(['Piotr\nBaltimore', 27, 3.5])
     table.add_row(['Sam', 21])
     table.show_index = True
-    table.style_name = 'pretty_columns'
+    table.style_name = 'double_horizontal'
     table.missing_value = '?'
     return table
 

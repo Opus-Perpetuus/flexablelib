@@ -1,6 +1,6 @@
 """Every rendered line has the same terminal width, in every style.
 
-Regression for ``plain``: its header separator line was one column short
+Regression for ``borderless_compact_header_gap``: its header separator line was one column short
 because it had no junction between columns.  Also pins that wide (CJK /
 emoji) headers and ``column_max_width`` keep all lines aligned.  Note that
 ``*_eheader`` styles intentionally draw the header row without column
@@ -34,13 +34,13 @@ def test_all_lines_same_width(style, headers, rows, max_width):
 
 def test_plain_header_separator_spans_table():
     table = Table(rows=[['abc', 1], ['d', 2]], headers=['x', 'yy'])
-    table.style_name = 'plain'
+    table.style_name = 'borderless_compact_header_gap'
     lines = table.compose().split('\n')
     assert lines[1] == ' ' * len(lines[0])
 
 
 def test_eheader_header_row_has_no_column_separator_by_design():
     table = Table(rows=[['a', 'b']], headers=['x', 'y'])
-    table.style_name = 'grid_eheader'
+    table.style_name = 'ascii_double_underline_open_header'
     assert table.compose().split('\n')[:3] == [
         '+-------+', '| x   y |', '+===+===+']

@@ -12,15 +12,15 @@ from flexablelib.fast import visible_width
 
 # Styles that ship with vertical column rules (the ones merges must paint).
 STYLES_WITH_VERTICALS = [
-    'pretty_grid',
-    'pretty_columns',
-    'round_edges',
-    'dashes',
-    'grid',
-    'bold_borderline',
-    'thin_borderline',
+    'double_horizontal_rows',
+    'double_horizontal',
+    'rounded_double_underline',
+    'dashed',
+    'ascii_double_underline_rows',
+    'double_frame_rows',
+    'single_double_underline_rows',
     'double_grid',
-    'grid_eheader',
+    'ascii_double_underline_open_header',
 ]
 
 
@@ -79,13 +79,13 @@ def test_last_row_horizontal_merge_bottom_is_not_header_tee(style):
     bottom = str(table).splitlines()[-1]
     # Header-only tees must not appear on the end line.
     for bad in ('╞', '╡', '╤', '╪'):
-        # double_grid / pretty_columns end lines use ╘═╧╛ — ╞ would be wrong.
+        # double_grid / double_horizontal end lines use ╘═╧╛ — ╞ would be wrong.
         if bad in bottom and not bottom.startswith(('╘', '╚', '╙', '╰', '└', '+', '┗')):
             pytest.fail(f'header tee {bad!r} on bottom: {bottom!r}')
     _square(str(table))
 
 
-@pytest.mark.parametrize('style', ['pretty_columns', 'round_edges', 'dashes'])
+@pytest.mark.parametrize('style', ['double_horizontal', 'rounded_double_underline', 'dashed'])
 def test_column_only_multi_col_merge_inserts_cap(style):
     table = _build_base(style)
     table.merge_cells(1, 0, last_column=1, value='AB')
@@ -98,7 +98,7 @@ def test_column_only_multi_col_merge_inserts_cap(style):
     _square(str(table))
 
 
-@pytest.mark.parametrize('style', ['pretty_columns', 'round_edges', 'dashes'])
+@pytest.mark.parametrize('style', ['double_horizontal', 'rounded_double_underline', 'dashed'])
 def test_short_merge_does_not_ghost_through_taller_block(style):
     table = Table(style_name=style)
     for c in range(4):
@@ -112,7 +112,7 @@ def test_short_merge_does_not_ghost_through_taller_block(style):
     _square(rendered)
 
 
-@pytest.mark.parametrize('style', ['round_edges', 'dashes', 'pretty_columns'])
+@pytest.mark.parametrize('style', ['rounded_double_underline', 'dashed', 'double_horizontal'])
 def test_hyphenated_labels_still_get_caps(style):
     table = Table(style_name=style)
     table.add_column('Cat', ['', '', '', ''])
@@ -132,7 +132,7 @@ def test_hyphenated_labels_still_get_caps(style):
     assert any(_has_h_run(line) for line in nearby), rendered
 
 
-@pytest.mark.parametrize('style', ['dashes'])
+@pytest.mark.parametrize('style', ['dashed'])
 def test_dashes_bottom_merge_has_no_solid_em_dash(style):
     table = _build_base(style)
     table.merge_cells(3, 2, last_column=3, value='CD')
@@ -140,7 +140,7 @@ def test_dashes_bottom_merge_has_no_solid_em_dash(style):
     assert '─' not in bottom, bottom
 
 
-@pytest.mark.parametrize('style', ['round_edges'])
+@pytest.mark.parametrize('style', ['rounded_double_underline'])
 def test_round_end_corners_kept(style):
     table = _build_base(style)
     table.merge_cells(3, 1, last_column=2, value='BC')
@@ -201,7 +201,7 @@ def _orders():
     ]
 
 
-@pytest.mark.parametrize('style', ['pretty_grid', 'pretty_columns', 'round_edges', 'grid'])
+@pytest.mark.parametrize('style', ['double_horizontal_rows', 'double_horizontal', 'rounded_double_underline', 'ascii_double_underline_rows'])
 @pytest.mark.parametrize('order_name,factory', _orders())
 def test_call_order_permutations_render_square(style, order_name, factory):
     table = factory(style)
@@ -211,7 +211,7 @@ def test_call_order_permutations_render_square(style, order_name, factory):
 
 
 @pytest.mark.parametrize('align', ['l', 'c', 'r'])
-@pytest.mark.parametrize('style', ['pretty_grid', 'pretty_columns', 'round_edges'])
+@pytest.mark.parametrize('style', ['double_horizontal_rows', 'double_horizontal', 'rounded_double_underline'])
 def test_centered_block_has_no_internal_ghost_cross(style, align):
     table = Table(style_name=style)
     for c in range(5):
@@ -224,7 +224,7 @@ def test_centered_block_has_no_internal_ghost_cross(style, align):
     _square(rendered)
 
 
-@pytest.mark.parametrize('style', ['pretty_grid', 'bold_borderline', 'double_grid'])
+@pytest.mark.parametrize('style', ['double_horizontal_rows', 'double_frame_rows', 'double_grid'])
 def test_adjacent_vertical_then_horizontal_l_shape(style):
     table = Table(style_name=style)
     for c in range(5):
@@ -236,7 +236,7 @@ def test_adjacent_vertical_then_horizontal_l_shape(style):
     _square(rendered)
 
 
-@pytest.mark.parametrize('style', ['pretty_grid', 'pretty_columns', 'dashes'])
+@pytest.mark.parametrize('style', ['double_horizontal_rows', 'double_horizontal', 'dashed'])
 def test_many_nonoverlapping_blocks(style):
     table = Table(style_name=style)
     for c in range(6):

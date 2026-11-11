@@ -45,7 +45,7 @@ def test_zebra_accepts_a_percentage_grey_background():
 
 def _framed():
     table = Table(rows=[['alpha', 1], ['beta', 2]], headers=['name', 'n'])
-    table.style_name = 'modern'
+    table.style_name = 'single_rows'
     return table
 
 
@@ -77,7 +77,7 @@ def test_centered_border_text_sits_inside_the_corners():
 
 def test_middle_valign_still_applies_after_the_fast_path():
     table = Table(rows=[['a\nb\nc', 'x']], headers=['tall', 'short'])
-    table.style_name = 'ascii'
+    table.style_name = 'ascii_rows'
     table.valign = 'm'
     body = [line for line in bare(table.compose()).splitlines()
             if line.startswith('|')][1:]
