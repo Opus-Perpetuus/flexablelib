@@ -271,6 +271,11 @@ def open_end(lines, brk, config):
     other = r - 1 if direction == 'up' else r + 1
     if 0 <= other < len(lines) and TITLE_RE.match(strip_ansi(lines[other])):
         return True
+    # Column-only styles have no body rule. A multi-column merge does not
+    # grow a synthetic cap (that would blank neighbour cells), so the │
+    # on the row above/below looks into the merge interior.
+    if direction in ('up', 'down') and config.get('merges') == 'on':
+        return True
     return (config.get('hrules', 'off') != 'off'
             or config.get('vrules', 'off') != 'off')
 

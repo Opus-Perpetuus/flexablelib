@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.0.2] - 2026-11-11
+
+### Fixed
+- Merge and zebra backgrounds now fill a single rectangle: the interior of
+  the cell or merge, including any separators absorbed between its rows.
+  The fill no longer stairsteps at the corners, leaks onto neighbouring
+  cells, or paints the outline glyphs (`─`, `═`, tees and crossings).
+- Horizontal rules keep `border_color` (or the default foreground) and do
+  not inherit a cell or zebra background, so a `_rows` style no longer
+  loses its border colour or leaves an uncoloured gap on a junction.
+- A leftover `ESC[0m` after a merge that already closed its colour is
+  dropped, so `column_colors` / zebra next to a coloured merge no longer
+  emit a doubled reset.
+- Theme `slate` (psql + zebra) and other themes paint a 2D merge as a
+  solid rectangle; `border_color` no longer cuts through the label.
+- Column-only styles (verticals but no rule between rows) no longer
+  insert a synthetic cap around a multi-column merge. That cap blanked
+  neighbour cells on a new line and made them look merged. The span is
+  shown by dropping the internal vertical; when the merge has a colour,
+  the rectangular fill marks it. Existing header and end rules still
+  get their tees repaired.
+
 ## [3.0.1] - 2026-11-11
 
 ### Fixed
