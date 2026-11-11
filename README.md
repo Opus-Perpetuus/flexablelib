@@ -483,8 +483,8 @@ Cards take `style_name`, `theme` (the table themes), `border_color`,
 whole card), `zebra`, `panel` and `shadow`.
 
 `table.render(width)` makes a table responsive: the normal table when it fits,
-squeezed and wrapped when that is enough, without its low-priority columns
-next, and one card per row when nothing else fits. `width` defaults to
+without its low-priority columns next, squeezed and wrapped after that, and
+one card per row when nothing else fits. `width` defaults to
 `max_width`, then the terminal width; `responsive=True` makes `print(table)` do
 the same.
 

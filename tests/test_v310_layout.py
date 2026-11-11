@@ -282,8 +282,13 @@ def test_render_switches_table_compact_hidden_cards():
                                                           'Grupo': 2})
     natural = table.natural_width()
     assert table.render_mode(natural) == 'table'
-    assert table.render_mode(natural - 10) == 'compact'
+    # Hiding a low-priority column comes before squeezing every column.
+    assert table.render_mode(natural - 10) == 'hidden'
     assert table.render_mode(45) == 'hidden'
+    plain = people(style_name='rounded')
+    assert plain.render_mode(natural - 10) == 'compact'
+    squeezed = plain.render(width=natural - 10)
+    assert 'Correo' in squeezed and max(widths(squeezed)) <= natural - 10
     assert table.render_mode(20) == 'cards'
     hidden = table.render(width=45)
     assert 'Correo' not in hidden and widths(hidden) <= set(range(46))
@@ -444,3 +449,122 @@ def test_readme_responsive_example():
     assert 'Correo' not in table.render(width=46)
     assert table.render(width=30).split('\n')[:2] == [
         '           Personas', '╭─ Ana ──────────────────────╮']
+
+
+# +------------------------------------------------- options and edges
+
+def test_setters_validate():
+    table = people()
+    for name, value, error in (
+            ('title_position', 'top', ValueError),
+            ('caption_position', 'top', ValueError),
+            ('title_align', 'middle', ValueError),
+            ('breakpoints', 'wide', TypeError),
+            ('breakpoints', {'cards': 0}, ValueError),
+            ('column_priority', [1], TypeError),
+            ('column_priority', {'Pts': 0}, ValueError),
+            ('card_options', [1], TypeError)):
+        with pytest.raises(error):
+            setattr(table, name, value)
+    table.title_position = None
+    table.caption_position = None
+    table.breakpoints = None
+    table.column_priority = None
+    table.card_options = None
+    assert (table.title_position, table.caption_position) == ('above',
+                                                               'below')
+    assert table.breakpoints == {} and table.column_priority == {}
+    assert table.card_options == {}
+    with pytest.raises(ValueError):
+        Grid(['x']).render(width=0)
+    with pytest.raises(ValueError):
+        Card(field_layout='zigzag', fields={'a': 1}).render(width=20)
+
+
+def test_empty_table_renders_as_a_table():
+    assert Table().render_mode(10) == 'table'
+    assert Table(headers=['a']).to_cards() == []
+
+
+def test_render_defaults_to_max_width_then_terminal(terminal):
+    table = people(style_name='rounded')
+    terminal(40)
+    assert table.render_mode() == 'cards'
+    table.max_width = 300
+    assert table.render_mode() == 'table'
+
+
+def test_cards_view_keeps_subtitle_and_caption_and_column_options():
+    table = people(title='Personas', subtitle='2026', caption='fin',
+                   use_colors=False, breakpoints={'cards': 999},
+                   card_options={'columns': 1, 'gap': 1})
+    lines = table.render(width=100).split('\n')
+    assert lines[0].strip() == 'Personas' and lines[1].strip() == '2026'
+    assert lines[-1].strip() == 'fin'
+    assert lines[2].count('+-') == 1  # columns=1 even with room for more
+
+
+def test_card_options_and_theme_edges():
+    c = Card(fields={'a': 1}).add_field('b', None)
+    assert c.fields == [('a', 1), ('b', None)]
+    plain = Card(title='T', fields={'a': 1}, theme='plain')
+    assert plain.use_colors is False and plain.title_color is None
+    with pytest.raises(ValueError):
+        Card(theme='sparkly')
+    bounded = Card(title='T', fields={'a': 'x' * 50}, max_width=20)
+    assert bounded.natural_width() == 20
+    floor = Card(title='T', min_width=40)
+    assert floor.natural_width() == 40
+    assert Card(width=33).natural_width() == 33
+    empty = Card(use_colors=False).render(width=10)
+    assert widths(empty) == {10}
+
+
+def test_long_titles_are_cut_into_the_border():
+    c = Card(title='Un título larguísimo que no cabe', fields={'a': 1},
+             use_colors=False)
+    first = c.render(width=20).split('\n')[0]
+    assert visible_width(first) == 20 and '…' in first
+
+
+def test_tiles_inline_and_stacked_layouts():
+    fields = [('Cliente', 'José'), ('Total', '$1,200'), ('Estado', 'Ok')]
+    inline = Card(fields=fields, field_columns=2, field_layout='inline',
+                  use_colors=False, style_name='single_rows')
+    text = inline.render(width=50)
+    assert widths(text) == {50}
+    assert 'Cliente José' in text
+    stacked = Card(fields=fields, field_layout='stacked', use_colors=False)
+    lines = stacked.render(width=30).split('\n')
+    assert lines[1].strip('│ ') == 'Cliente' and lines[2].strip('│ ') == 'José'
+    narrow = Card(fields={'Etiqueta larga': 'valor'}, use_colors=False)
+    assert widths(narrow.render(width=12)) == {12}
+    assert inline.natural_width() > 0 and stacked.natural_width() > 0
+
+
+def test_coloured_tiles_and_values():
+    c = Card(fields=[('a', 1), ('b', '')], field_columns=2, color='on blue',
+             value_colors={'a': 'red'}, use_colors=True)
+    text = c.render(width=30)
+    assert parse_spec('red') in text and RESET + RESET not in text
+    off = Card(fields=[('a', '\x1b[31mx\x1b[0m')], field_columns=2,
+               use_colors=False)
+    assert '\x1b' not in off.render(width=20)
+
+
+def test_grid_tuple_children_natural_width_and_max_width():
+    grid = Grid([('a' * 10, 2), 'b' * 4], columns=2, gap=1, max_width=15)
+    assert grid.natural_width() == 15
+    assert max(widths(grid.render(width=80))) <= 15
+    assert Grid(['abc'], width=7).natural_width() == 7
+    assert Grid(['abc', 'de'], min_width=6).natural_width() == 6 * 2 + 2
+    assert Grid(['abc'], width=9).render().split('\n')[0] == 'abc'
+    assert str(Grid(['xy'], width=5)) == 'xy'
+
+
+def test_grid_child_with_a_render_without_width():
+    class Legacy(object):
+        def render(self):
+            return 'old'
+    assert Grid([Legacy()]).render(width=10) == 'old'
+    assert str(Card(title='T', use_colors=False, width=12)).count('\n') >= 1
