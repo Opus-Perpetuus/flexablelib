@@ -230,10 +230,10 @@ def test_border_title_never_covers_a_junction():
 
 
 def test_border_title_falls_back_above_when_it_cannot_fit():
-    table = people(style_name='single', title='Un título muy largo aquí',
+    table = people(style_name='single', title='Un título muy largo aquí, sí',
                    title_position='border', title_align='l')
     lines = str(table).split('\n')
-    assert lines[0].strip() == 'Un título muy largo aquí'
+    assert lines[0].strip() == 'Un título muy largo aquí, sí'
     assert lines[1].startswith('┌──')
     # No top rule at all: the title stays above.
     md = people(style_name='psql', title='T', title_position='border')
@@ -272,6 +272,9 @@ def test_inset_label_helper():
     assert inset_label('┌──────────┐', 'Hi', 'l') == '┌─ Hi ─────┐'
     assert inset_label('┌──────────┐', 'Hi', 'r') == '┌───── Hi ─┐'
     assert inset_label('┌──┬──┐', 'Hi', 'c') is None
+    # 'l' / 'r' take the first stretch long enough from their side.
+    assert inset_label('┌──┬──────────┬──┐', 'Hi', 'l') == '┌──┬─ Hi ─────┬──┐'
+    assert inset_label('┌──┬──────────┬──┐', 'Hi', 'r') == '┌──┬───── Hi ─┬──┐'
     assert inset_label('      ', 'Hi') is None
 
 

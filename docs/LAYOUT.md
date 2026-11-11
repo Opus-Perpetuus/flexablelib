@@ -56,9 +56,10 @@ Card(
 
 A border title only replaces plain rule glyphs. It never covers a corner or a
 column junction (`┬`), so every column still meets the frame. When there is no
-long enough stretch of rule (with `'l'`, the first column; with `'r'`, the
-last; with `'c'`, the one nearest the middle), or the style draws no top rule,
-the title is drawn above instead.
+long enough stretch of rule, or the style draws no top rule, the title is
+drawn above instead. With `'l'` the title takes the first stretch from the
+left that is long enough, with `'r'` the first from the right, with `'c'` the
+one nearest the middle.
 
 ## Responsive tables
 
@@ -130,5 +131,7 @@ share, so `panel='double'` or `shadow='▒'` look the same on both.
 * Merged cells are not carried into cards: each card shows the row's own
   values.
 * Grid columns are equal width; spans cover several of them.
-* A border title cannot sit over a column junction, so on tables with narrow
-  columns it often falls back to a line above.
+* A border title cannot sit over a column junction: on a table whose columns
+  are all narrower than the title it falls back to a line above, and with
+  `'l'` / `'r'` it may sit over the first column wide enough rather than the
+  outermost one.
