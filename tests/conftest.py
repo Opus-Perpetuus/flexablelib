@@ -30,6 +30,7 @@ for path in (REPO_ROOT, TESTS_DIR):
 
 from helpers import DEFAULT_TERMINAL_COLS, DEFAULT_TERMINAL_LINES  # noqa: E402
 from flexablelib import table as table_module  # noqa: E402
+from flexablelib import layout as layout_module  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -50,11 +51,12 @@ def default_terminal(monkeypatch):
     Give every test a wide, fixed terminal so CI never renders differently
     from a developer's console.
     """
-    monkeypatch.setattr(
-        table_module,
-        'get_window_size',
-        lambda: (DEFAULT_TERMINAL_COLS, DEFAULT_TERMINAL_LINES),
-    )
+    for module in (table_module, layout_module):
+        monkeypatch.setattr(
+            module,
+            'get_window_size',
+            lambda: (DEFAULT_TERMINAL_COLS, DEFAULT_TERMINAL_LINES),
+        )
 
 
 @pytest.fixture
@@ -72,11 +74,12 @@ def terminal(monkeypatch, default_terminal):
             ...
     """
     def _set_terminal(cols, lines=DEFAULT_TERMINAL_LINES):
-        monkeypatch.setattr(
-            table_module,
-            'get_window_size',
-            lambda: (cols, lines),
-        )
+        for module in (table_module, layout_module):
+            monkeypatch.setattr(
+                module,
+                'get_window_size',
+                lambda: (cols, lines),
+            )
         return cols, lines
 
     return _set_terminal

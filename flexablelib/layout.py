@@ -545,6 +545,9 @@ class Card(object):
 
     @field_columns.setter
     def field_columns(self, value):
+        if value == 'auto':
+            self.__field_columns = 'auto'
+            return
         value = int(value)
         if value < 1:
             raise ValueError('field_columns must be >= 1')
@@ -633,6 +636,8 @@ class Card(object):
         if self.__fields:
             label_w = self._label_width()
             cols = self.field_columns
+            if cols == 'auto':
+                cols = len(self.__fields)
             gap = int(self.field_gap)
             if cols == 1 and self._layout_for(cols) == 'inline':
                 value_w = max(_block_width(self._value_text(v))
@@ -793,8 +798,14 @@ class Card(object):
         fields = self.__fields
         if not fields:
             return []
-        cols = min(self.field_columns, len(fields))
         gap = max(0, int(self.field_gap))
+        cols = self.field_columns
+        if cols == 'auto':
+            # As many tiles per row as fit at their natural width.
+            tile = max(max(visible_width(l), _block_width(
+                self._value_text(v))) for l, v in fields)
+            cols = max(1, (content_w + gap) // (tile + gap))
+        cols = min(cols, len(fields))
         layout = self._layout_for(cols)
         label_w = self._label_width()
         even, odd = _zebra_specs(self.zebra)
