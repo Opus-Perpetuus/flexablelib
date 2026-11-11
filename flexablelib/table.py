@@ -125,7 +125,7 @@ class Table(object):
     """
 
     def __init__(self, rows=None, columns=None, headers=None, style_name='',
-                 missing_val='', header_style=None) -> None:
+                 missing_val='', header_style=None, responsive=False) -> None:
         # +------------------------+ PARAMETERS +------------------------+
         self.__missing_value = missing_val
         self.__value_placer = ValuePlacer()
@@ -175,6 +175,18 @@ class Table(object):
         self.__title = None
         # Optional caption drawn below the table (Rich/tablewriter style).
         self.__caption = None
+        # Second title line, where the title goes ('above' or 'border'), its
+        # alignment and colour; where the caption goes.
+        self.__subtitle = None
+        self.__title_position = 'above'
+        self.__title_align = 'c'
+        self.__title_color = None
+        self.__caption_position = 'below'
+        # Responsive rendering: off, on, and the knobs it uses.
+        self.__responsive = bool(responsive)
+        self.__breakpoints = {}
+        self.__column_priority = {}
+        self.__card_options = {}
         # Alternating body-row colours: None, a single odd-row spec, or (even, odd).
         self.__zebra = None
         # Last N rendered body rows treated as footer (Spectre/tablewriter).
@@ -356,6 +368,8 @@ class Table(object):
     # start +---------------------------+ METHODS +---------------------------+ start
 
     def __str__(self) -> str:
+        if self.__responsive:
+            return self.render()
         return self.compose()
     
     
@@ -3081,6 +3095,17 @@ class Table(object):
         left_len = self.__check_if_none_and_get_len(vertical_body_lines.left)
         right_len = self.__check_if_none_and_get_len(vertical_body_lines.right)
         middle_len = self.__check_if_none_and_get_len(vertical_body_lines.middle)   
+        # Columns in ``hide_columns`` are not drawn: neither their width nor
+        # their margins and separator count toward the table's width.
+        hidden_width = 0
+        hidden = self.__user_hidden_column_indexes()
+        widths_as_list = (self.__column_widths_as_list_with_i[1:]
+                          if self.__show_index
+                          else self.__column_widths_as_list)
+        for hidden_i in hidden:
+            if 0 <= hidden_i < len(widths_as_list):
+                hidden_width += (widths_as_list[hidden_i] + one_column_margin
+                                 + middle_len)
         if not self.__show_index:     
             separators_of_table = sum([
                 left_len,
@@ -3092,7 +3117,7 @@ class Table(object):
                 all_columns_margin,
                 separators_of_table
             ])
-            return table_width
+            return table_width - hidden_width
         else:
             separators_of_table_with_i = sum([
                 left_len,
@@ -3104,7 +3129,7 @@ class Table(object):
                 all_columns_margin + one_column_margin,
                 separators_of_table_with_i
             ])
-            return table_width_with_i
+            return table_width_with_i - hidden_width
         
     def __check_columns_size(self, 
                              table_width: int, 
@@ -3161,6 +3186,12 @@ class Table(object):
         # wrapping data that had room to spare while the wide column keeps
         # more than it needs. That is issue #16.
         floors = self.__column_shrink_floors()
+        # A hidden column is not drawn, so it has nothing to give: booking
+        # part of the difference against it left the drawn columns too wide
+        # and the next pass shrank everything again.
+        for hidden_i in self.__user_hidden_column_indexes():
+            if 0 <= hidden_i < len(floors):
+                floors[hidden_i] = widths[hidden_i]
         reductions = [0] * len(widths)
         remaining = difference
 
@@ -4473,6 +4504,14 @@ class Table(object):
                 + lines[len(lines) - tail:]
             )
 
+        if ((self.__title and self.__title_position == 'border') or
+                (self.__caption and self.__caption_position == 'border')):
+            table_string = self.__inset_border_labels(
+                table_string,
+                title_line.count('\n') + 1 if title_line else 0,
+                caption_line.count('\n') + 1 if caption_line else 0,
+            )
+
         table_string = self.__apply_panel_and_shadow(table_string)
         return self.__apply_table_align(table_string)
 
@@ -4547,17 +4586,88 @@ class Table(object):
 
         return '\n'.join(pieces), line_map
 
-    def __title_line(self, column_widths_list, table_with_i, drawn_width=None):
-        """Centre the title over the full table width, if any."""
-        if not self.__title:
+    def __title_line(self, column_widths_list, table_with_i, drawn_width=None,
+                     include_title=None):
+        """
+        The lines drawn above the table: the title (unless it goes into the
+        top border) and the subtitle, aligned on the table width.
+        """
+        if include_title is None:
+            include_title = self.__title_position != 'border'
+        texts = []
+        if self.__title and include_title:
+            texts.append((self.__title, self.__title_color))
+        if self.__subtitle:
+            texts.extend((line, 'dim') for line in self.__subtitle.split('\n'))
+        if not texts:
             return None
         table_width = drawn_width or self.__get_string_table_width()
-        title = self.__title
-        title_width = visible_width(title)
-        if title_width >= table_width:
-            return title
-        left = (table_width - title_width) // 2
-        return (' ' * left) + title
+        lines = []
+        for text, spec in texts:
+            lines.append(self.__aligned_label(text, table_width, spec))
+        return '\n'.join(lines)
+
+    def __aligned_label(self, text, table_width, spec=None):
+        """Place ``text`` left/centre/right over ``table_width`` columns."""
+        if spec and self.__colors_active:
+            text = colorize(text, spec)
+        width = visible_width(text)
+        if width >= table_width:
+            return text
+        align = self.__title_align
+        if align == 'l':
+            return text
+        if align == 'r':
+            return ' ' * (table_width - width) + text
+        return ' ' * ((table_width - width) // 2) + text
+
+    def __inset_border_labels(self, table_string, head, tail):
+        """
+        Set the title into the top rule and/or the caption into the bottom
+        rule (``title_position`` / ``caption_position`` = ``'border'``).
+
+        A label only replaces plain rule glyphs, never a corner or a column
+        junction; when no stretch of rule is long enough it is drawn above
+        (title) or below (caption) instead.
+        """
+        from .layout import inset_label
+        from .colors import parse_spec
+        lines = table_string.split('\n')
+        first, last = head, len(lines) - tail - 1
+        border = (parse_spec(self.__border_color)
+                  if self.__border_color and self.__colors_active else '')
+        label_prefix = (parse_spec(self.__title_color)
+                        if self.__title_color and self.__colors_active else '')
+        width = max((visible_width(line) for line in lines[first:last + 1]),
+                    default=0)
+        above, below = [], []
+        if self.__title and self.__title_position == 'border':
+            placed = None
+            if 0 <= first < len(lines):
+                placed = inset_label(lines[first], self.__title,
+                                     self.__title_align,
+                                     label_prefix=label_prefix,
+                                     border_prefix=border)
+            if placed is None:
+                above.append(self.__aligned_label(
+                    self.__title, width, self.__title_color))
+            else:
+                lines[first] = placed
+        if self.__caption and self.__caption_position == 'border':
+            placed = None
+            if 0 <= last < len(lines) and last != first:
+                placed = inset_label(lines[last], self.__caption,
+                                     self.__title_align,
+                                     border_prefix=border)
+            if placed is None:
+                below.append(self.__aligned_label(self.__caption, width))
+            else:
+                lines[last] = placed
+        if above:
+            lines = lines[:head] + above + lines[head:]
+        if below:
+            lines = lines[:len(lines) - tail] + below + lines[len(lines) - tail:]
+        return '\n'.join(lines)
 
 
     def __valign_for_cell(self, row_index, header, column_i):
@@ -4639,56 +4749,21 @@ class Table(object):
             out = self.__apply_shadow(out)
         return out
 
-    def __panel_glyphs(self):
-        """Box-drawing glyphs for the outer panel frame."""
-        name = 'rounded'
-        if isinstance(self.__panel, str) and self.__panel not in ('True', 'true', '1'):
-            name = self.__panel.lower()
-        presets = {
-            'rounded': ('╭', '─', '╮', '│', '╰', '╯'),
-            'sharp':   ('┌', '─', '┐', '│', '└', '┘'),
-            'ascii':   ('+', '-', '+', '|', '+', '+'),
-            'double':  ('╔', '═', '╗', '║', '╚', '╝'),
-            'heavy':   ('┏', '━', '┓', '┃', '┗', '┛'),
-        }
-        return presets.get(name, presets['rounded'])
-
     def __wrap_panel(self, table_string):
-        tl, hz, tr, vt, bl, br = self.__panel_glyphs()
-        lines = table_string.splitlines()
-        width = max((visible_width(line) for line in lines), default=0)
-        padded = []
-        for line in lines:
-            pad = width - visible_width(line)
-            padded.append(line + (' ' * pad))
-        top = tl + (hz * width) + tr
-        bottom = bl + (hz * width) + br
-        body = [vt + line + vt for line in padded]
-        return chr(10).join([top] + body + [bottom])
+        # Shared with Card / Grid so tables and cards draw identical chrome.
+        from .layout import wrap_panel
+        return wrap_panel(table_string, self.__panel)
 
     def __apply_shadow(self, table_string):
-        glyph = '░'
-        if isinstance(self.__shadow, str) and self.__shadow not in ('True', 'true', '1'):
-            glyph = self.__shadow[:1] or '░'
-        lines = table_string.splitlines()
-        width = max((visible_width(line) for line in lines), default=0)
-        out = []
-        for i, line in enumerate(lines):
-            pad = width - visible_width(line)
-            body = line + (' ' * pad)
-            # First line: no right-edge shadow (Spectre-style); later lines get it,
-            # plus a bottom shadow row.
-            if i == 0:
-                out.append(body + ' ')
-            else:
-                out.append(body + glyph)
-        out.append(' ' + (glyph * width))
-        return chr(10).join(out)
+        # First line: no right-edge shadow (Spectre-style); later lines get
+        # it, plus a bottom shadow row.
+        from .layout import add_shadow
+        return add_shadow(table_string, self.__shadow)
 
 
     def __caption_line(self, column_widths_list, table_with_i, drawn_width=None):
         """Centre the caption under the full table width, if any."""
-        if not self.__caption:
+        if not self.__caption or self.__caption_position == 'border':
             return None
         table_width = drawn_width or self.__get_string_table_width()
         caption = self.__caption
@@ -5527,7 +5602,9 @@ class Table(object):
         'column_min_width', 'column_max_width', 'column_colors',
         'expand_to_window', 'justify', 'suppress_empty', 'show_margin',
         'show_empty_rows', 'show_empty_columns', 'parse_str_numbers',
-        'too_narrow_message',
+        'too_narrow_message', 'subtitle', 'title_position',
+        'caption_position', 'title_align', 'title_color', 'responsive',
+        'breakpoints', 'column_priority', 'card_options',
     )
 
     def __copy_display_settings(self, out):
@@ -5890,6 +5967,413 @@ class Table(object):
         """
         from .readers import from_markdown
         return from_markdown(cls, source, parse_numbers=parse_numbers, **options)
+
+    # +------------------+ TITLES, CARDS AND RESPONSIVE +------------------+
+
+    @property
+    def subtitle(self):
+        """
+        Optional second line under the title, drawn above the table (dim
+        when colours are on). Stays above the frame even when the title is
+        set into the border.
+        """
+        return self.__subtitle
+
+    @subtitle.setter
+    def subtitle(self, value):
+        self.__subtitle = None if value is None else str(value)
+
+    @property
+    def title_position(self):
+        """
+        Where the title goes: ``'above'`` (default, a line over the table)
+        or ``'border'`` (set into the top rule: ``╭─ Title ───╮``). A border
+        title never covers a corner or column junction; when no stretch of
+        rule is long enough, or the style draws no top rule, it falls back
+        to a line above.
+        """
+        return self.__title_position
+
+    @title_position.setter
+    def title_position(self, value):
+        value = 'above' if value is None else str(value).lower()
+        if value not in ('above', 'border'):
+            raise ValueError("title_position must be 'above' or 'border'")
+        self.__title_position = value
+
+    @property
+    def caption_position(self):
+        """``'below'`` (default) or ``'border'`` (set into the bottom rule)."""
+        return self.__caption_position
+
+    @caption_position.setter
+    def caption_position(self, value):
+        value = 'below' if value is None else str(value).lower()
+        if value not in ('below', 'border'):
+            raise ValueError("caption_position must be 'below' or 'border'")
+        self.__caption_position = value
+
+    @property
+    def title_align(self):
+        """Alignment of title, subtitle and caption: ``'l'``, ``'c'``, ``'r'``."""
+        return self.__title_align
+
+    @title_align.setter
+    def title_align(self, value):
+        from .layout import _align
+        self.__title_align = _align(value, 'c')
+
+    @property
+    def title_color(self):
+        """Colour spec for the title (``None``: plain)."""
+        return self.__title_color
+
+    @title_color.setter
+    def title_color(self, value):
+        self.__title_color = value
+
+    @property
+    def responsive(self):
+        """
+        When true, ``str(table)`` / ``print(table)`` go through
+        :meth:`render`: the table adapts to the terminal width, compacting
+        and finally switching to cards when it cannot fit.
+        """
+        return self.__responsive
+
+    @responsive.setter
+    def responsive(self, value):
+        self.__responsive = bool(value)
+
+    @property
+    def breakpoints(self):
+        """
+        Responsive thresholds. ``{'cards': 60}`` (or just ``60``) shows cards
+        whenever the width is below 60 columns; ``{'min_column': 8}`` is the
+        narrowest a column may be squeezed before columns are hidden or the
+        table becomes cards (default 8, or the column's natural width when
+        smaller).
+        """
+        return dict(self.__breakpoints)
+
+    @breakpoints.setter
+    def breakpoints(self, value):
+        if value is None:
+            self.__breakpoints = {}
+            return
+        if isinstance(value, int) and not isinstance(value, bool):
+            value = {'cards': value}
+        if not isinstance(value, dict):
+            raise TypeError('breakpoints must be None, an int or a dict')
+        unknown = set(value) - {'cards', 'min_column'}
+        if unknown:
+            raise ValueError(
+                'unknown breakpoint(s): {0}; use cards, min_column'.format(
+                    ', '.join(sorted(map(str, unknown)))))
+        out = {}
+        for key, number in value.items():
+            number = int(number)
+            if number < 1:
+                raise ValueError('breakpoint {0!r} must be >= 1'.format(key))
+            out[key] = number
+        self.__breakpoints = out
+
+    @property
+    def column_priority(self):
+        """
+        ``{header_or_index: priority}`` for responsive rendering. Columns
+        default to priority 1 and are never hidden; when the table does not
+        fit, the highest priority number (3, then 2...) is hidden first,
+        before falling back to cards.
+        """
+        return dict(self.__column_priority)
+
+    @column_priority.setter
+    def column_priority(self, value):
+        if value is None:
+            self.__column_priority = {}
+            return
+        if not isinstance(value, dict):
+            raise TypeError('column_priority must be a dict')
+        out = {}
+        for key, number in value.items():
+            number = int(number)
+            if number < 1:
+                raise ValueError('column priorities must be >= 1')
+            out[key] = number
+        self.__column_priority = out
+
+    @property
+    def card_options(self):
+        """
+        Keyword arguments for the :class:`~flexablelib.layout.Card` objects
+        :meth:`to_cards` and responsive rendering build (``title_field``,
+        ``subtitle_field``, ``fields``, ``footer_field``, ``field_columns``,
+        ``min_width``, ``gap``...).
+        """
+        return dict(self.__card_options)
+
+    @card_options.setter
+    def card_options(self, value):
+        if value is None:
+            self.__card_options = {}
+            return
+        if not isinstance(value, dict):
+            raise TypeError('card_options must be a dict')
+        self.__card_options = dict(value)
+
+    def __header_key(self, key, headers):
+        """A header name for a header-or-index key, or None."""
+        if isinstance(key, int) and not isinstance(key, bool):
+            return headers[key] if -len(headers) <= key < len(headers) else None
+        for header in headers:
+            if header == key or str(header) == str(key):
+                return header
+        return None
+
+    def to_cards(self, title_field=None, subtitle_field=None, fields=None,
+                 footer_field=None, **options):
+        """
+        One :class:`~flexablelib.layout.Card` per displayed row.
+
+        The title comes from ``title_field`` (default: the first column),
+        the optional subtitle and footer from ``subtitle_field`` /
+        ``footer_field``, and the remaining columns (or ``fields``, in that
+        order) become ``label  value`` pairs. Values are the formatted
+        strings the table shows; ``sort_by``, ``row_filter`` and
+        ``hide_columns`` apply.
+
+        The cards take the table's style, border/header colours, zebra,
+        ``column_colors`` (as value colours), panel and shadow. Anything in
+        :attr:`card_options` and in ``**options`` overrides that.
+        """
+        from .layout import Card
+        opts = dict(self.__card_options)
+        opts.update(options)
+        for name, given in (('title_field', title_field),
+                            ('subtitle_field', subtitle_field),
+                            ('fields', fields),
+                            ('footer_field', footer_field)):
+            if given is not None:
+                opts[name] = given
+        for layout_only in ('min_width', 'gap', 'columns', 'row_gap'):
+            opts.pop(layout_only, None)
+        records = self.to_records(formatted=True)
+        headers = list(records[0].keys()) if records else [
+            header for header in self.headers]
+        if not headers:
+            return []
+
+        def pick(key):
+            if key is None:
+                return None
+            header = self.__header_key(key, headers)
+            if header is None:
+                raise KeyError('no column {0!r}'.format(key))
+            return header
+
+        title_key = opts.pop('title_field', None)
+        title_h = pick(title_key) if title_key is not None else headers[0]
+        subtitle_h = pick(opts.pop('subtitle_field', None))
+        footer_h = pick(opts.pop('footer_field', None))
+        chosen = opts.pop('fields', None)
+        if chosen is None:
+            field_hs = [h for h in headers
+                        if h not in (title_h, subtitle_h, footer_h)]
+        else:
+            field_hs = [pick(key) for key in chosen]
+
+        value_colors = {}
+        for key, spec in (self.__column_colors or {}).items():
+            header = self.__header_key(key, headers)
+            if header is not None and spec:
+                value_colors[str(header)] = spec
+        missing = self.__missing_value
+        missing = '' if missing is None else str(missing)
+
+        base = dict(
+            style_name=self.style_name,
+            border_color=self.__border_color,
+            zebra=self.__zebra,
+            use_colors=self.__use_colors,
+            panel=self.__panel,
+            shadow=self.__shadow,
+        )
+        if self.__header_color:
+            base['title_color'] = self.__header_color
+        if value_colors:
+            base['value_colors'] = value_colors
+        base.update(opts)
+
+        def text(value):
+            return missing if value is None else str(value)
+
+        cards = []
+        for record in records:
+            cards.append(Card(
+                title=text(record.get(title_h)) if title_h is not None
+                else None,
+                subtitle=text(record.get(subtitle_h)) if subtitle_h
+                is not None else None,
+                footer=text(record.get(footer_h)) if footer_h is not None
+                else None,
+                fields=[(str(h), text(record.get(h))) for h in field_hs],
+                **base
+            ))
+        return cards
+
+    def natural_width(self):
+        """Width the table takes when nothing squeezes it."""
+        return max((visible_width(line)
+                    for line in self.__compose_unbounded().split('\n')),
+                   default=0)
+
+    def __compose_with(self, **settings):
+        """compose() with some public settings changed, then restored."""
+        saved = {}
+        try:
+            for name, value in settings.items():
+                saved[name] = getattr(self, name)
+                setattr(self, name, value)
+            return self.compose()
+        finally:
+            for name, value in saved.items():
+                setattr(self, name, value)
+
+    def __compose_unbounded(self):
+        return self.__compose_with(max_width=10 ** 6, expand_to_window=False,
+                                   table_align=None, too_narrow_message=None)
+
+    def render_mode(self, width=None):
+        """
+        What :meth:`render` would draw at ``width``: ``'table'``,
+        ``'hidden'`` (low-priority columns hidden, squeezed too if that is
+        still needed), ``'compact'`` (squeezed and wrapped) or ``'cards'``.
+        """
+        return self.__responsive_plan(width)[0]
+
+    def __responsive_plan(self, width):
+        from .layout import render_width
+        if width is None:
+            width = self.__max_width
+        width = render_width(width)
+        if not self.headers and self.__real_column_count == 0:
+            return 'table', width, ()
+        cards_below = self.__breakpoints.get('cards')
+        if cards_below is not None and width < cards_below:
+            return 'cards', width, ()
+        # Hiding low-priority columns beats squeezing every column, and both
+        # beat cards: try each level of hiding at natural width first, then
+        # squeezed.
+        headers = [h for h in self.headers]
+        ranked = {}
+        for key, number in self.__column_priority.items():
+            header = self.__header_key(key, headers)
+            if header is not None and number > 1:
+                ranked.setdefault(number, []).append(header)
+        levels = [tuple(self.__hide_columns)]
+        for number in sorted(ranked, reverse=True):
+            more = levels[-1] + tuple(ranked[number])
+            if len(set(more)) >= len(headers):
+                break
+            levels.append(more)
+        for compact in (False, True):
+            for level, hidden in enumerate(levels):
+                if self.__fits_legibly(width, hidden, compact=compact):
+                    if level:
+                        return 'hidden', width, hidden
+                    return ('compact' if compact else 'table'), width, hidden
+        return 'cards', width, ()
+
+    def __fits_legibly(self, width, hidden, compact):
+        """Whether the table fits ``width`` (squeezed if ``compact``)."""
+        natural = self.__compose_with(
+            hide_columns=hidden, max_width=10 ** 6, expand_to_window=False,
+            table_align=None, too_narrow_message=None)
+        natural_w = max((visible_width(line) for line in natural.split('\n')),
+                        default=0)
+        if natural_w <= width:
+            return True
+        if not compact:
+            return False
+        # Squeezed: every visible column keeps at least ``min_column``
+        # columns (or its natural width when smaller).
+        floor = self.__breakpoints.get('min_column', 8)
+        saved = self.__hide_columns
+        try:
+            self.__hide_columns = hidden
+            records = self.to_records(formatted=True)
+        finally:
+            self.__hide_columns = saved
+        headers = [h for h in self.headers
+                   if self.__header_key(h, list(hidden)) is None]
+        if records:
+            headers = list(records[0].keys())
+        content = 0
+        squeezed = 0
+        for header in headers:
+            cells = [visible_width(str(header))] + [
+                max((visible_width(line) for line in str(r.get(header)).split(
+                    '\n')), default=0)
+                for r in records if r.get(header) is not None]
+            col = max(cells) if cells else 0
+            content += col
+            squeezed += min(col, floor)
+        needed = natural_w - content + squeezed
+        return needed <= width
+
+    def render(self, width=None):
+        """
+        Draw the table for ``width`` columns (default: :attr:`max_width`,
+        else the terminal width), responsively:
+
+        1. it fits: the normal table;
+        2. hiding low-priority columns (:attr:`column_priority`, highest
+           number first) makes it fit: the table without them;
+        3. it fits squeezed (columns wrapped, none narrower than
+           ``breakpoints['min_column']``), hiding as few low-priority columns
+           as possible: the squeezed table;
+        4. otherwise: one card per row (:meth:`to_cards`) in a grid that
+           takes as many columns of cards as fit.
+
+        ``breakpoints={'cards': N}`` forces cards below ``N`` columns. The
+        title, subtitle and caption stay above/below the cards.
+        """
+        mode, width, hidden = self.__responsive_plan(width)
+        if mode == 'table':
+            return self.__compose_with(max_width=width)
+        if mode in ('compact', 'hidden'):
+            # 'hidden' may still need squeezing: wrap rather than cut.
+            overflow = self.__overflow or 'wrap'
+            return self.__compose_with(max_width=width, hide_columns=hidden,
+                                       overflow=overflow)
+        return self.__render_cards(width)
+
+    def __render_cards(self, width):
+        from .layout import Grid
+        opts = self.__card_options
+        cards = self.to_cards()
+        lines = []
+        if self.__title:
+            lines.append(self.__aligned_label(self.__title, width,
+                                              self.__title_color))
+        if self.__subtitle:
+            for line in self.__subtitle.split('\n'):
+                lines.append(self.__aligned_label(line, width, 'dim'))
+        if cards:
+            min_width = opts.get('min_width')
+            if min_width is None:
+                min_width = min(width, max(c.natural_width() for c in cards))
+            grid = Grid(cards, columns=opts.get('columns', 'auto'),
+                        gap=opts.get('gap', 2), row_gap=opts.get('row_gap', 1),
+                        min_width=min(int(min_width), width))
+            lines.append(grid.render(width=width))
+        if self.__caption:
+            lines.append(self.__aligned_label(self.__caption, width))
+        out = '\n'.join(lines)
+        if not self.__colors_active:
+            out = strip_ansi(out)
+        return out
 
     def to_records(self, include_index=False, formatted=False):
         """

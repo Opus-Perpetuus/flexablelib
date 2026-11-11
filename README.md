@@ -439,6 +439,94 @@ table.merge_cells(0, 0, 2, 2, value='Total', align='r')
 A merge never widens the table -- columns are still sized by their unmerged
 content -- so text longer than its span is truncated.
 
+## Cards, grids and responsive tables
+
+`Card` draws one record in a frame, in any of the table styles. The title goes
+into the top border when the style draws one:
+
+```python
+from flexablelib import Card
+
+card = Card(title='Ana', subtitle='Norte',
+            fields={'Edad': 28, 'Ciudad': 'Guadalajara'},
+            footer='actualizado hoy')
+print(card.render(width=30))
+```
+
+```
+╭─ Ana ──────────────────────╮
+│ Norte                      │
+├────────────────────────────┤
+│ Edad    28                 │
+│ Ciudad  Guadalajara        │
+├────────────────────────────┤
+│ actualizado hoy            │
+╰────────────────────────────╯
+```
+
+`field_columns=2` (or `'auto'`) lays the fields out as a grid of tiles, and
+`actions` adds `[ Action ]` chips:
+
+```
+╭─ Pedido 42 ────────────────────╮
+│ Cliente         Total          │
+│ José            $1,200         │
+│ Estado          Fecha          │
+│ Enviado         11/11          │
+├────────────────────────────────┤
+│             [ Ver ] [ Editar ] │
+╰────────────────────────────────╯
+```
+
+Cards take `style_name`, `theme` (the table themes), `border_color`,
+`title_color`, `label_color`, `value_colors`, `color` (a background for the
+whole card), `zebra`, `panel` and `shadow`.
+
+`table.render(width)` makes a table responsive: the normal table when it fits,
+without its low-priority columns next, squeezed and wrapped after that, and
+one card per row when nothing else fits. `width` defaults to
+`max_width`, then the terminal width; `responsive=True` makes `print(table)` do
+the same.
+
+```python
+table.title, table.title_position = 'Personas', 'border'
+table.column_priority = {'Correo': 3}          # hidden first
+table.card_options = {'subtitle_field': 'Grupo', 'fields': ['Edad', 'Ciudad']}
+table.render(width=80)    # table
+table.render(width=46)    # table without "Correo"
+table.render(width=30)    # cards
+```
+
+```
+╭─────────┬────────┬──────┬─ Personas ──┬──────────────────╮
+│ Nombre  │ Grupo  │ Edad │ Ciudad      │ Correo           │
+├─────────┼────────┼──────┼─────────────┼──────────────────┤
+│ Ana     │ Norte  │   28 │ Guadalajara │ ana@example.com  │
+│ Luna 🌸 │ Centro │   22 │ Mérida      │ luna@example.com │
+╰─────────┴────────┴──────┴─────────────┴──────────────────╯
+
+           Personas
+╭─ Ana ──────────────────────╮
+│ Norte                      │
+├────────────────────────────┤
+│ Edad    28                 │
+│ Ciudad  Guadalajara        │
+╰────────────────────────────╯
+```
+
+`Grid` places cards, tables, text and other grids in columns that reflow with
+the width -- a grid of cards or a whole terminal screen:
+
+```python
+from flexablelib import Grid, GridCell
+
+Grid(table.to_cards(), min_width=28).render(width=100)   # 3 columns, 2 at 62, 1 at 40
+Grid([GridCell('Ventas de noviembre', span=3),
+      GridCell(table, span=2), Grid(cards, columns=1)], columns=3)
+```
+
+More in [docs/LAYOUT.md](https://github.com/Opus-Perpetuus/flexablelib/blob/main/docs/LAYOUT.md).
+
 ## Notes
 
 - A column named ``"i"`` does not collide with the index column (`utils.IndexColumnTitle`).
