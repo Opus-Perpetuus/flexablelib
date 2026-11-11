@@ -19,6 +19,3 @@ personas. `CLAUDE.md` es un enlace a este archivo.
   remoto, nombra la rama en tu resumen final.
 - Única excepción: el usuario pide aislar trabajo o correr agentes en paralelo. La rama
   temporal es local, nunca se empuja, y se mergea y se borra en la misma sesión.
-
-Regla completa: [`docs/REGLA_RAMA_UNICA.md`](https://github.com/codice-progressio/imperium-SIC-ayuntamiento-zapotlanejo/blob/version-13/docs/REGLA_RAMA_UNICA.md)
-del monorepo `codice-progressio/imperium-SIC-ayuntamiento-zapotlanejo`.
