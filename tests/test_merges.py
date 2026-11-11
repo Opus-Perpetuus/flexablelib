@@ -295,11 +295,12 @@ def test_a_merge_works_across_styles(style):
     rendered = str(table)
 
     assert 'span' in rendered
-    # Column-only styles (double_horizontal, ascii_double_underline_open_header, …) grow by one synthetic
-    # row rule per multi-column merge; every line must still share the width.
+    # Column-only styles no longer grow a synthetic cap (that blanked
+    # neighbour cells). Every line must still share the width, and the
+    # table must not gain a line.
     after = [len(line) for line in rendered.splitlines()]
     assert set(after) == set(before)
-    assert len(after) >= len(before)
+    assert len(after) == len(before)
 
 
 # +-------------------------------------------------------------------------+
@@ -563,26 +564,27 @@ def test_horizontal_merge_caps_become_tees_above_and_below():
     assert '├────┬────┼────┤' in below
 
 
-def test_column_only_style_inserts_horizontal_break_under_multi_column_merge():
-    """double_horizontal has column lines but no row lines; a multi-column merge
-    must insert a row rule so the grid does not break oddly.
+def test_column_only_style_does_not_insert_synthetic_cap():
+    """double_horizontal has column lines but no row lines.
 
-    Caps use the table's outer horizontal glyph (═ for double_horizontal).
+    A synthetic cap would blank neighbour cells on a new line and make
+    them look merged. The multi-column span is shown by dropping the
+    internal vertical; the table stays the same height and stays square.
     """
     table = Table(style_name='double_horizontal')
     table.add_column('A', ['a1', 'a2', 'a3'])
     table.add_column('B', ['b1', 'b2', 'b3'])
     table.add_column('C', ['c1', 'c2', 'c3'])
+    before = str(table)
     table.merge_cells(1, 0, last_column=1, value='AB')
-
-    lines = str(table).splitlines()
-    # Light tees (┴/┬) or double-horizontal tees (╧/╤) — both valid depending
-    # on whether the synthesizer mirrors the outer ═ border.
-    assert any(('┴' in line or '╧' in line) for line in lines), lines
-    assert any(('┬' in line or '╤' in line) for line in lines), lines
+    rendered = str(table)
+    lines = rendered.splitlines()
     assert any('AB' in line for line in lines)
-    # The synthetic rules keep the table square.
+    assert len(lines) == len(before.splitlines())
     assert len({visible_width(line) for line in lines}) == 1
+    # Neighbour C stays a normal cell on the merged row, not a blank.
+    ab_line = next(line for line in lines if 'AB' in line)
+    assert 'c2' in ab_line
 
 
 def test_block_merge_header_and_footer_caps():
@@ -651,12 +653,8 @@ def test_stress_last_row_merge_bottom_border_is_end_line():
 # Generic junction / cap algorithm (no demo-specific hardcoding)
 # +-------------------------------------------------------------------------+
 
-def test_hyphen_in_cell_text_does_not_block_column_only_caps():
-    """A lone '-' inside cell text must not be mistaken for a rule line.
-
-    Column-only styles insert synthetic caps around multi-column merges; if
-    'Beta-1' were treated as a rule, those caps would be skipped.
-    """
+def test_hyphen_in_cell_text_is_not_treated_as_a_rule():
+    """A lone '-' inside cell text must not be mistaken for a rule line."""
     table = Table(style_name='rounded_double_underline')
     table.add_column('Cat', [''] * 5)
     table.add_column('Item', ['Alpha-1', 'Alpha-2', 'Beta-1', 'Beta-2', 'Beta-3'])
@@ -666,19 +664,13 @@ def test_hyphen_in_cell_text_does_not_block_column_only_caps():
     table.merge_cells(2, 0, last_row=4, value='Beta')
     table.merge_cells(2, 2, last_row=4, last_column=3, value='BLOCK')
 
-    lines = str(table).splitlines()
-    block_i = next(i for i, line in enumerate(lines) if 'BLOCK' in line)
-    # Cap above the block (between Alpha group and BLOCK) and below (or end).
-    above = lines[block_i - 2]  # one data line of BLOCK above middle, then cap
-    # Find a synthetic/body rule that carries a tee into the V|N span.
-    rule_lines = [line for line in lines if ('┬' in line or '┴' in line or '├' in line) and '═' not in line]
-    assert rule_lines, '\n'.join(lines)
-    # At least one rule must sit next to the BLOCK rows.
-    assert any(
-        abs(i - block_i) <= 3 and ('┬' in line or '┴' in line or '─' in line)
-        for i, line in enumerate(lines)
-        if _looks_like_rule_line(line)
-    ), '\n'.join(lines)
+    rendered = str(table)
+    lines = rendered.splitlines()
+    assert any('BLOCK' in line for line in lines)
+    assert any('Beta-1' in line or 'Alpha-1' in line or 'Alpha' in line for line in lines)
+    # Hyphenated labels stay body text, not a rule, and the table stays square.
+    assert len({visible_width(line) for line in lines}) == 1
+    assert 'BLOCK' in rendered
 
 
 def _looks_like_rule_line(line: str) -> bool:
@@ -686,22 +678,30 @@ def _looks_like_rule_line(line: str) -> bool:
     return re.search(r'[─━═┄┅┈┉╌╍▬−\-~=]{2,}', line) is not None
 
 
-def test_multi_column_merge_in_column_only_style_gets_caps_matching_outer_dash():
-    """Caps above/below a multi-column merge use the table end horizontal glyph."""
+def test_multi_column_merge_in_column_only_style_does_not_add_a_cap():
+    """A 2D merge in a column-only style keeps the original line count.
+
+    Neighbour cells on the same rows stay visible; no synthetic rule is
+    inserted between them. Existing header/end rules keep their own dash.
+    """
     table = Table(style_name='rounded_double_underline')
     table.add_column('A', ['a1', 'a2', 'a3', 'a4'])
     table.add_column('B', ['b1', 'b2', 'b3', 'b4'])
     table.add_column('C', ['c1', 'c2', 'c3', 'c4'])
+    before = str(table)
     table.merge_cells(1, 1, last_row=2, last_column=2, value='BC')
 
     rendered = str(table)
     lines = rendered.splitlines()
     assert any('BC' in line for line in lines)
-    # Outer end uses ─; synthetic caps must also use ─ (not a foreign dash).
-    rules = [line for line in lines if _looks_like_rule_line(line) and not line.startswith('╭') and not line.startswith('╰') and '═' not in line]
-    assert rules, rendered
-    for line in rules:
-        assert '┄' not in line and '═' not in line, line
+    assert len(lines) == len(before.splitlines())
+    assert len({visible_width(line) for line in lines}) == 1
+    # Neighbour A stays a normal cell beside the merge, not a blank.
+    bc_line = next(line for line in lines if 'BC' in line)
+    assert 'a2' in bc_line or 'a3' in bc_line
+    # Existing outer rules keep ─ (or ═ under the header), never a foreign dash.
+    bottom = lines[-1]
+    assert '┄' not in bottom
 
 
 def test_dashes_style_bottom_under_merge_keeps_dotted_glyph_not_solid():
@@ -718,7 +718,7 @@ def test_dashes_style_bottom_under_merge_keeps_dotted_glyph_not_solid():
     assert '┴┄┄┄┄┄┄┄┄┄┄┄┄┄┘' in bottom or bottom.count('┄') >= 10, bottom
 
 
-def test_synthetic_rule_blanks_through_taller_crossing_merge():
+def test_short_merge_does_not_leave_ghost_cross_in_taller_merge():
     """A short multi-column merge must not leave ghost ┼ inside a taller 2D merge."""
     table = Table(style_name='double_horizontal')
     for c in range(6):
@@ -726,27 +726,11 @@ def test_synthetic_rule_blanks_through_taller_crossing_merge():
     table.merge_cells(0, 0, 2, 2, value='TALL')
     table.merge_cells(0, 3, 1, 5, value='SHORT')
 
-    lines = str(table).splitlines()
-    # The rule just under SHORT (still inside TALL's rows) must not show ┼
-    # under TALL's columns — those junctions are ghosts.
-    short_i = next(i for i, line in enumerate(lines) if 'SHORT' in line)
-    # Scan rules after SHORT's text line while TALL still covers row 2.
-    for line in lines[short_i + 1:]:
-        if 'TALL' in line or 'r2c' in line or 'r3c' in line:
-            # data
-            if 'r3c' in line:
-                break
-            continue
-        if not _looks_like_rule_line(line):
-            continue
-        # Under TALL (first three col bands) there must be no ┼ / ╪ ghost.
-        # Left portion before the SHORT columns' reopen.
-        left = line.split('r')[0] if False else line
-        # Take from start through the junction that opens column 3.
-        # Ghost pattern was: ├──────┼──────┼──────┼
-        assert '┼──────┼──────┼' not in line, line
-        assert '╪══════╪══════╪' not in line, line
-        break
+    rendered = str(table)
+    assert 'TALL' in rendered and 'SHORT' in rendered
+    assert '┼──────┼──────┼' not in rendered
+    assert '╪══════╪══════╪' not in rendered
+    assert len({visible_width(line) for line in rendered.splitlines()}) == 1
 
 
 def test_round_edges_end_corners_survive_last_row_horizontal_merge():
@@ -763,66 +747,73 @@ def test_round_edges_end_corners_survive_last_row_horizontal_merge():
     assert '└' not in bottom and '┘' not in bottom, bottom
 
 
-def test_crossing_vertical_merge_keeps_edge_when_cap_inserted():
-    """When a cap is inserted under a 2D block beside a continuing vertical
-    merge, the vertical merge's column stays an edge (no horizontal through it)."""
+def test_crossing_vertical_merge_is_not_cut_by_a_synthetic_cap():
+    """A 2D block beside a continuing vertical merge must not insert a cap
+    that draws a horizontal through the vertical merge."""
     table = Table(style_name='rounded_double_underline')
     table.add_column('Cat', [''] * 6)
     table.add_column('Item', [f'i{r}' for r in range(6)])
     table.add_column('V', list(range(6)))
     table.add_column('N', [f'n{r}' for r in range(6)])
+    before = str(table)
     table.merge_cells(0, 0, last_row=5, value='ALL')
     table.merge_cells(1, 2, last_row=3, last_column=3, value='BOX')
 
-    lines = str(table).splitlines()
-    # Rules flanking BOX must blank the Cat column (ALL continues through).
-    for i, line in enumerate(lines):
-        if not _looks_like_rule_line(line):
-            continue
-        if '═' in line or line.startswith('╭') or line.startswith('╰'):
-            continue
-        # Body synthetic rule: starts with │ (edge through ALL) not ├.
-        if '┬' in line or '┴' in line:
-            assert line.startswith('│'), line
+    rendered = str(table)
+    lines = rendered.splitlines()
+    assert 'ALL' in rendered and 'BOX' in rendered
+    assert len(lines) == len(before.splitlines())
+    # No body rule is introduced; existing header/end stay the only rules
+    # with a horizontal run besides the header underline.
+    body_caps = [
+        line for line in lines
+        if _looks_like_rule_line(line)
+        and '═' not in line
+        and not line.startswith('╭')
+        and not line.startswith('╰')
+    ]
+    assert body_caps == []
 
-def test_synthetic_cap_h_stays_inside_merge_column_span():
-    """Synthetic caps must not draw H into columns outside the merge span."""
+def test_column_only_merge_does_not_draw_a_cap_into_neighbours():
+    """A multi-column merge in a column-only style must not insert a rule
+    that blanks or draws H through neighbour columns."""
     table = Table(style_name='ascii_double_underline_open_header')
     for c in range(4):
         table.add_column(f'C{c}', [f'r{r}c{c}' for r in range(4)])
+    before = str(table)
     table.merge_cells(0, 0, last_row=2, value='V')
     table.merge_cells(0, 1, last_column=2, value='HSPAN')
 
-    lines = str(table).splitlines()
-    hspan_i = next(i for i, line in enumerate(lines) if 'HSPAN' in line)
-    cap = lines[hspan_i + 1]
-    assert _looks_like_rule_line(cap), cap
-    # Bleed looked like: |      +------+------+------+
-    # Clamped looks like: |      +------+------+      |
-    assert not (cap.rstrip().endswith('+') or cap.endswith('------+')), cap
-    assert '+      |' in cap or cap.endswith('      |'), cap
+    rendered = str(table)
+    lines = rendered.splitlines()
+    assert 'HSPAN' in rendered
+    assert len(lines) == len(before.splitlines())
+    hspan = next(line for line in lines if 'HSPAN' in line)
+    # The unmerged last column stays visible on the merge row.
+    assert 'r0c3' in hspan
+    # No mid-table cap line after the merge text.
+    below = lines[lines.index(hspan) + 1]
+    assert not _looks_like_rule_line(below), below
 
 
-def test_synthetic_cap_does_not_bleed_through_unrelated_column():
-    """Item column next to a V|N merge must not carry a horizontal run."""
+def test_column_only_merge_does_not_bleed_h_through_unrelated_column():
+    """Item column next to a V|N merge must not gain a horizontal run."""
     table = Table(style_name='rounded_double_underline')
     table.add_column('Cat', [''] * 6)
     table.add_column('Item', [f'i{r}' for r in range(6)])
     table.add_column('V', list(range(6)))
     table.add_column('N', [f'n{r}' for r in range(6)])
+    before = str(table)
     table.merge_cells(0, 0, last_row=5, value='ALL')
     table.merge_cells(1, 2, last_row=3, last_column=3, value='BOX')
 
-    lines = str(table).splitlines()
-    for line in lines:
-        if not _looks_like_rule_line(line):
-            continue
-        if '═' in line or line.startswith('╭') or line.startswith('╰'):
-            continue
-        if '┬' in line or '┴' in line:
-            assert '├──────┼' not in line, line
-            # Desired shape: │     │      ├───┴────┤
-            assert '│      ├' in line or '│     │' in line, line
+    rendered = str(table)
+    lines = rendered.splitlines()
+    assert 'ALL' in rendered and 'BOX' in rendered
+    assert len(lines) == len(before.splitlines())
+    box_line = next(line for line in lines if 'BOX' in line)
+    # The Item column beside BOX stays body text, not a blank cap.
+    assert 'i1' in box_line or 'i2' in box_line or 'i3' in box_line
 
 
 def test_invisible_vertical_style_keeps_plain_dash_rules():

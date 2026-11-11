@@ -4747,6 +4747,9 @@ class Table(object):
         hidden_columns = self.__effective_hidden_columns(table_with_i)
 
         regions = self.__regions_with_colors()
+        border_color = (
+            self.__border_color if self.__colors_active else None
+        )
         merged = apply_merges(
             table_string.split('\n'),
             row_line_map,
@@ -4755,43 +4758,10 @@ class Table(object):
             self.__style_composition,
             1 if table_with_i else 0,
             hidden_columns,
+            border_color=border_color,
         )
         return '\n'.join(merged)
 
-
-    def __rule_spec_for_cell(self, row_index, column_index, column_titles):
-        """
-        Colour that should back the H-rule segment under a cell.
-
-        Explicit merge colours win (so a wide merge paints one continuous
-        band under its span). Otherwise the cell's resolved colour is used.
-        """
-        for region in self.__regions_with_colors():
-            if (region.first_row <= row_index <= region.last_row
-                    and region.first_column <= column_index <= region.last_column
-                    and region.color):
-                return region.color
-        name = (
-            column_titles[column_index]
-            if column_index < len(column_titles) else ''
-        )
-        try:
-            raw = self.__raw_value_at(column_titles, column_index, row_index)
-        except Exception:
-            raw = None
-        return self.__color_for_cell(raw, row_index, name)
-
-    def __rule_specs_for_row(self, row_index, column_titles, column_widths):
-        """One colour spec per *drawn* column for the rule under ``row_index``."""
-        hidden = set(self.__effective_hidden_columns(self.__show_index))
-        specs = []
-        for col_i, _width in enumerate(column_widths):
-            if col_i in hidden:
-                continue
-            specs.append(
-                self.__rule_spec_for_cell(row_index, col_i, column_titles)
-            )
-        return specs
 
     @staticmethod
     def _border_text_span(length, text_len, offset, align, lo, hi):
@@ -5056,92 +5026,39 @@ class Table(object):
     def __colour_horizontal_rules(self, separators, column_widths,
                                   column_titles, body_row_count):
         """
-        Paint cell backgrounds onto horizontal rules.
+        Colour horizontal rules with ``border_color`` only (no cell fill).
 
-        Body gaps use the row above. The header/body rule uses the first body
-        row (fill meets the header separator from below). The end rule uses
-        the last body row. Superior header keeps ``border_color`` only unless
-        ``header_color`` carries a background.
-        Returns the updated HorizontalComposition and a gap painter callable
-        (or None when the style has no body rule).
+        Cell, zebra and merge backgrounds live on the interior rectangle
+        of the cell or merge. Rule glyphs stay chrome so a fill cannot
+        leak onto ``─`` / ``═`` / junctions, and a missing ``border_color``
+        on a junction cannot open an uncoloured gap in the middle of a
+        rule.
+
+        Returns the updated HorizontalComposition and a gap painter
+        callable (or None when the style has no body rule).
         """
-        from .merges import compute_layout, paint_rule_cell_backgrounds
-
-        hidden = self.__effective_hidden_columns(self.__show_index)
-        layout = compute_layout(
-            column_widths, self.__style_composition, hidden
-        )
         border = self.__border_color
 
-        def paint(line, specs):
+        def paint(line):
             if line is None:
                 return None
-            return paint_rule_cell_backgrounds(line, layout, specs, border)
-
-        first_specs = (
-            self.__rule_specs_for_row(0, column_titles, column_widths)
-            if body_row_count else []
-        )
-        last_specs = (
-            self.__rule_specs_for_row(
-                body_row_count - 1, column_titles, column_widths
-            )
-            if body_row_count else []
-        )
-        header_specs = []
-        if self.__header_color and background_hex(self.__header_color):
-            drawn = sum(
-                1 for i, _ in enumerate(column_widths)
-                if i not in set(hidden)
-            )
-            header_specs = [self.__header_color] * drawn
-
-        superior = separators.superior_header_line
-        if header_specs:
-            superior = paint(superior, header_specs)
-        elif border and superior is not None:
-            superior = colorize(superior, border)
-
-        inferior = separators.inferior_header_line
-        if first_specs:
-            inferior = paint(inferior, first_specs)
-        elif border and inferior is not None:
-            inferior = colorize(inferior, border)
-
-        superior_nh = separators.superior_header_line_no_header
-        if first_specs:
-            superior_nh = paint(superior_nh, first_specs)
-        elif border and superior_nh is not None:
-            superior_nh = colorize(superior_nh, border)
-
-        end_line = separators.table_end_line
-        if last_specs:
-            end_line = paint(end_line, last_specs)
-        elif border and end_line is not None:
-            end_line = colorize(end_line, border)
-
-        plain_body = separators.table_body_line
-        body_template = plain_body
-        if border and body_template is not None and not first_specs:
-            body_template = colorize(body_template, border)
+            return colorize(line, border) if border else line
 
         painted = HorizontalComposition(
-            superior,
-            inferior,
-            superior_nh,
-            body_template if not first_specs else plain_body,
-            end_line,
+            paint(separators.superior_header_line),
+            paint(separators.inferior_header_line),
+            paint(separators.superior_header_line_no_header),
+            paint(separators.table_body_line),
+            paint(separators.table_end_line),
         )
 
+        plain_body = separators.table_body_line
         gap_separator = None
         if plain_body is not None and body_row_count:
-            def gap_separator(after_row, _plain=plain_body):
-                specs = self.__rule_specs_for_row(
-                    after_row, column_titles, column_widths
-                )
-                return paint_rule_cell_backgrounds(
-                    _plain, layout, specs, border
-                )
+            chrome = paint(plain_body)
+
+            def gap_separator(after_row, _line=chrome):
+                return _line
 
         return painted, gap_separator
 
