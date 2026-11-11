@@ -9,3 +9,4 @@ include style_examples.md
 include flexablelib/py.typed
 include pytest.ini
 recursive-include tests *.py
+recursive-include examples *.py
