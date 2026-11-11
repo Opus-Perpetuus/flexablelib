@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.2.0] - 2026-11-11
+
+### Added
+- `Grid(column_widths=[...])`: fixed, `'auto'`, `'Nfr'`, `'N%'` and
+  `(size, min, max)` columns, or a dict of layouts per width (breakpoints).
+  Columns that cannot fit stack; `collapse_below` stacks below a width.
+- `GridCell(row_span=n)`, with CSS-style sparse auto-placement, plus
+  `valign`, `title`, `title_align`, `color`, `stretch`, `padding` and
+  `hide_below` (hide a cell on narrow terminals). `Grid.add()` takes them.
+- `Grid(border=...)`: one shared frame around and between the cells
+  (`single`, `rounded`, `double`, `heavy`, `ascii`) with correct junctions
+  for spans and row spans, a title per cell set into its top border,
+  `border_color`, `title_color` and cell `padding`.
+- `Grid.render(width, height)` / `Grid(height=...)` and `row_heights`
+  (fixed, `auto`, fractions, bounds, per-width dicts): exact heights, spare
+  lines to fraction rows, overflow trimmed bottom-up with the frame kept
+  closed. Children that take a height (grids, `LogView`...) fill their slot.
+- Widgets: `ProgressBar` (eighth-cell precision, thresholds, value formats),
+  `Sparkline`, `BarChart`, `StatusBar`, `KeyHints`, `LogView` (levels
+  coloured, tail to height), `Text` and `Rule`.
+- `Screen`: header and footer pinned to the terminal's edges, the body gets
+  the lines in between. `Live`: redraw in place on the alternate screen, or
+  plain frames on a pipe; `run(step, interval, iterations)`.
+- `examples/dashboard.py`: a complete terminal dashboard (three layouts by
+  width, themes, borders, `--live`).
+
+### Unchanged
+- A grid without the new options renders exactly as in 3.1.0.
+
 ## [3.1.0] - 2026-11-11
 
 ### Added
