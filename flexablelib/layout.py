@@ -207,22 +207,16 @@ def inset_label(line, label, align='c', glyph=None, label_prefix='',
     need = visible_width(text)
     align = _align(align, 'c')
     # Keep at least one rule glyph either side of the label.
-    all_runs = _rule_runs(plain, glyph)
-    runs = [(s, e) for s, e in all_runs if e - s >= need + 2]
+    runs = [(s, e) for s, e in _rule_runs(plain, glyph) if e - s >= need + 2]
     if not runs:
         return None
     total = len(plain)
-    # Left and right labels belong in the first / last stretch of rule; a
-    # label that only fits further in is drawn outside the frame instead of
-    # floating over some middle column.
+    # Left: the first stretch of rule (from the left) long enough; right:
+    # the first from the right; centre: the one nearest the middle.
     if align == 'l':
-        if all_runs[0] != runs[0]:
-            return None
         start, end = runs[0]
         pos = start + 1
     elif align == 'r':
-        if all_runs[-1] != runs[-1]:
-            return None
         start, end = runs[-1]
         pos = end - 1 - need
     else:
