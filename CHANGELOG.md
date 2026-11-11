@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.0.3] - 2026-11-11
+
+### Fixed
+- A leftover `ESC[0m` kept by `strip_by_width` no longer lands in the
+  padded text of a coloured merge and closes the fill mid-cell. The
+  background now covers the whole interior rectangle, including internal
+  separators and padding (theme `dark` and other themes).
+- Column-only styles again draw a top and bottom rule around a
+  multi-column merge, clamped to the merge width, with `├`/`┤` tees that
+  do not bleed into neighbouring cells. A vertical-only merge still
+  gets no cap.
+- Junctions on a fully absorbed separator (side-by-side merges, or a
+  rule that is almost entirely merge interiors) are repaired even when
+  the line no longer looks like a rule, so leftover `┼`/`╟`/`╢` become
+  `│`/`║`.
+- Dotted-row `:` junctions become `.` when a vertical arm is missing;
+  markdown header separators stay `|---|---|` so the format remains
+  valid; ascii-rounded outer frames are not rewritten.
+
+### Added
+- A glyph-topology verifier (`flexablelib.box_topology`) and tests over
+  every style, with and without colour, covering horizontal, vertical
+  and 2D merges at corners, edges, and next to the header or footer.
+  Colour must not change the glyphs, and every interior column of a
+  coloured merge must carry that merge's background.
+
 ## [3.0.2] - 2026-11-11
 
 ### Fixed
