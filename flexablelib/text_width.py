@@ -45,6 +45,24 @@ _ANSI_RE = re.compile(
 
 _RESET = '\x1b[0m'
 
+# Select Graphic Rendition: the CSI escapes (final byte 'm') that set colour
+# and attributes. Only these leave state open that a reset has to close.
+_SGR_RE = re.compile(r'\x1b\[([0-9;:]*)m')
+
+
+def sgr_is_open(text: str) -> bool:
+    """
+    Whether `text` leaves a colour or attribute switched on at its end.
+
+    True when the last SGR escape in the text is anything other than a full
+    reset (``ESC[0m`` or ``ESC[m``). Partial resets such as ``ESC[39m`` count
+    as open: closing them again is harmless, leaving them open is not.
+    """
+    last = None
+    for last in _SGR_RE.finditer(text):
+        pass
+    return last is not None and last.group(1) not in ('', '0')
+
 # U+FE0F asks for the emoji presentation of the character before it. It has no
 # width of its own; what it does is make that character two columns wide.
 VARIATION_SELECTOR_16 = '\ufe0f'
@@ -269,7 +287,7 @@ def slice_by_width(text: str, start: int, end: int) -> str:
     next.
     """
     _, inside, _ = partition_by_width(text, start, end)
-    if inside and _ANSI_RE.search(inside) and not inside.endswith(_RESET):
+    if inside and sgr_is_open(inside):
         inside += _RESET
     return inside
 
