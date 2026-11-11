@@ -362,9 +362,14 @@ def _pick_junction(v_glyph: str, h_glyph: str, n: bool, s: bool, e: bool, w: boo
     if v_glyph in '|+':
         # ASCII column lines join with '+' whatever the dash ('-', '=', '~').
         return _ASCII.get(key, '+')
+    if v_glyph == ':':
+        # dotted_rows: ':' is a through vertical. When a vertical arm is
+        # missing, fall back to the dotted dash so the junction does not
+        # point into a merge interior.
+        return ':' if (n and s) else (h_glyph if h_glyph and h_glyph != ':' else '.')
     if v_glyph and not ('\u2500' <= v_glyph <= '\u257f'):
-        # Other non-box column glyphs (``dotted_rows`` draws ':') are their own
-        # junction; a light box tee next to them is a foreign glyph.
+        # Other non-box column glyphs are their own junction; a light box
+        # tee next to them is a foreign glyph.
         return v_glyph
     if v_glyph == '║' and h_glyph == '═':
         return _DOUBLE.get(key, '║')
@@ -557,6 +562,23 @@ def _clamp_rule_to_h_ranges(line, layout, composition, h_ranges, filler=' '):
     return rewritten
 
 
+_OUTER_FRAME_CORNERS = set(".'`")
+
+
+def _is_outer_frame(line: str) -> bool:
+    """True for a top/bottom box or ascii-rounded frame, not a grid rule."""
+    if not line:
+        return False
+    plain = strip_ansi(line)
+    if not plain or _re_search_word(plain):
+        return False
+    return plain[0] in _OUTER_FRAME_CORNERS and plain[-1] in _OUTER_FRAME_CORNERS
+
+
+def _re_search_word(plain: str) -> bool:
+    return any(ch.isalnum() for ch in plain)
+
+
 def _looks_like_rule(line: str, h_glyph: str = None) -> bool:
     """True only for real separator lines, not cell text that contains '-'."""
     if not line:
@@ -666,10 +688,19 @@ def _repair_rule_junctions(line, layout, composition, h_glyph, missing_south=Non
             v_glyph, h_glyph, north, south, east, west,
             round_corners=round_corners,
         )
+        # Markdown/org header rules are '|---|---|'. Rewriting '|' to '+'
+        # would stop the line being a valid markdown separator.
+        if v_glyph == '|' and glyph == '+':
+            plain = strip_ansi(rewritten)
+            if plain.startswith('|') and plain.endswith('|') and '+' not in plain:
+                glyph = '|'
         if h_glyph in _HEAVY_H and glyph in _LIGHT_TO_HEAVY_H:
             glyph = _LIGHT_TO_HEAVY_H[glyph]
+        # Keep a plain vertical only when it still runs through the rule
+        # (both arms). A '|' or ':' that has lost the south (or north) arm
+        # must become a tee or a dash; otherwise it points into the merge.
         if (above is not False and _glyph(here) in _VERTICALS
-                and (north or south)):
+                and north and south):
             glyph = here
         if only is not None and south and not north and _glyph(here) in _NO_UP:
             glyph = here  # already has no arm upwards, e.g. a header box top
@@ -796,11 +827,11 @@ def apply(lines, row_line_map, regions, column_widths, composition,
     ``border_color`` (or the default foreground) and never pick up the
     merge fill.
 
-    Column-only styles (verticals but no body rule) do not grow a synthetic
-    cap around a multi-column merge. An inserted line would blank neighbour
-    cells and make them look merged; without a real rule there is no outline
-    to repair, and the rectangular fill (when coloured) already shows the
-    span.
+    Column-only styles (verticals but no body rule) insert a synthetic cap
+    above and below a multi-column merge, drawn only across the merge
+    width, with tees that do not send a horizontal arm into neighbour
+    columns. A vertical-only merge does not get a cap: the table has no
+    row rules, and the left/right verticals already outline the span.
 
     Returns the rewritten lines.
     """
@@ -818,9 +849,41 @@ def apply(lines, row_line_map, regions, column_widths, composition,
     # their data lines; caps above/below need ┴/┬ repair.
     # (above_line, below_line, inner_separator_xs, first_row, last_row)
     horiz_caps = []
+    # Column-only gaps keyed by logical row *after which* a rule sits
+    # (gap after row G = between G and G+1). Values: miss_s, miss_n, insert_at.
+    gap_plans = {}
     # Visible-column ranges of every merge interior, per physical line, so
     # the chrome pass can recolour outline glyphs without touching the fill.
     interior_ranges = {}
+
+    synthesized = _synthesize_body_rule(composition)
+    col_only = (
+        composition.table_body_line is None
+        and synthesized is not None
+        and composition.vertical_table_body_lines is not None
+        and composition.vertical_table_body_lines.middle not in (None, '', ' ')
+    )
+    syn_h = synthesized.middle if synthesized is not None else None
+
+    def _blank_crossings(rule_line, gap_after_row):
+        """Erase horizontal through merges that continue across this gap."""
+        for crossing in regions:
+            if crossing.first_row <= gap_after_row and crossing.last_row >= gap_after_row + 1:
+                cross_bounds = _region_bounds(crossing, layout, index_offset)
+                if cross_bounds is None:
+                    continue
+                (c_start, c_end), _, _, _ = cross_bounds
+                if c_end > c_start:
+                    rule_line = _repaint(
+                        rule_line, c_start, c_end, filler * (c_end - c_start)
+                    )
+        return rule_line
+
+    def _shift_interiors(at):
+        return {
+            (k + 1 if k >= at else k): v
+            for k, v in interior_ranges.items()
+        }
 
     def _mark_interior(line_index, start, end):
         if end > start:
@@ -846,6 +909,14 @@ def apply(lines, row_line_map, regions, column_widths, composition,
             first_line = lines[target_lines[0]]
             text = strip_by_width(slice_by_width(first_line, cell_start, cell_end))
         text = str(text)
+        # strip_by_width keeps leading/trailing escapes so a cell can keep
+        # its colour when the merge has no colour of its own. If we are
+        # about to paint a region colour, those escapes must go: a leftover
+        # RESET would sit after the left pad and close the fill mid-span
+        # ("Mérida" falling out of the background).
+        spec = getattr(region, 'color', None)
+        if spec:
+            text = strip_ansi(text)
 
         if visible_width(text) > span_width:
             text = truncate_to_width(text, span_width)
@@ -856,7 +927,6 @@ def apply(lines, row_line_map, regions, column_widths, composition,
         # Colour the entire span (text line + blank continuations) so a merge
         # fill is flush across its rectangle -- same pad-then-paint contract
         # as ordinary cells. Borders stay outside _repaint's range.
-        spec = getattr(region, 'color', None)
         if spec:
             painted = colorize(painted, spec)
             blank = colorize(blank, spec)
@@ -897,14 +967,46 @@ def apply(lines, row_line_map, regions, column_widths, composition,
                 (above, below, set(inner_seps), region.first_row, region.last_row)
             )
 
+            if col_only and synthesized is not None:
+                # Cap above, including a merge on the first body row when
+                # the style has no header/body separator (ascii_rounded).
+                # If the line above is already a rule, pass 4 repairs it
+                # in place; otherwise a cap is inserted there.
+                g = region.first_row - 1
+                plan = gap_plans.setdefault(
+                    g, {'s': set(), 'n': set(), 'at': min(target_lines),
+                        'h': []}
+                )
+                plan['s'] |= set(inner_seps)
+                plan['at'] = min(plan['at'], min(target_lines))
+                plan.setdefault('h', []).append((start, end))
+                # Cap below: gap after last_row (unless last table row — end
+                # line is repaired in pass 3).
+                max_row = max(row_line_map) if row_line_map else region.last_row
+                if region.last_row < max_row:
+                    g = region.last_row
+                    plan = gap_plans.setdefault(
+                        g, {'s': set(), 'n': set(), 'at': max(target_lines) + 1,
+                            'h': []}
+                    )
+                    plan['n'] |= set(inner_seps)
+                    plan['at'] = min(plan.get('at', max(target_lines) + 1),
+                                     max(target_lines) + 1)
+                    plan.setdefault('h', []).append((start, end))
+
     # --- Pass 2: repair junctions on body rules touched by vertical blanks ---
-    if h_glyph:
+    # Always run, even when the dash run was fully absorbed: leftover ┼
+    # between side-by-side merges must become │ (no H arms into spaces).
+    if composition.vertical_table_body_lines is not None:
         for sep_index in sorted(touched_seps):
             line = lines[sep_index]
-            if not _looks_like_rule(line, h_glyph):
-                continue
+            line_h = h_glyph or next(
+                (ch for ch in strip_ansi(line) if _is_h(ch)), '─'
+            )
             lines[sep_index] = _repair_rule_junctions(
-                line, layout, composition, h_glyph
+                line, layout, composition, line_h,
+                above=lines[sep_index - 1] if sep_index > 0 else None,
+                below=lines[sep_index + 1] if sep_index + 1 < len(lines) else None,
             )
 
     # --- Pass 3: ┴ / ┬ on existing rules above and below H / 2D merges -------
@@ -932,11 +1034,59 @@ def apply(lines, row_line_map, regions, column_widths, composition,
                   | missing_north_by_line.get(line_index, set())),
         )
 
-    # No synthetic caps. Inserting a rule in a column-only style blanks the
-    # neighbour columns on that new line and makes them look merged. Outline
-    # tees are only repaired on rules that already exist (pass 3).
+    # --- Pass 4: synthetic caps for column-only styles ----------------------
+    # A multi-column merge in a style with no body rule has no top/bottom
+    # outline, so a │ on the neighbouring row points into the merge interior
+    # (wrong vertex) and the block is easy to misread as continuing. Insert a
+    # rule only across the merge width, with ├/┤ (or ┌/┐) at the edges so
+    # horizontal arms do not bleed into neighbour columns. Neighbour columns
+    # keep their verticals through the new line; they are not given a
+    # horizontal cap of their own.
+    if col_only and gap_plans and synthesized is not None:
+        for g in sorted(gap_plans.keys(), reverse=True):
+            plan = gap_plans[g]
+            at = plan['at']
+            existing = None
+            if 0 <= at < len(lines) and _looks_like_rule(lines[at], syn_h):
+                existing = at
+            elif 0 <= at - 1 < len(lines) and _looks_like_rule(lines[at - 1], syn_h):
+                existing = at - 1
 
-    # --- Pass 4: restore border chrome on remaining rule glyphs --------------
+            if existing is not None and _is_outer_frame(lines[existing]):
+                existing = None
+
+            if existing is not None:
+                line = lines[existing]
+                line = _blank_crossings(line, g)
+                line_h = next((ch for ch in strip_ansi(line) if _is_h(ch)), syn_h or '─')
+                lines[existing] = _repair_rule_junctions(
+                    line, layout, composition, line_h,
+                    missing_south=plan['s'] or None,
+                    missing_north=plan['n'] or None,
+                    above=lines[existing - 1] if existing > 0 else None,
+                    below=lines[existing + 1] if existing + 1 < len(lines) else None,
+                )
+                continue
+
+            rule = _build_rule_line(
+                layout, composition, column_widths, hidden_columns, synthesized
+            )
+            if rule is None:
+                continue
+            rule = _clamp_rule_to_h_ranges(
+                rule, layout, composition, plan.get('h') or []
+            )
+            rule = _blank_crossings(rule, g)
+            rule = _repair_rule_junctions(
+                rule, layout, composition, syn_h,
+                missing_south=plan['s'] or None,
+                missing_north=plan['n'] or None,
+            )
+            at = max(0, min(at, len(lines)))
+            lines.insert(at, rule)
+            interior_ranges = _shift_interiors(at)
+
+    # --- Pass 5: restore border chrome on remaining rule glyphs --------------
     if border_color:
         for line_index, line in enumerate(lines):
             if not _looks_like_rule(line, h_glyph):
