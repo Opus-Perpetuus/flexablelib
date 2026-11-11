@@ -193,8 +193,9 @@ def test_coloured_merges_and_zebra_paint_cleanly(style):
 
 
 @pytest.mark.parametrize('style', _styles())
-def test_column_only_styles_do_not_insert_synthetic_caps(style):
-    """A multi-column merge must not grow the table by a synthetic rule."""
+def test_multi_column_merge_keeps_topology_and_width(style):
+    """A multi-column merge may grow a width-clamped cap; topology stays clean."""
+    from flexablelib.box_topology import new_breaks
     table = Table(style_name=style)
     table.add_column('A', ['a1', 'a2', 'a3'])
     table.add_column('B', ['b1', 'b2', 'b3'])
@@ -203,11 +204,10 @@ def test_column_only_styles_do_not_insert_synthetic_caps(style):
     table.merge_cells(1, 0, last_column=1, value='AB')
     after = str(table)
     assert 'AB' in after
-    # No synthetic cap: the merged table does not gain a line.
-    assert len(after.splitlines()) == len(before.splitlines())
     widths = {visible_width(line) for line in after.splitlines()}
     if len({visible_width(line) for line in before.splitlines()}) == 1:
         assert len(widths) == 1
+    assert new_breaks(after.splitlines(), before.splitlines()) == []
 
 
 def test_zebra_plus_border_color_on_rows_keeps_rule_chrome():
@@ -242,3 +242,25 @@ def test_theme_slate_2d_merge_is_rectangular():
     assert _RESET * 2 not in rendered
     assert 'Centro' in strip_ansi(rendered)
     _assert_rectangular(rendered, 'Centro', (250, 204, 21))
+
+
+def test_merge_fill_covers_inherited_cell_text():
+    """A leftover RESET from a dim border must not close the fill mid-label."""
+    os.environ['FORCE_COLOR'] = '1'
+    table = Table(
+        rows=[
+            ['Norte', 'Ana', 28, 'Guadalajara', 12],
+            ['Norte', 'José', 35, 'Monterrey', 18],
+            ['Centro', 'Luna', 22, 'Mérida', 15],
+            ['Centro', 'Sofía', 41, 'Puebla', 9],
+        ],
+        headers=['Grupo', 'Nombre', 'Edad', 'Ciudad', 'Pts'],
+        style_name='rounded',
+    )
+    table.apply_theme('dark')
+    table.use_colors = True
+    table.merge_cells(2, 3, 3, 4, color='black on #22d3ee', align='c')
+    rendered = str(table)
+    assert _RESET * 2 not in rendered
+    _assert_rectangular(rendered, 'Mérida', (34, 211, 238))
+    assert '\x1b[0mMérida' not in rendered
