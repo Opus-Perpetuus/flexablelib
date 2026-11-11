@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.1.0] - 2026-11-11
+
+### Added
+- `Card`: one record in a frame, in any of the 54 styles and the 15
+  themes. The title goes into the top border (`╭─ Title ───╮`) when the
+  style draws one; subtitle, `label  value` fields (or a grid of tiles with
+  `field_columns=2`/`'auto'`), any renderable as `body`, footer and
+  `[ action ]` chips. Colours fill the card frame to frame; panel and
+  shadow work as on tables.
+- `Grid` and `GridCell`: lay cards, tables, text and other grids out in
+  columns that reflow with the width (`columns='auto'` or n, `min_width`,
+  spans, nesting, equal-height rows) -- a grid of cards or a whole terminal
+  screen.
+- `Table.render(width)` / `responsive=True`: the table when it fits, then
+  squeezed, then without low-priority columns (`column_priority`), then as
+  cards (`to_cards()`) in a responsive grid. `breakpoints`,
+  `card_options`, `render_mode()` and `natural_width()`.
+- `Table.subtitle`, `title_position='border'`, `caption_position='border'`,
+  `title_align`, `title_color`. A border title never covers a corner or a
+  column junction; it falls back to a line above.
+- `flexablelib.layout.wrap_panel` / `add_shadow`, shared by tables and
+  cards.
+
+### Fixed
+- Columns in `hide_columns` no longer count toward the width the fit pass
+  has to save, so a table that fits once they are hidden is no longer
+  squeezed as if they were still drawn.
+
 ## [3.0.3] - 2026-11-11
 
 ### Fixed
