@@ -6247,8 +6247,8 @@ class Table(object):
     def render_mode(self, width=None):
         """
         What :meth:`render` would draw at ``width``: ``'table'``,
-        ``'compact'`` (squeezed and wrapped), ``'hidden'`` (low-priority
-        columns hidden) or ``'cards'``.
+        ``'hidden'`` (low-priority columns hidden, squeezed too if that is
+        still needed), ``'compact'`` (squeezed and wrapped) or ``'cards'``.
         """
         return self.__responsive_plan(width)[0]
 
@@ -6262,23 +6262,27 @@ class Table(object):
         cards_below = self.__breakpoints.get('cards')
         if cards_below is not None and width < cards_below:
             return 'cards', width, ()
-        hidden = tuple(self.__hide_columns)
-        if self.__fits_legibly(width, hidden, compact=False):
-            return 'table', width, hidden
-        if self.__fits_legibly(width, hidden, compact=True):
-            return 'compact', width, hidden
+        # Hiding low-priority columns beats squeezing every column, and both
+        # beat cards: try each level of hiding at natural width first, then
+        # squeezed.
         headers = [h for h in self.headers]
         ranked = {}
         for key, number in self.__column_priority.items():
             header = self.__header_key(key, headers)
             if header is not None and number > 1:
                 ranked.setdefault(number, []).append(header)
+        levels = [tuple(self.__hide_columns)]
         for number in sorted(ranked, reverse=True):
-            hidden = hidden + tuple(ranked[number])
-            if len(set(hidden)) >= len(headers):
+            more = levels[-1] + tuple(ranked[number])
+            if len(set(more)) >= len(headers):
                 break
-            if self.__fits_legibly(width, hidden, compact=True):
-                return 'hidden', width, hidden
+            levels.append(more)
+        for compact in (False, True):
+            for level, hidden in enumerate(levels):
+                if self.__fits_legibly(width, hidden, compact=compact):
+                    if level:
+                        return 'hidden', width, hidden
+                    return ('compact' if compact else 'table'), width, hidden
         return 'cards', width, ()
 
     def __fits_legibly(self, width, hidden, compact):
@@ -6324,10 +6328,11 @@ class Table(object):
         else the terminal width), responsively:
 
         1. it fits: the normal table;
-        2. it fits squeezed (columns wrapped, none narrower than
-           ``breakpoints['min_column']``): the squeezed table;
-        3. hiding low-priority columns (:attr:`column_priority`) makes it
-           fit: the table without them;
+        2. hiding low-priority columns (:attr:`column_priority`, highest
+           number first) makes it fit: the table without them;
+        3. it fits squeezed (columns wrapped, none narrower than
+           ``breakpoints['min_column']``), hiding as few low-priority columns
+           as possible: the squeezed table;
         4. otherwise: one card per row (:meth:`to_cards`) in a grid that
            takes as many columns of cards as fit.
 
@@ -6338,6 +6343,7 @@ class Table(object):
         if mode == 'table':
             return self.__compose_with(max_width=width)
         if mode in ('compact', 'hidden'):
+            # 'hidden' may still need squeezing: wrap rather than cut.
             overflow = self.__overflow or 'wrap'
             return self.__compose_with(max_width=width, hide_columns=hidden,
                                        overflow=overflow)

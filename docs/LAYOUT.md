@@ -66,10 +66,11 @@ the title is drawn above instead.
 (default: `max_width`, else the terminal):
 
 1. `'table'`: the table as it is.
-2. `'compact'`: columns squeezed and wrapped, none narrower than
-   `breakpoints['min_column']` (default 8, or the column's natural width).
-3. `'hidden'`: columns with a priority above 1 hidden, highest number first
-   (`column_priority = {'Correo': 3, 'Grupo': 2}`), then squeezed.
+2. `'hidden'`: columns with a priority above 1 hidden, highest number first
+   (`column_priority = {'Correo': 3, 'Grupo': 2}`), until it fits.
+3. `'compact'` (or `'hidden'` when columns had to go too): columns squeezed
+   and wrapped, none narrower than `breakpoints['min_column']` (default 8, or
+   the column's natural width), hiding as few columns as possible.
 4. `'cards'`: one card per row, in a grid of as many columns as fit.
 
 `table.render_mode(width)` tells which one it would use. `breakpoints={'cards':
