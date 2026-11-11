@@ -86,15 +86,16 @@ def test_last_row_horizontal_merge_bottom_is_not_header_tee(style):
 
 
 @pytest.mark.parametrize('style', ['double_horizontal', 'rounded_double_underline', 'dashed'])
-def test_column_only_multi_col_merge_stays_square_without_cap(style):
+def test_column_only_multi_col_merge_stays_square_with_clamped_cap(style):
+    from flexablelib.box_topology import new_breaks
     table = _build_base(style)
     before = str(table)
     table.merge_cells(1, 0, last_column=1, value='AB')
     rendered = str(table)
     lines = rendered.splitlines()
     assert any('AB' in line for line in lines)
-    assert len(lines) == len(before.splitlines())
     _square(rendered)
+    assert new_breaks(lines, before.splitlines()) == []
 
 
 @pytest.mark.parametrize('style', ['double_horizontal', 'rounded_double_underline', 'dashed'])
