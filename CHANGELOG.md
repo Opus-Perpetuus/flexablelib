@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.0.1] - 2026-11-11
+
+### Fixed
+- A merged region drawn over a cell with ANSI colour no longer leaves a
+  stray `ESC[0m` in the output. The reset is now added only when a colour is
+  actually still open where the merge starts.
+- Slicing coloured text (`slice_by_width`, and merges that use it) no longer
+  appends a second reset after text that already closed its colour.
+
+### Added
+- `text_width.sgr_is_open(text)` reports whether text leaves a colour or
+  attribute switched on.
+- Tests for merge/slice escape handling and for `from_markdown` / `from_html`
+  edge cases (prose around a table, corrupt or malformed embedded payloads,
+  rowspans in the body and across the header).
+
 ## [3.0.0] - 2026-11-10
 
 ### Changed (breaking)
