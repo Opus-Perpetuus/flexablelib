@@ -13,7 +13,7 @@ def _widths(table):
 
 def test_max_width_trims_cjk_by_terminal_columns():
     table = Table(rows=[['東京'], ['大阪府']], headers=['city'])
-    table.style_name = 'ascii'
+    table.style_name = 'ascii_rows'
     table.column_max_width = 4
     lines = strip_ansi(table.compose()).splitlines()
     assert '| 東京 |' in lines
@@ -23,7 +23,7 @@ def test_max_width_trims_cjk_by_terminal_columns():
 
 def test_max_width_keeps_a_short_cell_that_fits():
     table = Table(rows=[['ab'], ['abcdef']], headers=['c'])
-    table.style_name = 'ascii'
+    table.style_name = 'ascii_rows'
     table.column_max_width = 3
     body = strip_ansi(table.compose()).splitlines()
     assert '| ab  |' in body
@@ -32,7 +32,7 @@ def test_max_width_keeps_a_short_cell_that_fits():
 
 def test_max_width_trims_each_line_of_a_multiline_cell():
     table = Table(rows=[['a\nbb\nccccc']], headers=['m'])
-    table.style_name = 'ascii'
+    table.style_name = 'ascii_rows'
     table.column_max_width = 3
     body = strip_ansi(table.compose()).splitlines()
     assert '| a   |' in body
@@ -43,7 +43,7 @@ def test_max_width_trims_each_line_of_a_multiline_cell():
 
 def test_max_width_renders_none_as_blank_since_v230():
     table = Table(rows=[[None], ['x']], headers=['c'])
-    table.style_name = 'ascii'
+    table.style_name = 'ascii_rows'
     table.column_max_width = 3
     assert '|   |' in strip_ansi(table.compose()).splitlines()
     assert 'None' not in table.compose()
@@ -51,7 +51,7 @@ def test_max_width_renders_none_as_blank_since_v230():
 
 @pytest.mark.parametrize('style', Table().possible_styles)
 def test_max_width_wide_text_keeps_every_style_rectangular(style):
-    if style in ('plain', 'blank', 'empty', 'markdown', 'psql'):
+    if style in ('borderless_compact_header_gap', 'borderless', 'borderless_compact', 'markdown', 'psql'):
         pytest.skip('style has no closing border')
     table = Table(rows=[['東京', 1], ['大阪府', 22]], headers=['名前', 'n'])
     table.style_name = style
@@ -59,18 +59,18 @@ def test_max_width_wide_text_keeps_every_style_rectangular(style):
     assert len(_widths(table)) == 1
 
 
-# sticks indicators overhung narrow columns -----------------------------------
+# ascii_align_markers indicators overhung narrow columns -----------------------------------
 
 @pytest.mark.parametrize('rows', [[['a']], [['é'], ['ab']]])
 def test_sticks_indicator_fits_narrow_columns(rows):
     table = Table(rows=rows, headers=['c'])
-    table.style_name = 'sticks'
+    table.style_name = 'ascii_align_markers'
     assert len(_widths(table)) == 1
 
 
 def test_sticks_indicator_fits_the_index_column():
     table = Table(rows=[['alpha', 1]], headers=['name', 'n'])
-    table.style_name = 'sticks'
+    table.style_name = 'ascii_align_markers'
     table.show_index = True
     lines = strip_ansi(table.compose()).splitlines()
     assert len(_widths(table)) == 1
@@ -79,13 +79,13 @@ def test_sticks_indicator_fits_the_index_column():
 
 def test_sticks_wide_columns_are_unchanged():
     table = Table(rows=[['alpha', 100]], headers=['name', 'qty'])
-    table.style_name = 'sticks'
+    table.style_name = 'ascii_align_markers'
     assert strip_ansi(table.compose()).splitlines()[0] == '+ ~<~   + ~>~ +'
 
 
 # border_text left/right ate cell text on styles with no outer border ---------
 
-@pytest.mark.parametrize('style', ['simple', 'clean', 'psql', 'plain', 'presto'])
+@pytest.mark.parametrize('style', ['lines_ascii', 'underlined_single', 'psql', 'borderless_compact_header_gap'])
 @pytest.mark.parametrize('where', ['left', 'right'])
 def test_vertical_border_text_never_overwrites_cells(style, where):
     table = Table(rows=[['alpha', 1], ['beta', 2]], headers=['name', 'n'])
@@ -97,7 +97,7 @@ def test_vertical_border_text_never_overwrites_cells(style, where):
 
 def test_vertical_border_text_still_draws_on_framed_styles():
     table = Table(rows=[['alpha', 1], ['beta', 2]], headers=['name', 'n'])
-    table.style_name = 'modern'
+    table.style_name = 'single_rows'
     table.border_text('HI', 'left')
     lines = strip_ansi(table.compose()).splitlines()
     assert lines[1][0] == 'H' and lines[2][0] == 'I'
@@ -146,7 +146,7 @@ def test_from_html_of_a_plain_table_is_unchanged():
 
 def test_float_column_below_its_integer_width_keeps_the_frame_square():
     table = Table(rows=[[1.5], [22.25], [3.0]], headers=['v'])
-    table.style_name = 'ascii'
+    table.style_name = 'ascii_rows'
     table.column_max_width = 1
     lines = strip_ansi(table.compose()).splitlines()
     assert len(_widths(table)) == 1
@@ -155,7 +155,7 @@ def test_float_column_below_its_integer_width_keeps_the_frame_square():
 
 def test_float_column_cap_that_fits_still_applies():
     table = Table(rows=[[1.125], [22.25]], headers=['v'])
-    table.style_name = 'ascii'
+    table.style_name = 'ascii_rows'
     table.column_max_width = 4
     lines = strip_ansi(table.compose()).splitlines()
     assert len(_widths(table)) == 1
@@ -168,7 +168,7 @@ def test_index_with_max_width_trims_the_last_text_column():
     table = Table(rows=[['é', 'abcdef']], headers=['a', 'b'])
     table.show_index = True
     table.column_max_width = 2
-    table.style_name = 'ascii'
+    table.style_name = 'ascii_rows'
     lines = strip_ansi(table.compose()).splitlines()
     assert '| 0 | é | .. |' in lines
 
@@ -178,7 +178,7 @@ def test_index_with_max_width_leaves_other_alignments_alone():
     table.show_index = True
     table.column_max_width = {'name': 3}
     table.col_alignment = ['l', 'l']
-    table.style_name = 'ascii'
+    table.style_name = 'ascii_rows'
     lines = strip_ansi(table.compose()).splitlines()
     assert '| 0 | ... | 5   |' in lines
 
@@ -199,7 +199,7 @@ def test_merge_with_hrules_on_ascii_rounded(hrules):
 def _mixed():
     table = Table(rows=[['a', None], ['b', 3], ['c', 'x'], ['d', 1.5],
                         ['e', float('nan')], ['f', 'w']], headers=['k', 'v'])
-    table.style_name = 'ascii'
+    table.style_name = 'ascii_rows'
     table.sort_by = 'v'
     return table
 
@@ -236,7 +236,7 @@ def test_sort_by_plain_numbers_is_unchanged():
 @pytest.mark.parametrize('header', ['0', '2024', '1.25', 'a'])
 def test_numeric_header_over_float_column(valign, header):
     table = Table(rows=[[1.5, 'x\ny'], [22.25, 'z']], headers=[header, 'b'])
-    table.style_name = 'ascii'
+    table.style_name = 'ascii_rows'
     if valign:
         table.valign = valign
     lines = strip_ansi(table.compose()).splitlines()
@@ -248,7 +248,7 @@ def test_numeric_header_over_float_column(valign, header):
 
 def _coloured_frame(**kw):
     t = Table(rows=[['b', 'c'], ['d', 'e']], headers=['h', 'k'])
-    t.style_name = 'ascii'
+    t.style_name = 'ascii_rows'
     t.border_color = 'blue'
     t.header_color = 'red'
     t.border_text('TOP', 'top', color='red')
@@ -286,7 +286,7 @@ def test_theme_does_not_force_colour_into_a_pipe(monkeypatch):
 
 def test_vertical_border_text_skips_title_and_caption():
     plain = Table(rows=[['b', 'c'], ['d', 'e']], headers=['h', 'k'])
-    plain.style_name = 'ascii'
+    plain.style_name = 'ascii_rows'
     plain.border_text('LR', 'left')
     framed = plain.compose()
     plain.title = 't'
@@ -299,7 +299,7 @@ def test_vertical_border_text_skips_title_and_caption():
 
 # --- float cells fill wider columns ----------------------------------------
 
-@pytest.mark.parametrize('style', ['ascii', 'grid_eheader', 'modern'])
+@pytest.mark.parametrize('style', ['ascii_rows', 'ascii_double_underline_open_header', 'single_rows'])
 def test_float_column_fills_min_width(style):
     t = Table(rows=[[1.5, 'x'], [22.25, 'y']], headers=['h', 'k'])
     t.style_name = style
@@ -310,7 +310,7 @@ def test_float_column_fills_min_width(style):
 
 def test_float_column_fills_long_header():
     t = Table(rows=[[1.5], [22.25]], headers=['a long header'])
-    t.style_name = 'ascii'
+    t.style_name = 'ascii_rows'
     lines = t.compose().split('\n')
     assert len({visible_width(line) for line in lines}) == 1
     assert lines[3].rstrip('| ').endswith('1.5')
@@ -318,7 +318,7 @@ def test_float_column_fills_long_header():
 
 # --- divider on a style without a body rule --------------------------------
 
-@pytest.mark.parametrize('style', ['dashes', 'grid_eheader'])
+@pytest.mark.parametrize('style', ['dashed', 'ascii_double_underline_open_header'])
 def test_divider_matches_table_width_after_wrapped_row(style):
     t = Table(rows=[['a\nbb', 'c'], ['d', 'e']], headers=['h', 'k'])
     t.style_name = style
@@ -331,7 +331,7 @@ def test_divider_matches_table_width_after_wrapped_row(style):
 
 def test_max_width_leaves_index_column_whole():
     t = Table(rows=[['a'], ['b'], ['c']], headers=['h'])
-    t.style_name = 'ascii'
+    t.style_name = 'ascii_rows'
     t.show_index = True
     t.roman_index = True
     t.column_max_width = 1
@@ -343,7 +343,7 @@ def test_max_width_leaves_index_column_whole():
 @pytest.mark.parametrize('overflow', ['wrap', 'truncate'])
 def test_max_width_one_with_wide_glyphs(overflow):
     t = Table(rows=[['x']], headers=['名前0'])
-    t.style_name = 'ascii'
+    t.style_name = 'ascii_rows'
     t.column_max_width = 1
     t.overflow = overflow
     lines = t.compose().split('\n')
@@ -352,7 +352,7 @@ def test_max_width_one_with_wide_glyphs(overflow):
 
 def test_max_width_beats_min_width():
     t = Table(rows=[['abcdef']], headers=['h'])
-    t.style_name = 'ascii'
+    t.style_name = 'ascii_rows'
     t.column_min_width = 8
     t.column_max_width = 4
     assert '| a... |' in t.compose()
@@ -369,7 +369,7 @@ def _merged(style, pad):
     return t.compose()
 
 
-@pytest.mark.parametrize('style', ['modern', 'ascii', 'rounded', 'double'])
+@pytest.mark.parametrize('style', ['single_rows', 'ascii_rows', 'rounded', 'double'])
 @pytest.mark.parametrize('pad', [0, 2, 3])
 def test_merge_respects_cell_padding(style, pad):
     lines = _merged(style, pad).split('\n')
@@ -378,7 +378,7 @@ def test_merge_respects_cell_padding(style, pad):
 
 
 def test_merge_with_zero_padding_repairs_junctions():
-    assert _merged('modern', 0) == '\n'.join([
+    assert _merged('single_rows', 0) == '\n'.join([
         '┌─┬─┬─┐',
         '│x│y│z│',
         '├─┴─┼─┤',
@@ -392,7 +392,7 @@ def test_merge_with_zero_padding_repairs_junctions():
 
 
 def test_merge_with_wide_padding_matches_layout():
-    assert _merged('ascii', 2).split('\n')[3:6] == [
+    assert _merged('ascii_rows', 2).split('\n')[3:6] == [
         '|           |  c  |',
         '|           +-----+',
         '|     M     |  f  |',

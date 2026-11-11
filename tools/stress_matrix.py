@@ -545,8 +545,8 @@ def stream_vs_compose():
     """stream() must print what compose() prints for the same rows
     (colour stripped), across frame/title/zebra/index settings."""
     rows = [[1, 'x'], [2, 'y'], [3, 'z']]
-    opts = dict(style_name=['sharp', 'blank', 'plain', 'empty', 'rounded',
-                            'bheader_ebody', 'markdown', 'grid_eheader'],
+    opts = dict(style_name=['single', 'borderless', 'borderless_compact_header_gap', 'borderless_compact', 'rounded',
+                            'double_header_open', 'markdown', 'ascii_double_underline_open_header'],
                 show_headers=[True, False], panel=[False, 'double'],
                 shadow=[False, True], caption=[None, 'cap'], title=[None, 'T'],
                 zebra=[None, ('on blue', 'on black')], show_index=[False, True])

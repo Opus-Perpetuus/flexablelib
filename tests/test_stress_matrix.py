@@ -24,7 +24,7 @@ CASES = (
         {k: v for k, v in case.items() if v != 'off'})
        for i, case in enumerate(PAIRWISE)]
     + [(style, dict(combo, mode=mode))
-       for style in ('rounded', 'grid', 'plain')
+       for style in ('rounded', 'ascii_double_underline_rows', 'borderless_compact_header_gap')
        for combo in matrix.EVERYTHING
        for mode in ('compose', 'paginate')]
 )
@@ -41,14 +41,14 @@ def test_render_invariants(case):
     assert matrix.run_case(style, config) == []
 
 
-@pytest.mark.parametrize('style', ['rounded', 'grid', 'markdown'])
+@pytest.mark.parametrize('style', ['rounded', 'ascii_double_underline_rows', 'markdown'])
 @pytest.mark.parametrize('combo', range(len(matrix.EVERYTHING)))
 def test_exports_round_trip(style, combo):
     assert matrix.check_exports(style, matrix.EVERYTHING[combo]) == []
 
 
 def test_none_padding_and_raw_rows_roundtrip_matrix():
-    count, failures = matrix.none_vs_missing(['rounded', 'grid', 'plain',
+    count, failures = matrix.none_vs_missing(['rounded', 'ascii_double_underline_rows', 'borderless_compact_header_gap',
                                             'theme:mono', 'theme:report'])
     assert count == 75
     assert failures == []

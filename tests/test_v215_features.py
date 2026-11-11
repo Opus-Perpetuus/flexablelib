@@ -20,7 +20,7 @@ def test_stream_yields_lines_and_leaves_table_untouched():
 
 
 def test_stream_append_keeps_rows():
-    t = Table(headers=['A', 'B'], style_name='sharp')
+    t = Table(headers=['A', 'B'], style_name='single')
     list(t.stream(([1, 2], [3, 4]), append=True))
     assert t.row_count == 2
     assert t.columns['A'] == [1, 3]
@@ -33,13 +33,13 @@ def test_stream_requires_headers():
 
 
 def test_stream_with_existing_rows_and_pretty_grid_separators():
-    t = Table.from_records([[0, 0]], headers=['A', 'B'], style_name='pretty_grid')
+    t = Table.from_records([[0, 0]], headers=['A', 'B'], style_name='double_horizontal_rows')
     # Widths freeze from seed content; set floors so later rows are not
     # truncated (beautifultable stream contract).
     t.column_min_width = [4, 4]
     lines = list(t.stream(([1, 10], [2, 20])))
     joined = '\n'.join(lines)
-    # Inter-row rules present in pretty_grid.
+    # Inter-row rules present in double_horizontal_rows.
     assert '├' in joined or '+' in joined
     assert '0' in joined and '20' in joined
     assert t.row_count == 1  # append=False
@@ -49,7 +49,7 @@ def test_hide_columns_by_name_and_index():
     t = Table.from_records(
         [[1, 2, 3], [4, 5, 6]],
         headers=['A', 'B', 'C'],
-        style_name='sharp',
+        style_name='single',
     )
     t.hide_columns = 'B'
     out = bare(t.compose())
@@ -75,7 +75,7 @@ def test_apply_theme_and_unknown():
     assert t.style_name == 'markdown'
     assert t.use_colors is False
     t.apply_theme('matrix')
-    assert t.style_name == 'ascii'
+    assert t.style_name == 'ascii_rows'
     assert t.header_color == 'bold green'
     with pytest.raises(ValueError, match='unknown theme'):
         t.apply_theme('neon-disco')
@@ -85,7 +85,7 @@ def test_sort_by_callable():
     t = Table.from_records(
         [['z', 1], ['a', 2], ['m', 3]],
         headers=['N', 'V'],
-        style_name='simple',
+        style_name='lines_ascii',
     )
     t.sort_by = lambda row: row[0]
     out = bare(t.compose())

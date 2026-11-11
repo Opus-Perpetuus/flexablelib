@@ -33,10 +33,10 @@ def build_table(style_name):
 # The catalogue itself
 # +-------------------------------------------------------------------------+
 
-def test_the_catalogue_holds_43_styles():
+def test_the_catalogue_holds_54_styles():
     # A canary: adding a style is meant to be purely additive, and the README,
     # ARCHITECTURE.md and style_examples.md all quote this number.
-    assert len(ALL_STYLES) == 56
+    assert len(ALL_STYLES) == 54
 
 
 def test_style_names_are_unique():
@@ -158,10 +158,10 @@ def test_no_style_name_falls_back_to_the_default():
 
 
 def test_the_style_name_setter_accepts_a_catalogue_name():
-    table = build_table('grid')
-    table.style_name = 'thin_borderline'
+    table = build_table('ascii_double_underline_rows')
+    table.style_name = 'single_double_underline_rows'
 
-    assert table.style_name == 'thin_borderline'
+    assert table.style_name == 'single_double_underline_rows'
     assert '┌' in str(table)
 
 
@@ -178,9 +178,9 @@ def test_the_style_name_setter_works_from_any_directory(monkeypatch, tmp_path):
     table = Table()
     monkeypatch.chdir(tmp_path)
 
-    table.style_name = 'thin_borderline'
+    table.style_name = 'single_double_underline_rows'
 
-    assert table.style_name == 'thin_borderline'
+    assert table.style_name == 'single_double_underline_rows'
     assert '┌' in str(table)
 
 
@@ -189,23 +189,23 @@ def test_style_examples_is_present_at_the_repository_root():
     assert os.path.isfile(os.path.join(REPO_ROOT, 'style_examples.md'))
 
 
-def test_blocks_style_is_in_the_catalogue():
-    assert 'blocks' in ALL_STYLES
+def test_borderless_style_is_in_the_catalogue():
+    assert 'borderless' in ALL_STYLES
 
 
-def test_blocks_style_has_no_border_glyphs():
-    """blocks is fill-only: no box-drawing / ascii rule characters."""
-    table = build_table('blocks')
+def test_borderless_style_has_no_border_glyphs():
+    """borderless is fill-only: no box-drawing / ascii rule characters."""
+    table = build_table('borderless')
     rendered = str(table)
     for glyph in '┌┐└┘├┤┬┴┼│─═╪╧╤╞╡╒╘╛║╔╗╚╝┊┄╍+|':
         assert glyph not in rendered, (glyph, rendered)
 
 
-def test_blocks_style_keeps_cell_padding_for_background_fills():
+def test_borderless_style_keeps_cell_padding_for_background_fills():
     import os
     os.environ['FORCE_COLOR'] = '1'
     os.environ.pop('NO_COLOR', None)
-    table = build_table('blocks')
+    table = build_table('borderless')
     table.use_colors = True
     table.header_color = 'bold white on blue'
     table.column_colors = {'Name': 'black on green'}
@@ -215,9 +215,9 @@ def test_blocks_style_keeps_cell_padding_for_background_fills():
 
 
 TABLED_STYLES = [
-    'ascii', 'modern', 'sharp', 'rounded', 'modern_rounded', 'extended',
-    'psql', 'markdown', 're_structured_text', 'dots', 'ascii_rounded',
-    'blank', 'empty',
+    'ascii_rows', 'single_rows', 'single', 'rounded', 'rounded_rows', 'double_rows',
+    'psql', 'markdown', 'rst', 'dotted_rows', 'ascii_rounded',
+    'borderless', 'borderless_compact',
 ]
 
 
