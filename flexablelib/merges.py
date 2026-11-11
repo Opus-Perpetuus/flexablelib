@@ -21,6 +21,7 @@ import re
 from typing import List, NamedTuple, Optional
 
 from .colors import background_hex, colorize
+from .text_width import sgr_is_open
 from .fast import (
     has_ansi,
     pad_to_width,
@@ -43,7 +44,8 @@ _RESET = '\x1b[0m'
 def _repaint(line, start, end, replacement):
     """Replace the visible columns [start, end) of a line, ending any colour."""
     before, removed, after = partition_by_width(line, start, end)
-    if has_ansi(removed) and not replacement.startswith(_RESET):
+    if (has_ansi(removed) and sgr_is_open(before)
+            and not replacement.startswith(_RESET)):
         replacement = _RESET + replacement
     return before + replacement + after
 
@@ -702,7 +704,8 @@ def paint_rule_cell_backgrounds(line, layout, column_specs, border_color=None):
         if not plain:
             continue
         painted = colorize(plain, spec)
-        if has_ansi(chunk) and not painted.startswith(_RESET):
+        if (has_ansi(chunk) and sgr_is_open(before)
+                and not painted.startswith(_RESET)):
             painted = _RESET + painted
         rewritten = before + painted + after
     return rewritten
