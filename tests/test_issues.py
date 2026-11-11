@@ -1,7 +1,7 @@
 """
 Regression tests for the issues.
 
-https://github.com/Opus-Perpetuus/prettyTables/issues
+https://github.com/Opus-Perpetuus/flexablelib/issues
 
 Every issue ever filed against flexablelib has a reproduction here, stated
 as the behaviour the report asked for. There are no ``xfail`` markers left:
