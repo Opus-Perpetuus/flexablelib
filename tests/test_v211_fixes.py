@@ -242,7 +242,7 @@ def test_vrules_true_and_invalid():
 def test_add_divider_defaults_and_validation():
     Table().add_divider()   # no rows: nothing to divide, no error
     table = Table(rows=[[1], [2], [3]], headers=['a'])
-    table.style_name = 'grid_eheader'
+    table.style_name = 'ascii_double_underline_open_header'
     with pytest.raises(ValueError):
         table.add_divider(-1)
     table.add_divider()

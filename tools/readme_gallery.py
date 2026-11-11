@@ -49,12 +49,12 @@ def quickstart():
 
 def styles():
     out = []
-    for name in ('modern', 'rounded', 'pretty_grid', 'psql', 'markdown', 'blocks'):
+    for name in ('single_rows', 'rounded', 'double_horizontal_rows', 'psql', 'markdown', 'borderless'):
         table = Table(rows=[['Oslo', 7.25], ['Lima', 19.5]],
                       headers=['City', 'Temp'])
         table.style_name = name
         table.use_colors = True
-        if name == 'blocks':
+        if name == 'borderless':
             table.header_color = 'bold white on blue'
             table.zebra = ('', 'on grey23')
         out.append(f'{name}\n{table}')
@@ -62,7 +62,7 @@ def styles():
 
 
 def border_text():
-    table = base('modern')
+    table = base('single_rows')
     table.border_color = 'blue'
     table.border_text(' Production ', where='top', color='bold yellow')
     table.border_text(' 4 services ', where='bottom', color='cyan',
@@ -75,7 +75,7 @@ def merges():
         rows=[['Q1', 'North', 120, 135], ['', 'South', 98, 101],
               ['Q2', 'North', 140, 152], ['', 'South', 110, 99]],
         headers=['Quarter', 'Zone', 'Plan', 'Actual'])
-    table.style_name = 'pretty_grid'
+    table.style_name = 'double_horizontal_rows'
     table.use_colors = True
     table.merge_cells(0, 0, last_row=1)
     table.merge_cells(2, 0, last_row=3)

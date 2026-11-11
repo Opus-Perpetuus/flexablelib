@@ -23,11 +23,11 @@ from helpers import table_width, widths_from_border
 from flexablelib import Table
 
 LONG_COMMENT = 'a very long comment here'   # 24 characters
-INTERSECTION = '┬'                          # thin_borderline's top border
+INTERSECTION = '┬'                          # single_double_underline_rows's top border
 
 
 def build_table(**settings):
-    table = Table(style_name='thin_borderline')
+    table = Table(style_name='single_double_underline_rows')
     table.add_column('Name', ['Jade', 'John'])
     table.add_column('Comment', [LONG_COMMENT, 'short'])
     for name, value in settings.items():

@@ -95,7 +95,7 @@ first pass (`semi=True`) measures the unconstrained table; if that exceeds the t
 re-measures against those new widths.
 
 `__form_string()` handles the four combinations of "has a top border" and "has a bottom
-border" separately (`table.py:2444-2451`), because styles like `plain` and `presto` have
+border" separately (`table.py:2444-2451`), because styles like `borderless_compact_header_gap` and `psql` have
 neither, and the join logic differs for each case.
 
 ## Internal state
@@ -153,14 +153,19 @@ TableComposition = namedtuple('TableComposition', [
 Each horizontal rule is a `SeparatorLine(left, middle, intersection, right)` — the four
 characters needed to draw a line such as `+----+----+`: `+` on the left, `-` repeated in the
 middle, `+` at each intersection, `+` on the right. A field set to `None` means "this style has
-no such line", which is how `plain` and `presto` end up borderless.
+no such line", which is how `borderless_compact_header_gap` and `psql` end up borderless.
 
-All 56 styles live in the `__style_compositions` namedtuple (`style_compositions.py:136`),
-grouped by character family: box-drawing, thin/bold borderline, ASCII (`+-|~oO:`), simple
-horizontal-rule styles, and `dashes`.
+All 54 styles live in the `__style_compositions` namedtuple in `style_compositions.py`,
+grouped by line family: borderless, single, rounded, double (frame, horizontal, header),
+dashed/dotted, ASCII, tilde, horizontal lines only, underlined columns, and text formats
+(markdown, org, psql, rst). Names describe the look: family, then `_double_underline`,
+`_rows`, and `_open_header` / `_open_body` / `_open`; the module docstring has the full
+scheme. Names from before 3.0.0 live in `DEPRECATED_STYLE_NAMES` and are translated by the
+`style_name` setter with a `DeprecationWarning`.
 
-**Adding a style is purely additive:** add a name to the `Compositions` field list, then add
-the corresponding `TableComposition(...)` entry. No logic changes anywhere. The structure of
+**Adding a style is purely additive:** add a name to the `Compositions` field list, add
+the corresponding `TableComposition(...)` entry, and describe it in `tools/style_examples.py`
+(then run it to regenerate `style_examples.md`). No logic changes anywhere. The structure of
 this part was adapted from `tabulate`, as the module docstring notes.
 
 `Table.possible_styles` returns the field names, and the `style_name` setter validates against
@@ -339,7 +344,7 @@ than its span is truncated.
 
 `compute_layout()` derives each column's offsets within a line from the widths
 and the style's own separator characters, so the rewrite lands in the right
-place for all 56 styles. Where a horizontal rule meets the right edge of a
+place for all 54 styles. Where a horizontal rule meets the right edge of a
 merged block, the four-way junction is replaced by the body rule's `left`
 character, since no line arrives from the left there any more.
 
@@ -402,7 +407,7 @@ python -m pytest
 | `tests/test_columns.py` | type inference and the two-sided float measurement |
 | `tests/test_text_width.py` | visible width, and C/Python backend equivalence |
 | `tests/test_cells.py` | padding, justification, wrapping, transposition |
-| `tests/test_styles.py` | all 56 styles rendered, plus style selection |
+| `tests/test_styles.py` | all 54 styles rendered, plus style selection |
 | `tests/test_readme_examples.py` | the README's outputs, as golden strings |
 | `tests/test_issues.py` | reproductions for the open issues, as `xfail` |
 

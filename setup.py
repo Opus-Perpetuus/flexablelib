@@ -20,7 +20,7 @@ setup(
   package_data = {'flexablelib': ['py.typed']},
   include_package_data = True,
   version = read_json(f'.{os.sep}package.json')['version'],      
-  description = ('Fast, dependency-free terminal tables for Python: 56 border '
+  description = ('Fast, dependency-free terminal tables for Python: 54 border '
                  'styles, ANSI colors, cell merges, decimal alignment, '
                  'width fitting, and CSV/Markdown/HTML/Excel/LaTeX I/O.'),
   long_description=read_file('README.md'),

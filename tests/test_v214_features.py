@@ -31,7 +31,7 @@ def test_valign_rejects_bad_code():
 
 
 def test_panel_and_shadow():
-    t = Table.from_records([['a', 1]], headers=['X', 'Y'], style_name='sharp')
+    t = Table.from_records([['a', 1]], headers=['X', 'Y'], style_name='single')
     t.panel = True
     out = bare(t.compose())
     assert out.splitlines()[0].startswith('╭')
@@ -42,7 +42,7 @@ def test_panel_and_shadow():
 
 
 def test_panel_ascii_style():
-    t = Table.from_records([['a']], headers=['X'], style_name='ascii')
+    t = Table.from_records([['a']], headers=['X'], style_name='ascii_rows')
     t.panel = 'ascii'
     out = bare(t.compose())
     assert out.splitlines()[0].startswith('+')
@@ -63,7 +63,7 @@ def test_to_rst_asciidoc_latex():
 
 
 def test_transpose_and_rotate_alias():
-    t = Table.from_records([['a', 1], ['b', 2]], headers=['X', 'Y'], style_name='sharp')
+    t = Table.from_records([['a', 1], ['b', 2]], headers=['X', 'Y'], style_name='single')
     rotated = t.transpose()
     assert rotated.headers[0] == 'field'
     assert 'row0' in rotated.headers
@@ -75,7 +75,7 @@ def test_paginate_pages():
     t = Table.from_records(
         [[f'r{i}', i] for i in range(5)],
         headers=['N', 'V'],
-        style_name='simple',
+        style_name='lines_ascii',
     )
     pages = t.paginate(2)
     assert len(pages) == 3
@@ -86,7 +86,7 @@ def test_paginate_pages():
 
 
 def test_nested_subtable_in_cell():
-    inner = Table.from_records([[1, 2]], headers=['a', 'b'], style_name='ascii')
+    inner = Table.from_records([[1, 2]], headers=['a', 'b'], style_name='ascii_rows')
     outer = Table.from_records(
         [['cell', inner]], headers=['k', 'v'], style_name='rounded'
     )

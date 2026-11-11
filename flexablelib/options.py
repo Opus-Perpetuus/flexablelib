@@ -38,7 +38,7 @@ NONE_VALUE_REPLACEMENT = ''
 # Default value to fill cells when aligning.
 DEFAULT_FILL_CHAR = ' '
 # The style is set if the user doesn't choose or puts an incorrect value.
-DEFAULT_STYLE = 'grid_eheader'
+DEFAULT_STYLE = 'ascii_double_underline_open_header'
 # Default index column header.
 I_COL_TIT = 'i'
 # Default space a cell has on each side (after aligning).

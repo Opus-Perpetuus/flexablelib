@@ -8,9 +8,11 @@ Print formatted tabular data in different styles
 # Here the whole table is formed
 
 import numbers
+import warnings
 
 from .style_compositions import (
-    __style_compositions as style_catalogue, 
+    __style_compositions as style_catalogue,
+    DEPRECATED_STYLE_NAMES,
     HorizontalComposition, 
     SeparatorLine,
     TableComposition
@@ -72,6 +74,27 @@ from typing import (
 )
 
 
+def _current_style_name(name):
+    """
+    Translate a style name from before 3.0.0 to its current name, warning
+    the caller. Anything else (current names, unknown names, '') passes
+    through untouched; unknown names still fall back to the default style.
+    """
+    try:
+        new_name = DEPRECATED_STYLE_NAMES.get(name)
+    except TypeError:  # unhashable value: let the default-style check decide
+        return name
+    if new_name is None:
+        return name
+    warnings.warn(
+        "style {0!r} was renamed to {1!r} in flexablelib 3.0.0; the old "
+        "name will be removed in a future release".format(name, new_name),
+        DeprecationWarning,
+        stacklevel=3,
+    )
+    return new_name
+
+
 class Table(object):
     """
     TABLE
@@ -79,695 +102,26 @@ class Table(object):
 
     Makes a table out of tabular data
 
-    ---------------
-    POSSIBLE STYLES
-    ---------------
-    ### PLAIN
+    ------
+    STYLES
+    ------
+    ``table.style_name`` picks one of the border styles listed by
+    ``table.possible_styles``; see ``style_examples.md`` for every style
+    rendered. Names describe the look (``single``, ``rounded_rows``,
+    ``double_frame_open``, ``ascii_double_underline_open_header``...); the
+    scheme is documented in ``flexablelib.style_compositions``.
+
     >>> from flexablelib import Table
     >>> new_table = Table()
-    >>> new_table.missing_val = 'n/a'
     >>> new_table.add_row(data=[1])
     >>> new_table.add_column(data=['Kg', 'ml'])
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'plain'
-    ... column 1 column 2
-    ...
-    ... 1        Kg
-    ... n/a      ml
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... 1   Kg
-    ... n/a ml
-
-    ---------------
-    ### PRETTY_GRID
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'pretty_grid'
-    ... ╒══════════╤══════════╕
-    ... │ column 1 │ column 2 │
-    ... ╞══════════╪══════════╡
-    ... │ 1        │ Kg       │
-    ... ├──────────┼──────────┤
-    ... │ n/a      │ ml       │
-    ... ╘══════════╧══════════╛
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... ╒═════╤════╕
-    ... │ 1   │ Kg │
-    ... ├─────┼────┤
-    ... │ n/a │ ml │
-    ... ╘═════╧════╛
-
-    ---------------
-    ### PRETTY_COLUMNS
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'pretty_columns'
-    ... ╒══════════╤══════════╕
-    ... │ column 1 │ column 2 │
-    ... ╞══════════╪══════════╡
-    ... │ 1        │ Kg       │
-    ... │ n/a      │ ml       │
-    ... ╘══════════╧══════════╛
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... ╒═════╤════╕
-    ... │ 1   │ Kg │
-    ... │ n/a │ ml │
-    ... ╘═════╧════╛
-
-    ---------------
-    ### BOLD_HEADER
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'bold_header'
-    ... ╔══════════╦══════════╗
-    ... ║ column 1 ║ column 2 ║
-    ... ╚══════════╩══════════╝
-    ... │ 1        │ Kg       │
-    ... ├──────────┼──────────┤
-    ... │ n/a      │ ml       │
-    ... └──────────┴──────────┘
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... ┌─────┬────┐
-    ... │ 1   │ Kg │
-    ... ├─────┼────┤
-    ... │ n/a │ ml │
-    ... └─────┴────┘
-
-    ---------------
-    ### BHEADER_COLUMNS
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'bheader_columns'
-    ... ╔══════════╦══════════╗
-    ... ║ column 1 ║ column 2 ║
-    ... ╚══════════╩══════════╝
-    ... │ 1        │ Kg       │
-    ... │ n/a      │ ml       │
-    ... └──────────┴──────────┘
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... ┌─────┬────┐
-    ... │ 1   │ Kg │
-    ... │ n/a │ ml │
-    ... └─────┴────┘
-
-    ---------------
-    ### BOLD_EHEADER
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'bold_eheader'
-    ... ╔═════════════════════╗
-    ... ║ column 1   column 2 ║
-    ... ╚═════════════════════╝
-    ... │ 1        │ Kg       │
-    ... ├──────────┼──────────┤
-    ... │ n/a      │ ml       │
-    ... └──────────┴──────────┘
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... ┌─────┬────┐
-    ... │ 1   │ Kg │
-    ... ├─────┼────┤
-    ... │ n/a │ ml │
-    ... └─────┴────┘
-
-    ---------------
-    ### BEHEADER_COLUMNS
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'beheader_columns'
-    ... ╔═════════════════════╗
-    ... ║ column 1   column 2 ║
-    ... ╚═════════════════════╝
-    ... │ 1        │ Kg       │
-    ... │ n/a      │ ml       │
-    ... └──────────┴──────────┘
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... ┌─────┬────┐
-    ... │ 1   │ Kg │
-    ... │ n/a │ ml │
-    ... └─────┴────┘
-
-    ---------------
-    ### BHEADER_EBODY
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'bheader_ebody'
-    ... ╔═════════════════════╗
-    ... ║ column 1   column 2 ║
-    ... ╚═════════════════════╝
-    ... │ 1          Kg       │
-    ... │ n/a        ml       │
-    ... └─────────────────────┘
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... ┌──────────┐
-    ... │ 1     Kg │
-    ... │ n/a   ml │
-    ... └──────────┘
-
-    ---------------
-    ### ROUND_EDGES
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'round_edges'
+    >>> new_table.style_name = 'rounded'
     ... ╭──────────┬──────────╮
     ... │ column 1 │ column 2 │
-    ... ╞══════════╪══════════╡
-    ... │ 1        │ Kg       │
-    ... │ n/a      │ ml       │
-    ... ╰──────────┴──────────╯
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... ╭─────┬────╮
-    ... │ 1   │ Kg │
-    ... │ n/a │ ml │
-    ... ╰─────┴────╯
-
-    ---------------
-    ### RE_EHEADER
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 're_eheader'
-    ... ╭─────────────────────╮
-    ... │ column 1   column 2 │
-    ... ╞══════════╤══════════╡
-    ... │ 1        │ Kg       │
-    ... │ n/a      │ ml       │
-    ... ╰──────────┴──────────╯
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... ╭─────┬────╮
-    ... │ 1   │ Kg │
-    ... │ n/a │ ml │
-    ... ╰─────┴────╯
-
-    ---------------
-    ### RE_EBODY
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 're_ebody'
-    ... ╭─────────────────────╮
-    ... │ column 1   column 2 │
-    ... ╞═════════════════════╡
-    ... │ 1          Kg       │
-    ... │ n/a        ml       │
-    ... ╰─────────────────────╯
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... ╭──────────╮
-    ... │ 1     Kg │
-    ... │ n/a   ml │
-    ... ╰──────────╯
-
-    ---------------
-    ### THIN_BORDERLINE
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'thin_borderline'
-    ... ┌──────────┬──────────┐
-    ... │ column 1 │ column 2 │
-    ... ╞══════════╪══════════╡
-    ... │ 1        │ Kg       │
     ... ├──────────┼──────────┤
-    ... │ n/a      │ ml       │
-    ... └──────────┴──────────┘
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... ┌─────┬────┐
-    ... │ 1   │ Kg │
-    ... ├─────┼────┤
-    ... │ n/a │ ml │
-    ... └─────┴────┘
-
-    ---------------
-    ### TH_BD_EHEADER
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'th_bd_eheader'
-    ... ┌─────────────────────┐
-    ... │ column 1   column 2 │
-    ... ╞══════════╤══════════╡
-    ... │ 1        │ Kg       │
-    ... ├──────────┼──────────┤
-    ... │ n/a      │ ml       │
-    ... └──────────┴──────────┘
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... ┌─────┬────┐
-    ... │ 1   │ Kg │
-    ... ├─────┼────┤
-    ... │ n/a │ ml │
-    ... └─────┴────┘
-
-    ---------------
-    ### TH_BD_EBODY
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'th_bd_ebody'
-    ... ┌──────────┬──────────┐
-    ... │ column 1 │ column 2 │
-    ... ╞══════════╧══════════╡
-    ... │ 1          Kg       │
-    ... │ n/a        ml       │
-    ... └─────────────────────┘
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... ┌──────────┐
-    ... │ 1     Kg │
-    ... │ n/a   ml │
-    ... └──────────┘
-
-    ---------------
-    ### TH_BD_EMPTY
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'th_bd_empty'
-    ... ┌─────────────────────┐
-    ... │ column 1   column 2 │
-    ... ╞═════════════════════╡
-    ... │ 1          Kg       │
-    ... │ n/a        ml       │
-    ... └─────────────────────┘
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... ┌──────────┐
-    ... │ 1     Kg │
-    ... │ n/a   ml │
-    ... └──────────┘
-
-    ---------------
-    ### BOLD_BORDERLINE
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'bold_borderline'
-    ... ╔══════════╤══════════╗
-    ... ║ column 1 │ column 2 ║
-    ... ╠══════════╪══════════╣
-    ... ║ 1        │ Kg       ║
-    ... ╟──────────┼──────────╢
-    ... ║ n/a      │ ml       ║
-    ... ╚══════════╧══════════╝
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... ╔═════╤════╗
-    ... ║ 1   │ Kg ║
-    ... ╟─────┼────╢
-    ... ║ n/a │ ml ║
-    ... ╚═════╧════╝
-
-    ---------------
-    ### BD_BL_EHEADER
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'bd_bl_eheader'
-    ... ╔═════════════════════╗
-    ... ║ column 1   column 2 ║
-    ... ╠══════════╤══════════╣
-    ... ║ 1        │ Kg       ║
-    ... ╟──────────┼──────────╢
-    ... ║ n/a      │ ml       ║
-    ... ╚══════════╧══════════╝
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... ╔═════╤════╗
-    ... ║ 1   │ Kg ║
-    ... ╟─────┼────╢
-    ... ║ n/a │ ml ║
-    ... ╚═════╧════╝
-
-    ---------------
-    ### BD_BL_EBODY
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'bd_bl_ebody'
-    ... ╔══════════╤══════════╗
-    ... ║ column 1 │ column 2 ║
-    ... ╠══════════╧══════════╣
-    ... ║ 1          Kg       ║
-    ... ║ n/a        ml       ║
-    ... ╚═════════════════════╝
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... ╔══════════╗
-    ... ║ 1     Kg ║
-    ... ║ n/a   ml ║
-    ... ╚══════════╝
-
-    ---------------
-    ### BD_BL_EMPTY
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'bd_bl_empty'
-    ... ╔═════════════════════╗
-    ... ║ column 1   column 2 ║
-    ... ╠═════════════════════╣
-    ... ║ 1          Kg       ║
-    ... ║ n/a        ml       ║
-    ... ╚═════════════════════╝
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... ╔══════════╗
-    ... ║ 1     Kg ║
-    ... ║ n/a   ml ║
-    ... ╚══════════╝
-
-    ---------------
-    ### PWRSHLL_ALIKE
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'pwrshll_alike'
-    ... column 1 column 2
-    ... -------- --------
-    ... 1        Kg
-    ... n/a      ml
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... 1   Kg
-    ... n/a ml
-
-    ---------------
-    ### PRESTO
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'presto'
-    ...  column 1 | column 2
-    ... ----------+----------
-    ...  1        | Kg
-    ...  n/a      | ml
-    >>> new_table.show_headers = False
-    >>> new_table
-    ...  1   | Kg
-    ...  n/a | ml
-
-    ---------------
-    ### GRID
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'grid'
-    ... +----------+----------+
-    ... | column 1 | column 2 |
-    ... +==========+==========+
-    ... | 1        | Kg       |
-    ... +----------+----------+
-    ... | n/a      | ml       |
-    ... +----------+----------+
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... +-----+----+
-    ... | 1   | Kg |
-    ... +-----+----+
-    ... | n/a | ml |
-    ... +-----+----+
-
-    ---------------
-    ### GRID_EHEADER
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'grid_eheader'
-    ... +---------------------+
-    ... | column 1   column 2 |
-    ... +==========+==========+
-    ... | 1        | Kg       |
-    ... | n/a      | ml       |
-    ... +----------+----------+
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... +-----+----+
-    ... | 1   | Kg |
-    ... | n/a | ml |
-    ... +-----+----+
-
-    ---------------
-    ### GRID_EBODY
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'grid_ebody'
-    ... +----------+----------+
-    ... | column 1 | column 2 |
-    ... +==========+==========+
-    ... | 1          Kg       |
-    ... | n/a        ml       |
-    ... +---------------------+
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... +----------+
-    ... | 1     Kg |
-    ... | n/a   ml |
-    ... +----------+
-
-    ---------------
-    ### GRID_EMPTY
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'grid_empty'
-    ... +---------------------+
-    ... | column 1   column 2 |
-    ... +=====================+
-    ... | 1          Kg       |
-    ... | n/a        ml       |
-    ... +---------------------+
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... +----------+
-    ... | 1     Kg |
-    ... | n/a   ml |
-    ... +----------+
-
-    ---------------
-    ### PIPES
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'pipes'
-    ... | column 1 | column 2 |
-    ... |----------|----------|
-    ... | 1        | Kg       |
-    ... | n/a      | ml       |
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... |-----|----|
-    ... | 1   | Kg |
-    ... | n/a | ml |
-
-    ---------------
-    ### TILDE_GRID
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'tilde_grid'
-    ... +----------+----------+
-    ... | column 1 | column 2 |
-    ... O~~~~~~~~~~O~~~~~~~~~~O
-    ... | 1        | Kg       |
-    ... +----------+----------+
-    ... | n/a      | ml       |
-    ... O~~~~~~~~~~O~~~~~~~~~~O
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... O~~~~~O~~~~O
-    ... | 1   | Kg |
-    ... +-----+----+
-    ... | n/a | ml |
-    ... O~~~~~O~~~~O
-
-    ---------------
-    ### TILG_EHEADER
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'tilg_eheader'
-    ... +---------------------+
-    ... | column 1   column 2 |
-    ... O~~~~~~~~~~O~~~~~~~~~~O
-    ... | 1        | Kg       |
-    ... +----------+----------+
-    ... | n/a      | ml       |
-    ... O~~~~~~~~~~O~~~~~~~~~~O
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... O~~~~~O~~~~O
-    ... | 1   | Kg |
-    ... +-----+----+
-    ... | n/a | ml |
-    ... O~~~~~O~~~~O
-
-    ---------------
-    ### TILG_COLUMNS
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'tilg_columns'
-    ... +----------+----------+
-    ... | column 1 | column 2 |
-    ... O~~~~~~~~~~O~~~~~~~~~~O
-    ... | 1        | Kg       |
-    ... | n/a      | ml       |
-    ... O~~~~~~~~~~O~~~~~~~~~~O
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... O~~~~~O~~~~O
-    ... | 1   | Kg |
-    ... | n/a | ml |
-    ... O~~~~~O~~~~O
-
-    ---------------
-    ### TILG_EMPTY
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'tilg_empty'
-    ... +---------------------+
-    ... | column 1   column 2 |
-    ... O~~~~~~~~~~~~~~~~~~~~~O
-    ... | 1          Kg       |
-    ... | n/a        ml       |
-    ... O~~~~~~~~~~~~~~~~~~~~~O
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... O~~~~~~~~~~O
-    ... | 1     Kg |
-    ... | n/a   ml |
-    ... O~~~~~~~~~~O
-
-    ---------------
-    ### ORGTBL
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'orgtbl'
-    ... | column 1 | column 2 |
-    ... |----------+----------|
-    ... | 1        | Kg       |
-    ... | n/a      | ml       |
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... | 1   | Kg |
-    ... | n/a | ml |
-
-    ---------------
-    ### CLEAN
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'clean'
-    ... column 1 column 2
-    ... ──────── ────────
-    ... 1        Kg
-    ... n/a      ml
-    ... ──────── ────────
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... ─── ──
-    ... 1   Kg
-    ... n/a ml
-    ... ─── ──
-
-    ---------------
-    ### SIMPLE
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'simple'
-    ... ---------------------
-    ...  column 1   column 2
-    ... ---------------------
-    ...  1          Kg
-    ...  n/a        ml
-    ... ---------------------
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... ----------
-    ...  1     Kg
-    ...  n/a   ml
-    ... ----------
-
-    ---------------
-    ### SIMPLE_BOLD
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'simple_bold'
-    ... =====================
-    ...  column 1   column 2
-    ... =====================
-    ...  1          Kg
-    ...  n/a        ml
-    ... =====================
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... ==========
-    ...  1     Kg
-    ...  n/a   ml
-    ... ==========
-
-    ---------------
-    ### SIMPLE_HEAD
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'simple_head'
-    ...  column 1   column 2
-    ... ---------------------
-    ...  1          Kg
-    ...  n/a        ml
-    >>> new_table.show_headers = False
-    >>> new_table
-    ...  1     Kg
-    ...  n/a   ml
-
-    ---------------
-    ### SIMPLE_HEAD_BOLD
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'simple_head_bold'
-    ...  column 1   column 2
-    ... =====================
-    ...  1          Kg
-    ...  n/a        ml
-    >>> new_table.show_headers = False
-    >>> new_table
-    ...  1     Kg
-    ...  n/a   ml
-
-    ---------------
-    ### SIM_TH_BL
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'sim_th_bl'
-    ... ─────────────────────
-    ...  column 1   column 2
-    ... ─────────────────────
-    ...  1          Kg
-    ...  n/a        ml
-    ... ─────────────────────
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... ──────────
-    ...  1     Kg
-    ...  n/a   ml
-    ... ──────────
-
-    ---------------
-    ### SIM_BD_BL
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'sim_bd_bl'
-    ... ═════════════════════
-    ...  column 1   column 2
-    ... ═════════════════════
-    ...  1          Kg
-    ...  n/a        ml
-    ... ═════════════════════
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... ══════════
-    ...  1     Kg
-    ...  n/a   ml
-    ... ══════════
-
-    ---------------
-    ### SIM_HEAD_TH_BL
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'sim_head_th_bl'
-    ...  column 1   column 2
-    ... ─────────────────────
-    ...  1          Kg
-    ...  n/a        ml
-    >>> new_table.show_headers = False
-    >>> new_table
-    ...  1     Kg
-    ...  n/a   ml
-
-    ---------------
-    ### SIM_HEAD_BD_BL
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'sim_head_bd_bl'
-    ...  column 1   column 2
-    ... ═════════════════════
-    ...  1          Kg
-    ...  n/a        ml
-    >>> new_table.show_headers = False
-    >>> new_table
-    ...  1     Kg
-    ...  n/a   ml
-
-    ---------------
-    ### DASHES
-    >>> new_table.show_headers = True
-    >>> new_table.style_name = 'dashes'
-    ... ┌┄┄┄┄┄┄┄┄┄┄┬┄┄┄┄┄┄┄┄┄┄┐
-    ... ┊ column 1 ┊ column 2 ┊
-    ... ┝╍╍╍╍╍╍╍╍╍╍┿╍╍╍╍╍╍╍╍╍╍┥
-    ... ┊ 1        ┊ Kg       ┊
-    ... ┊ n/a      ┊ ml       ┊
-    ... └┄┄┄┄┄┄┄┄┄┄┴┄┄┄┄┄┄┄┄┄┄┘
-    >>> new_table.show_headers = False
-    >>> new_table
-    ... ┌┄┄┄┄┄┬┄┄┄┄┐
-    ... ┊ 1   ┊ Kg ┊
-    ... ┊ n/a ┊ ml ┊
-    ... └┄┄┄┄┄┴┄┄┄┄┘
-
-    ---------------
+    ... │        1 │ Kg       │
+    ... │          │ ml       │
+    ... ╰──────────┴──────────╯
     """
 
     def __init__(self, rows=None, columns=None, headers=None, style_name='',
@@ -885,7 +239,7 @@ class Table(object):
         self.__show_empty_columns = True
         self.__show_empty_rows = True
         self.__generic_column_name = 'column'
-        self.__style_name = style_name
+        self.__style_name = _current_style_name(style_name)
         # +------------------+ TABLE CHARACTERISTICS +-------------------+
         self.__show_headers = True
         self.__table_height = 0
@@ -1208,36 +562,16 @@ class Table(object):
     def style_name(self) -> str:
         """
         The name of the style used to print the table.
-        
+
         Default style is::
-        
-            'grid_eheader'
-            
-        The default style is selected if the provided
-        one is incorrect (not one of the following)::
-        
-            'plain'            'pretty_grid' 
-            'pretty_columns'   'bold_header' 
-            'bheader_columns'  'bold_eheader' 
-            'beheader_columns' 'bheader_ebody' 
-            'round_edges'      're_eheader' 
-            're_ebody'         'thin_borderline' 
-            'th_bd_eheader'    'th_bd_ebody' 
-            'th_bd_empty'      'bold_borderline' 
-            'bd_bl_eheader'    'bd_bl_ebody' 
-            'bd_bl_empty'      'pwrshll_alike' 
-            'presto'           'grid' 
-            'grid_eheader'     'grid_ebody' 
-            'grid_empty'       'pipes' 
-            'tilde_grid'       'tilg_eheader' 
-            'tilg_columns'     'tilg_empty' 
-            'orgtbl'           'clean' 
-            'simple'           'simple_bold' 
-            'simple_head'      'simple_head_bold' 
-            'sim_th_bl'        'sim_bd_bl' 
-            'sim_head_th_bl'   'sim_head_bd_bl' 
-            'dashes'
-            
+
+            'ascii_double_underline_open_header'
+
+        The default style is used when the name is not one of
+        ``possible_styles``. A name from before 3.0.0 (``'ascii_double_underline_open_header'``,
+        ``'double_horizontal_rows'``...) is translated to its current name with a
+        ``DeprecationWarning``; see ``DEPRECATED_STYLE_NAMES`` in
+        ``flexablelib.style_compositions``.
         """
         return self.__checked_style_name
 
@@ -1799,8 +1133,10 @@ class Table(object):
         directory. Installed as a package that file is not there, so setting
         style_name raised FileNotFoundError from anywhere but the repository
         root.
+
+        Names from before 3.0.0 are translated with a DeprecationWarning.
         """
-        self.__style_name = value
+        self.__style_name = _current_style_name(value)
 
     @missing_value.setter
     def missing_value(self, value):
@@ -5024,7 +4360,7 @@ class Table(object):
             under_header = composition.inferior_header_line
             if (under_header is not None and under_header.left == '|'
                     and under_header.right == '|'):
-                # Markdown-like styles (markdown, pipes, orgtbl): a rule in
+                # Markdown-like styles (markdown, markdown_aligned, org): a rule in
                 # the shape of their header rule, without alignment colons.
                 synthesized = SeparatorLine(
                     left='|', middle='-',
@@ -5596,7 +4932,7 @@ class Table(object):
         if not left_specs and not right_specs:
             return table_string
 
-        # A style with no outer vertical border (simple, clean, psql...) has
+        # A style with no outer vertical border (lines_ascii, underlined_single, psql...) has
         # cell text in the first and last column; overwriting it would eat
         # data, so the label is dropped on that side.
         if not self.__has_outer_vertical('left'):
@@ -5957,7 +5293,7 @@ class Table(object):
     # Named colour+style bundles (Spectre / Rich theme spirit).
     THEMES = {
         'plain': {
-            'style_name': 'plain',
+            'style_name': 'borderless_compact_header_gap',
             'use_colors': False,
             'header_color': None,
             'border_color': None,
@@ -5971,21 +5307,21 @@ class Table(object):
             'zebra': 'on #2a2a2a',
         },
         'midnight': {
-            'style_name': 'sharp',
+            'style_name': 'single',
             'use_colors': None,
             'header_color': 'bold white',
             'border_color': 'blue',
             'zebra': ('', 'on #1a1a2e'),
         },
         'matrix': {
-            'style_name': 'ascii',
+            'style_name': 'ascii_rows',
             'use_colors': None,
             'header_color': 'bold green',
             'border_color': 'green',
             'zebra': 'dim green',
         },
         'report': {
-            'style_name': 'simple_bold',
+            'style_name': 'lines_ascii_double',
             'use_colors': None,
             'header_color': 'bold',
             'border_color': None,
@@ -6006,21 +5342,21 @@ class Table(object):
             'zebra': ('', 'on #001f3f'),
         },
         'solarized': {
-            'style_name': 'sharp',
+            'style_name': 'single',
             'use_colors': None,
             'header_color': 'bold #268bd2',
             'border_color': '#586e75',
             'zebra': ('', 'on #073642'),
         },
         'neon': {
-            'style_name': 'bold_borderline',
+            'style_name': 'double_frame_rows',
             'use_colors': None,
             'header_color': 'bold magenta',
             'border_color': 'cyan',
             'zebra': ('', 'on #1a0033'),
         },
         'mono': {
-            'style_name': 'simple',
+            'style_name': 'lines_ascii',
             'use_colors': None,
             'header_color': 'bold',
             'border_color': 'dim',
@@ -6034,21 +5370,21 @@ class Table(object):
             'zebra': ('', 'on #3a1f00'),
         },
         'contrast': {
-            'style_name': 'ascii',
+            'style_name': 'ascii_rows',
             'use_colors': None,
             'header_color': 'bold reverse',
             'border_color': 'bold',
             'zebra': ('', 'reverse'),
         },
         'forest': {
-            'style_name': 'modern',
+            'style_name': 'single_rows',
             'use_colors': None,
             'header_color': 'bold #87d787',
             'border_color': '#005f00',
             'zebra': ('', 'on #002200'),
         },
         'ember': {
-            'style_name': 'bold_borderline',
+            'style_name': 'double_frame_rows',
             'use_colors': None,
             'header_color': 'bold #ffaf00',
             'border_color': '#d70000',

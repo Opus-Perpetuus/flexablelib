@@ -24,15 +24,15 @@ def test_divider_keeps_every_line_the_same_width(style):
 
 @pytest.mark.parametrize('style,expected', [
     ('rounded', '├────┼────┼────┼────┤'),
-    ('sharp', '├────┼────┼────┼────┤'),
-    ('pretty_columns', '╞════╪════╪════╪════╡'),
-    ('dashes', '├┄┄┄┄┼┄┄┄┄┼┄┄┄┄┼┄┄┄┄┤'),
-    ('re_ebody', '├───────────────────┤'),
-    ('bd_bl_ebody', '╠═══════════════════╣'),
-    ('grid_eheader', '+----+----+----+----+'),
-    ('grid_ebody', '+-------------------+'),
+    ('single', '├────┼────┼────┼────┤'),
+    ('double_horizontal', '╞════╪════╪════╪════╡'),
+    ('dashed', '├┄┄┄┄┼┄┄┄┄┼┄┄┄┄┼┄┄┄┄┤'),
+    ('rounded_double_underline_open', '├───────────────────┤'),
+    ('double_frame_open_body', '╠═══════════════════╣'),
+    ('ascii_double_underline_open_header', '+----+----+----+----+'),
+    ('ascii_double_underline_open_body', '+-------------------+'),
     ('markdown', '|----|----|----|----|'),
-    ('orgtbl', '|----+----+----+----|'),
+    ('org', '|----+----+----+----|'),
 ])
 def test_divider_is_drawn_with_the_style_glyphs(style, expected):
     # Used to be a run of ASCII '-' crossing the column lines.
@@ -44,7 +44,7 @@ def test_divider_is_drawn_with_the_style_glyphs(style, expected):
 
 
 def test_divider_without_column_lines_stays_dashed():
-    table = small('simple')
+    table = small('lines_ascii')
     table.add_divider(0)
     lines = table.compose().split('\n')
     a0 = next(i for i, line in enumerate(lines) if 'a0' in line)
@@ -61,8 +61,8 @@ def test_divider_skips_hidden_columns():
 
 
 @pytest.mark.parametrize('style,foreign', [
-    ('tilg_columns', set('│├┤┬┴┼─')),
-    ('dots', set('│├┤┬┴┼─')),
+    ('tilde', set('│├┤┬┴┼─')),
+    ('dotted_rows', set('│├┤┬┴┼─')),
     ('psql', set('│├┤┬┴┼─')),
 ])
 def test_merge_junctions_use_the_style_glyphs(style, foreign):
@@ -183,20 +183,20 @@ def test_stream_with_zebra_yields_the_rows():
     # The painted bottom rule never matched, so rows were lost and the bottom
     # border came out after the header and after every row.
     lines, expected = _stream_vs_compose(
-        ROWS, style_name='sharp', use_colors=True,
+        ROWS, style_name='single', use_colors=True,
         zebra=('on blue', 'on black'))
     assert lines == expected
     assert sum(line.startswith('└') for line in lines) == 1
 
 
 @pytest.mark.parametrize('settings', [
-    dict(style_name='blank', panel='double', show_headers=False),
-    dict(style_name='blank', panel='double', shadow=True, show_headers=False,
+    dict(style_name='borderless', panel='double', show_headers=False),
+    dict(style_name='borderless', panel='double', shadow=True, show_headers=False,
          caption='cap'),
-    dict(style_name='empty', show_headers=False, shadow=True),
+    dict(style_name='borderless_compact', show_headers=False, shadow=True),
     dict(style_name='rounded', title='T', caption='C', panel=True,
          show_index=True),
-    dict(style_name='bheader_ebody', use_colors=True, zebra=True,
+    dict(style_name='double_header_open', use_colors=True, zebra=True,
          shadow=True, caption='c'),
 ])
 def test_stream_matches_compose(settings):
