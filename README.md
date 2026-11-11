@@ -439,7 +439,7 @@ table.merge_cells(0, 0, 2, 2, value='Total', align='r')
 A merge never widens the table -- columns are still sized by their unmerged
 content -- so text longer than its span is truncated.
 
-## Cards, grids and responsive tables
+## Cards, grids, responsive tables and terminal interfaces
 
 `Card` draws one record in a frame, in any of the table styles. The title goes
 into the top border when the style draws one:
@@ -525,6 +525,43 @@ Grid([GridCell('Ventas de noviembre', span=3),
       GridCell(table, span=2), Grid(cards, columns=1)], columns=3)
 ```
 
+### Terminal interfaces
+
+Since 3.2.0 a grid can size its columns (`12`, `'auto'`, `'2fr'`, `'30%'`,
+bounds, or one layout per width), span rows, share one border with proper
+junctions and a title per cell, and fill an exact height. Widgets --
+`ProgressBar`, `Sparkline`, `BarChart`, `StatusBar`, `KeyHints`, `LogView`,
+`Text`, `Rule` -- drop into it, `Screen` pins a header and footer to the
+terminal's edges and `Live` redraws in place:
+
+```python
+from flexablelib import (Grid, GridCell, LogView, ProgressBar, Sparkline,
+                         Text)
+
+Grid([
+    GridCell(Text('▸ Resumen\n  Ventas\n  Ajustes'), row_span=2, title='Menú'),
+    GridCell(ProgressBar(72, label='CPU', thresholds={0.7: 'yellow'}),
+             title='Recursos'),
+    GridCell(Sparkline([3, 5, 2, 8, 6, 9, 4, 7], label='rps', show_last=True),
+             title='Tráfico'),
+    GridCell(LogView(['10:00 INFO arranque', '10:01 WARN lento']), span=2,
+             title='Eventos'),
+], column_widths=[14, '1fr', '1fr'], border='rounded').render(width=64)
+```
+
+```
+╭─ Menú ───────┬─ Recursos ────────────┬─ Tráfico ─────────────╮
+│ ▸ Resumen    │ CPU ████████▋░░░  72% │ rps ▂▄▁▇▅█▃▆ 7        │
+│   Ventas     ├─ Eventos ─────────────┴───────────────────────┤
+│   Ajustes    │ 10:00 INFO arranque                           │
+│              │ 10:01 WARN lento                              │
+╰──────────────┴───────────────────────────────────────────────╯
+```
+
+A whole dashboard with a sidebar, KPI cards, a coloured table with merges,
+bars, sparklines and a log: [examples/dashboard.py](https://github.com/Opus-Perpetuus/flexablelib/blob/main/examples/dashboard.py)
+(`python examples/dashboard.py --live 10`).
+
 More in [docs/LAYOUT.md](https://github.com/Opus-Perpetuus/flexablelib/blob/main/docs/LAYOUT.md).
 
 ## Notes
@@ -540,14 +577,18 @@ Open work and the issue map: [docs/ISSUES.md](https://github.com/Opus-Perpetuus/
 ```
 flexablelib/                 # GitHub repository
 ├── flexablelib/            the Python package (no runtime dependencies)
-│   ├── __init__.py          public API: Table, TableComposition, SeparatorLine
+│   ├── __init__.py          public API: Table, Card, Grid, widgets, Screen, Live
 │   ├── table.py             the Table class — state and render orchestration
+│   ├── layout.py            Card, Grid, GridCell, panel and shadow
+│   ├── widgets.py           ProgressBar, Sparkline, BarChart, StatusBar, LogView…
+│   ├── screen.py            Screen (sticky header/footer) and Live (redraw)
 │   ├── columns.py           type inference, alignment, column widths
 │   ├── style_compositions.py   the 54 border styles, as data
 │   ├── table_strings.py     separator lines and data rows
 │   ├── cells.py             cell padding, justification, wrapping
 │   ├── options.py           constants and defaults
 │   └── utils.py             type predicates and small helpers
+├── examples/                runnable demos (dashboard.py)
 ├── tests/                   pytest suite — see ARCHITECTURE.md#testing
 ├── docs/                    issue history and design notes
 ├── logos/                   brand assets — see logos/README.md
