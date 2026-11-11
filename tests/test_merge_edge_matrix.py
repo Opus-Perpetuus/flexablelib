@@ -86,16 +86,15 @@ def test_last_row_horizontal_merge_bottom_is_not_header_tee(style):
 
 
 @pytest.mark.parametrize('style', ['double_horizontal', 'rounded_double_underline', 'dashed'])
-def test_column_only_multi_col_merge_inserts_cap(style):
+def test_column_only_multi_col_merge_stays_square_without_cap(style):
     table = _build_base(style)
+    before = str(table)
     table.merge_cells(1, 0, last_column=1, value='AB')
-    lines = str(table).splitlines()
-    assert any(_has_h_run(line) and '═' not in line or _has_h_run(line)
-               for line in lines)
-    # There is a body-ish rule that is not only the header double rule.
-    bodyish = [line for line in lines if _has_h_run(line)]
-    assert len(bodyish) >= 2, lines  # header + at least one cap or end
-    _square(str(table))
+    rendered = str(table)
+    lines = rendered.splitlines()
+    assert any('AB' in line for line in lines)
+    assert len(lines) == len(before.splitlines())
+    _square(rendered)
 
 
 @pytest.mark.parametrize('style', ['double_horizontal', 'rounded_double_underline', 'dashed'])
