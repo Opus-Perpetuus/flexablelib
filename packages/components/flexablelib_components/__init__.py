@@ -9,14 +9,15 @@ pieces (badges, alerts, links, breadcrumbs, code, Markdown/HTML, timelines,
 steppers, comments, stats, charts), navigation (tabs, menus, pagination,
 sidebar, wizard, accordion, tree, command palette, split panes, app shell),
 data (interactive and editable tables, filter bar, catalog, forms, login)
-and dialogs (modal, confirm, prompt, loading, popover).
+dialogs (modal, confirm, prompt, loading, popover) and pictures (image,
+image viewer: kitty, iTerm2, sixel, Unicode blocks, ASCII, link).
 
 Every component works inside :class:`flexablelib_tui.App` (focus with Tab,
 keys to the focused component) and also renders on its own with
 ``render(width)``. See docs/COMPONENTS.md.
 """
 
-__version__ = '3.4.0'
+__version__ = '3.5.0'
 
 from .base import Theme, DEFAULT_THEME, Input, Box, Button, frame
 from .inputs import (TextInput, PasswordInput, NumberInput, ExpressionInput,
@@ -38,6 +39,7 @@ from .navigation import (Tabs, Menu, ContextMenu, MenuButton, Pagination,
                          AppShell, SortControl)
 from .data import (DataTable, FilterBar, EditableTable, CatalogGrid, Form,
                    ValidationSummary, LoginForm, FilePreview, parse_query)
+from .media import Image, ImageViewer, IMAGE_EXTENSIONS
 from .overlays import (Modal, ConfirmDialog, PromptDialog, LoadingOverlay,
                        Popover, HelpLine)
 
@@ -60,5 +62,5 @@ __all__ = [
     'DataTable', 'FilterBar', 'EditableTable', 'CatalogGrid', 'Form',
     'ValidationSummary', 'LoginForm', 'FilePreview', 'parse_query',
     'Modal', 'ConfirmDialog', 'PromptDialog', 'LoadingOverlay', 'Popover',
-    'HelpLine', '__version__',
+    'HelpLine', 'Image', 'ImageViewer', 'IMAGE_EXTENSIONS', '__version__',
 ]

@@ -30,7 +30,8 @@ import time
 
 from flexablelib import _frames as _fx
 from flexablelib.colors import RESET, parse_spec, supports_color
-from flexablelib.layout import Grid, GridCell, _render_child, render_width
+from flexablelib.layout import (Card, Grid, GridCell, _render_child,
+                                render_width)
 
 from . import accessibility as _a11y
 from .keys import Key, MouseEvent, key_label
@@ -197,7 +198,7 @@ class Component(object):
         return '\n'.join(lines)
 
     def __str__(self):
-        return self.render()
+        return _fx.expand_graphics(self.render())
 
     def children(self):
         """Components (or layouts holding components) inside this one."""
@@ -267,6 +268,10 @@ def _child_nodes(node):
         return list(node.children)
     if isinstance(node, GridCell):
         return [node.child]
+    if isinstance(node, Card):
+        body = node.body
+        return [body] if body is not None and not isinstance(body, str) \
+            else []
     if isinstance(node, App):
         return [node.screen] + list(node.layers)
     return []
@@ -936,6 +941,10 @@ class App(object):
         self.running = True
         next_tick = time.monotonic() + (self.interval or 0)
         with terminal:
+            if any(getattr(c, 'needs_graphics', False)
+                   for c in self.components()):
+                from . import graphics as _graphics
+                _graphics.probe_terminal(terminal)
             caps = getattr(terminal, 'capabilities', None)
             if 'ascii' not in self.a11y_settings and caps is not None and \
                     caps.unicode is False and not _a11y.settings.ascii:

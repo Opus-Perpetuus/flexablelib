@@ -128,6 +128,25 @@ Your own components set `role` and override those methods.
   `ascii_fold` (C-accelerated, with a Python fallback that gives the same
   result). It turns on by itself when the terminal cannot show Unicode.
 
+## Pictures (3.5.0)
+
+An `Image` always has a text alternative (`alt`):
+
+- in screen-reader mode and with `TERM=dumb` the picture is never drawn;
+  the line reads `Imagen: Silla de madera (foto.png)`, plus the reason when
+  the file cannot be shown;
+- without colour (`NO_COLOR`, `use_colors=False`) Unicode pictures switch to
+  mono braille and pixel pictures are sent in grey;
+- in ASCII mode pictures are ASCII art, the link is marked `->` and the
+  warning `!`;
+- with `reduced_motion` animated pictures show their first frame;
+- the warning shown when there is no browser carries a symbol and words,
+  and opening an image (Enter, `o`, click) is also announced;
+- `audit()` reports `no alt text` for an `Image` without `alt`, and a
+  focusable `Image` draws a visible focus line (`▶ Enter: abrir`).
+
+See [IMAGES.md](IMAGES.md).
+
 ## Small terminals
 
 Layouts reflow (the sidebar hides, cards wrap, tables squeeze columns).
