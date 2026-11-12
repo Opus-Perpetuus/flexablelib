@@ -86,6 +86,7 @@ def main(path):
         while len(keys) < 5 and time.monotonic() < deadline:
             keys.extend(term.read_keys(timeout=0.2))
         result['terminal'] = [str(k) for k in keys]
+        result['terminal_raw'] = [repr(getattr(k, 'raw', '')) for k in keys]
         result['terminal_mouse'] = [list(k.mouse) for k in keys if k.mouse]
     result['expected_terminal'] = ['ctrl+up', 'f24', 'ctrl+c', 'mouse',
                                    'mouse']
