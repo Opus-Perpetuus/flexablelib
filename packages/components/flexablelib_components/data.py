@@ -10,6 +10,7 @@ import os
 import re
 
 from flexablelib import _frames as _fx
+from flexablelib.identifiers import is_id_column
 
 from .base import Button, Input, _Themed, frame, join_columns
 from .inputs import TextInput, PasswordInput, Checkbox
@@ -48,7 +49,16 @@ class DataTable(_Themed):
 
     ``columns``: names, or dicts with ``key``, ``title``, ``align``
     (``'l'``/``'r'``/``'c'``), ``width``, ``format(value)`` and
-    ``color(value) -> spec``. ``rows``: dicts or sequences.
+    ``color(value) -> spec`` and ``type``. ``rows``: dicts or sequences.
+
+    Integers get thousands separators (``15,000``) except in identifier
+    columns -- folios, IDs, codes, SKUs, years -- which print as typed
+    (``1281``): a column with ``'type': 'id'`` (or ``'folio'``, ``'code'``),
+    or, with ``id_columns='auto'`` (the default), one whose name says so
+    (:func:`flexablelib.is_id_column`; ``id_names`` replaces the word list).
+    ``'type': 'number'`` keeps the separators whatever the name;
+    ``id_columns=False`` restores the 3.3 behaviour (separators everywhere)
+    and a list names the id columns by key, title or position.
 
     Keys: Up/Down/PgUp/PgDn/Home/End move; ``1``-``9`` sort by that column
     (again: reverse); ``/`` types a quick filter (Enter/Escape end it,
@@ -65,8 +75,10 @@ class DataTable(_Themed):
     def __init__(self, columns, rows=(), height=None, selectable=False,
                  on_activate=None, on_select=None, zebra=True,
                  page_size=None, status=True, empty='Sin registros',
-                 **kwargs):
+                 id_columns='auto', id_names=None, **kwargs):
         super(DataTable, self).__init__(**kwargs)
+        self.id_columns = id_columns
+        self.id_names = id_names
         self.columns = [self._column(c, i) for i, c in enumerate(columns)]
         self.rows = list(rows)
         self.height = height
@@ -118,9 +130,40 @@ class DataTable(_Themed):
         k = column['key'] if isinstance(column['key'], int) else index
         return row[k] if k < len(row) else None
 
+    _ID_TYPES = ('id', 'folio', 'code', 'codigo', 'código', 'clave', 'key')
+    _NUMBER_TYPES = ('number', 'numero', 'número', 'money', 'quantity',
+                     'int', 'float', 'amount')
+
+    def is_id_column(self, ci):
+        """Whether column ``ci`` holds identifiers (no separators)."""
+        column = self.columns[ci]
+        kind = str(column.get('type', '')).lower()
+        if kind in self._ID_TYPES:
+            return True
+        if kind in self._NUMBER_TYPES:
+            return False
+        setting = self.id_columns
+        if not setting:
+            return False
+        if setting == 'auto' or setting is True:
+            cached = column.get('_id')
+            if cached is None:
+                cached = column['_id'] = is_id_column(
+                    column.get('title', column['key']), self.id_names) or \
+                    (isinstance(column['key'], str) and
+                     is_id_column(column['key'], self.id_names))
+            return cached
+        return column['key'] in setting or column.get('title') in setting \
+            or ci in setting
+
     def text(self, row, ci):
         column = self.columns[ci]
-        return _cell_text(self._get(row, column, ci), column.get('format'))
+        value = self._get(row, column, ci)
+        fmt = column.get('format')
+        if fmt is None and isinstance(value, int) and \
+                not isinstance(value, bool) and self.is_id_column(ci):
+            return str(value)
+        return _cell_text(value, fmt)
 
     def invalidate(self):
         self._view = None

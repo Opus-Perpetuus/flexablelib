@@ -2,3 +2,4 @@ include README.md
 include LICENSE
 include flexablelib_speedups/_frames.c
 include flexablelib_speedups/_width_tables.h
+include flexablelib_speedups/_ascii_table.h

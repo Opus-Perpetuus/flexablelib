@@ -37,7 +37,9 @@ from .fast import (
 __all__ = ['ACCELERATED', 'BACKEND', 'use', 'available', 'visible_width',
            'strip_ansi', 'widths_of', 'truncate', 'fit_line', 'fit_lines',
            'slice_columns',
-           'border_grid', 'changed_lines', 'render_diff', 'GLYPH_ORDER']
+           'border_grid', 'changed_lines', 'render_diff', 'ascii_fold',
+           'extract_marks', 'mark_open', 'MARK_CLOSE', 'GLYPH_ORDER',
+           'ASCII_FOLD']
 
 # The order border_grid() expects its 11 glyphs in.
 GLYPH_ORDER = ('h', 'v', 'tl', 'tr', 'bl', 'br', 'lt', 'rt', 'tt', 'bt', 'x')
@@ -147,6 +149,163 @@ def _py_render_diff(old, new):
     return ''.join(parts)
 
 
+# +---------------------------------------------------------------------------+
+# ASCII fallback: one ASCII character for each one-column symbol the
+# interface draws (box drawing, blocks, braille, arrows, shapes, checks), so
+# a frame keeps its exact layout on terminals without Unicode.
+
+def _build_ascii_fold():
+    table = {}
+
+    def put(chars, ascii_char):
+        for ch in chars:
+            table[ord(ch)] = ascii_char
+    # Box drawing U+2500-U+257F: lines, then everything else is a junction.
+    for cp in range(0x2500, 0x2580):
+        table[cp] = '+'
+    put('─━┄┅┈┉╌╍╼╾╴╶╸╺', '-')
+    put('═', '=')
+    put('│┃┆┇┊┋╎╏║╽╿╵╷╹╻', '|')
+    put('╱', '/')
+    put('╲', '\\')
+    put('╳', 'X')
+    # Block elements U+2580-U+259F.
+    for cp in range(0x2580, 0x25A0):
+        table[cp] = '#'
+    put('▁▂', '_')
+    put('▃', '.')
+    put('▄▀▔', '-')
+    put('▅▆▋▌▐', '=')
+    put('▍▎', '-')
+    put('▏▕', '|')
+    put('░', '.')
+    put('▒', ':')
+    # Geometric shapes U+25A0-U+25FF.
+    for cp in range(0x25A0, 0x2600):
+        table[cp] = '*'
+    put('■▪▬▮', '#')
+    put('□▫▭▯', 'o')
+    put('▲△▴▵', '^')
+    put('▶▷▸▹►▻', '>')
+    put('▼▽▾▿', 'v')
+    put('◀◁◂◃◄◅', '<')
+    put('○◌◯◐◑◒◓◦', 'o')
+    del table[0x25FD], table[0x25FE]           # two columns wide: kept
+    # Arrows.
+    put('←⇐⟵↤↞', '<')
+    put('→⇒⟶↦↠', '>')
+    put('↑⇑', '^')
+    put('↓⇓', 'v')
+    put('↔⇔', '-')
+    put('↕⇕', '|')
+    put('↵⏎↩', '<')
+    # Checks, crosses, warnings, stars, ballot boxes.
+    put('✔✓√', '+')
+    put('✖✗✘×', 'x')
+    put('⚠', '!')
+    put('ℹ', 'i')
+    put('★☆✦✧⭑', '*')
+    put('☐', '.')
+    put('☑☒', 'x')
+    # Punctuation and maths.
+    put('…⋯·•∙', '.')
+    put('‣', '>')
+    put('⁃‐‑‒–—―−', '-')
+    put('‘’‚′', "'")
+    put('“”„″', '"')
+    put('«‹', '<')
+    put('»›', '>')
+    put('≤', '<')
+    put('≥', '>')
+    put('≠', '#')
+    put('≈∼', '~')
+    put('±', '+')
+    put('÷', '/')
+    put('°', 'o')
+    put('∅', '0')
+    put('∞', '8')
+    put('\u00a0', ' ')
+    put('¦', '|')
+    put('¬', '-')
+    put('€', 'E')
+    put('␣', '_')
+    # Braille U+2800-U+28FF (charts, spinners): by how many dots are set.
+    for cp in range(0x2800, 0x2900):
+        dots = bin(cp - 0x2800).count('1')
+        table[cp] = ' ' if dots == 0 else '.' if dots <= 2 else \
+            ':' if dots <= 5 else '#'
+    return table
+
+
+#: Code point -> ASCII replacement used by :func:`ascii_fold`.
+ASCII_FOLD = _build_ascii_fold()
+
+
+def _py_ascii_fold(text):
+    """``text`` with every symbol of :data:`ASCII_FOLD` replaced by its
+    one-column ASCII stand-in (escapes, letters and wide characters kept)."""
+    if text.isascii():
+        return text
+    return text.translate(ASCII_FOLD)
+
+
+# +---------------------------------------------------------------------------+
+# Hit regions: zero-width marks (OSC 8970) a component puts around each of its
+# lines while an app tracks the mouse. extract_marks() removes them from a
+# frame and reports where every component ended up on screen.
+
+_MARK = '\x1b]8970;'
+MARK_CLOSE = _MARK + '\x07'
+
+
+def mark_open(ident):
+    """The mark that opens region ``ident`` (a non-negative int)."""
+    return '{0}{1}\x07'.format(_MARK, ident)
+
+
+def _py_extract_marks(lines):
+    """
+    ``(clean_lines, regions)``: the lines without marks, and one
+    ``(ident, row, x0, x1, depth)`` per marked span -- columns ``[x0, x1)``
+    of ``row``, ``depth`` 0 for the outermost. A span still open at the end
+    of its line closes there.
+    """
+    out = []
+    regions = []
+    for row, line in enumerate(lines):
+        if _MARK not in line:
+            out.append(line)
+            continue
+        parts = []
+        stack = []
+        col = pos = 0
+        while True:
+            k = line.find(_MARK, pos)
+            if k < 0:
+                seg = line[pos:]
+                parts.append(seg)
+                col += _py_visible_width(seg)
+                break
+            seg = line[pos:k]
+            parts.append(seg)
+            col += _py_visible_width(seg)
+            end = line.find('\x07', k)
+            if end < 0:
+                break
+            ident = line[k + 7:end]
+            if ident.isdigit() and ident.isascii() and len(ident) <= 9:
+                stack.append((int(ident), col))
+            elif not ident and stack:
+                i, x0 = stack.pop()
+                regions.append((i, row, x0, col, len(stack)))
+            pos = end + 1
+        while stack:
+            i, x0 = stack.pop()
+            regions.append((i, row, x0, col, len(stack)))
+        out.append(''.join(parts))
+    return out, regions
+
+
 _PYTHON = {
     'visible_width': _py_visible_width,
     'strip_ansi': _py_strip_ansi,
@@ -158,6 +317,8 @@ _PYTHON = {
     'border_grid': _py_border_grid,
     'changed_lines': _py_changed_lines,
     'render_diff': _py_render_diff,
+    'ascii_fold': _py_ascii_fold,
+    'extract_marks': _py_extract_marks,
 }
 
 
@@ -166,7 +327,8 @@ def _load_c():
         from flexablelib_speedups import _frames as module
     except ImportError:
         return None
-    return {name: getattr(module, name) for name in _PYTHON}
+    # An older speedups build may lack the newer functions: those stay Python.
+    return {name: getattr(module, name, _PYTHON[name]) for name in _PYTHON}
 
 
 _C = _load_c()
@@ -208,6 +370,8 @@ slice_columns = _py_slice_columns
 border_grid = _py_border_grid
 changed_lines = _py_changed_lines
 render_diff = _py_render_diff
+ascii_fold = _py_ascii_fold
+extract_marks = _py_extract_marks
 
 use('python' if os.environ.get('FLEXABLELIB_FRAMES', '').lower() == 'python'
     else 'auto')
