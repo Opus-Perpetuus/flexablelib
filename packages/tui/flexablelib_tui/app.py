@@ -976,11 +976,19 @@ class App(object):
         screen is printed once as linear text, then every change is
         announced as a new line (what screen readers read best).
         """
+        import os as _os
         import sys as _sys
         stream = self.stream if self.stream is not None else _sys.stdout
         if self.announcer.target is None:
             self.announcer.target = stream
-        terminal = self._make_terminal()
+        if self.terminal is None and \
+                _os.environ.get('TERM', '').lower() == 'dumb':
+            # A dumb terminal gets no mode switches at all: the escape
+            # sequences would be printed or read aloud.
+            from .terminal import Terminal
+            terminal = Terminal(paste=False, focus=False, keyboard='legacy')
+        else:
+            terminal = self._make_terminal()
         self.running = True
         width = render_width(None)
         next_tick = time.monotonic() + (self.interval or 0)
