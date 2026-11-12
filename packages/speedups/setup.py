@@ -20,7 +20,7 @@ setup(
     name='flexablelib-speedups',
     version=version(),
     description='Optional C acceleration of terminal frame drawing for '
-                'flexablelib (cut, pad, borders, frame diffs).',
+                'flexablelib (cut, pad, borders, frame diffs, images).',
     long_description=readme(),
     long_description_content_type='text/markdown',
     author='Benjamin Ramirez',
@@ -34,6 +34,9 @@ setup(
                                     'flexablelib_speedups/_ascii_table.h'],
                            # No compiler: the install still succeeds and
                            # flexablelib keeps its pure-Python frame code.
+                           optional=True),
+                 Extension('flexablelib_speedups._images',
+                           sources=['flexablelib_speedups/_images.c'],
                            optional=True)],
     python_requires='>=3.8',
     classifiers=[
