@@ -95,6 +95,7 @@ jobs:
           python -m pip install --upgrade pip setuptools
           python -m pip install -e .
           python -m pip install -r requirements-dev.txt pytest-cov
+          python -m pip install pandas openpyxl lxml
           cd packages/speedups
           python setup.py build_ext --inplace
 

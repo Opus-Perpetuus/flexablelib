@@ -157,7 +157,9 @@ class TestTerminalPosix:
             assert names(term.read_keys(timeout=0.3)) == ['down']
             assert term.read_keys(timeout=0.01) == []
             term.start()       # idempotent
-        assert termios.tcgetattr(slave)[3] == before[3]
+        # macOS sets PENDIN on its own after the mode is restored.
+        pendin = getattr(termios, 'PENDIN', 0)
+        assert termios.tcgetattr(slave)[3] & ~pendin == before[3] & ~pendin
         assert '\x1b[?1000h' in out.getvalue()
         assert '\x1b[?1000l' in out.getvalue()
         term.stop()            # idempotent
@@ -643,7 +645,12 @@ def test_run_in_real_pty(tmp_path):
     fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack('HHHH', 14, 50, 0, 0))
     read_for(0.4)
     os.write(master, b'q')
-    _, err = proc.communicate(timeout=10)
+    # Keep draining the pty while the child exits: a small pty buffer (macOS)
+    # would otherwise block its last redraw and it would never read the 'q'.
+    deadline = time.time() + 10
+    while proc.poll() is None and time.time() < deadline:
+        read_for(0.1)
+    _, err = proc.communicate(timeout=5)
     read_for(0.2)
     os.close(master)
     assert proc.returncode == 0, err
