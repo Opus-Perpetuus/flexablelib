@@ -126,3 +126,16 @@ def test_html_writes_to_a_handle_and_a_path(tmp_path):
     path = tmp_path / 'out.html'
     assert table.to_html(str(path)) is None
     assert path.read_text(encoding='utf-8') == table.to_html()
+
+
+def test_merged_html_writes_to_a_handle_and_a_path(tmp_path):
+    table = Table(rows=[['a', 'b'], ['c', 'd']], headers=['x', 'y'])
+    table.merge_cells(0, 0, 1, 0)
+    expected = table.to_html()
+    assert 'rowspan="2"' in expected
+    handle = io.StringIO()
+    assert table.to_html(handle) is None
+    assert handle.getvalue() == expected
+    path = tmp_path / 'merged.html'
+    assert table.to_html(str(path)) is None
+    assert path.read_text(encoding='utf-8') == expected
