@@ -424,10 +424,12 @@ class Table(object):
         whole multi-line string at once turned ``'a\\nbb'`` into ``'...'``.
         A cell that already fits is returned unchanged, type included.
         """
-        text = str(piece)
+        text = expand_tabs(str(piece), TAB_SIZE)
         lines = text.split('\n')
         if all(visible_width(line) <= new_width for line in lines):
             return piece
+        # Trim the expanded lines: a tab measures nothing, so trimming the
+        # raw text let it through as fitting when it did not.
         return '\n'.join(cls.__trim_with_sign(line, new_width) for line in lines)
 
     @staticmethod
