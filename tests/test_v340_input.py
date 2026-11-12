@@ -794,4 +794,7 @@ class TestRealWindowsConsole:
         result = json.loads(out.read_text(encoding='utf-8'))
         assert result['records'] == result['expected_records'], result
         assert result['vt_keys'] == result['expected_vt'], result
-        assert result['terminal'] == result['expected_terminal'], result
+        detail = json.dumps({k: result.get(k) for k in (
+            'terminal_protocol', 'terminal', 'terminal_mouse',
+            'terminal_raw')})
+        assert result['terminal'] == result['expected_terminal'], detail
