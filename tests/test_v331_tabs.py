@@ -10,10 +10,12 @@ in a card title or a border title split the frame in two.
 import pytest
 
 from flexablelib import Card, Table
-from flexablelib.text_width import expand_tabs, visible_width, wrap_to_width
+from flexablelib.text_width import (
+    expand_tabs, strip_ansi, visible_width, wrap_to_width)
 
 
 def _widths(text):
+    text = strip_ansi(text)
     return {visible_width(line) for line in text.split('\n')}
 
 
@@ -112,7 +114,7 @@ def test_border_title_with_newline_stays_on_the_top_rule():
 
 def test_card_border_title_with_newline_and_tab_keeps_the_frame():
     out = Card(title='a\tb\nc', fields=[('k\tx', 'v\ty')],
-               footer='f\tg').render()
+               footer='f\tg', use_colors=False).render()
     lines = out.split('\n')
     assert '\t' not in out
     assert len(_widths(out)) == 1
@@ -123,7 +125,7 @@ def test_card_border_title_with_newline_and_tab_keeps_the_frame():
 
 def test_card_inside_title_with_newline_is_two_lines():
     out = Card(title='first\nsecond', title_position='inside',
-               fields=[('k', 'v')]).render()
+               fields=[('k', 'v')], use_colors=False).render()
     assert len(_widths(out)) == 1
     assert any(line.strip('│ ') == 'first' for line in out.split('\n'))
     assert any(line.strip('│ ') == 'second' for line in out.split('\n'))
