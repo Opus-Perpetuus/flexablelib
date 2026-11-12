@@ -1380,3 +1380,24 @@ def test_frame_helper():
 def test_components_dir_listing():
     assert os.path.exists(os.path.join(os.path.dirname(C.__file__),
                                        'py.typed'))
+
+
+class TestStackWrap:
+    def test_wraps_by_min_width(self):
+        cards = [C.Stat('K{0}'.format(i), str(i), use_colors=False)
+                 for i in range(4)]
+        stack = C.Stack(cards, direction='horizontal', gap=1, min_width=20,
+                        use_colors=False)
+        wide = stack.render(width=90).split('\n')
+        assert all(k in wide[0] for k in ('K0', 'K1', 'K2', 'K3'))
+        mid = stack.render(width=50).split('\n')
+        rows = [l for l in mid if 'K' in l]
+        assert len(rows) == 2 and 'K0' in rows[0] and 'K1' in rows[0] \
+            and 'K2' in rows[1]
+        assert all(visible_width(l) == 50 for l in mid)
+        narrow = stack.render(width=24).split('\n')
+        assert len([l for l in narrow if 'K' in l]) == 4
+        # The last row keeps the same slot widths as the others.
+        three = C.Stack(cards[:3], direction='horizontal', min_width=20,
+                        use_colors=False).render(width=45).split('\n')
+        assert visible_width(three[-1]) == 45

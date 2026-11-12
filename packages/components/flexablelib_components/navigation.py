@@ -1052,15 +1052,19 @@ class Stack(_Themed):
     """
     Children one below the other (``direction='vertical'``) or side by side
     (``'horizontal'``, equal widths unless ``widths`` given), with ``gap``.
+    A horizontal stack with ``min_width`` wraps onto more rows when its
+    children would get narrower than that (four cards become 2 x 2, then a
+    column).
     """
 
     def __init__(self, children, direction='vertical', gap=0, widths=None,
-                 **kwargs):
+                 min_width=None, **kwargs):
         super(Stack, self).__init__(**kwargs)
         self.items = list(children)
         self.direction = direction
         self.gap = max(0, int(gap))
         self.widths = widths
+        self.min_width = min_width
 
     def children(self):
         return list(self.items)
@@ -1071,18 +1075,36 @@ class Stack(_Themed):
             return sum(widths) + self.gap * (len(widths) - 1)
         return max(widths)
 
+    def _row(self, items, slots, width, height):
+        if self.widths:
+            widths = list(self.widths)
+        else:
+            each = (width - self.gap * (slots - 1)) // slots
+            widths = [each] * slots
+            widths[-1] = width - self.gap * (slots - 1) - each * (slots - 1)
+        widths = widths[:len(items)]
+        blocks = [render_into(c, max(1, w), height)
+                  for c, w in zip(items, widths)]
+        return join_columns(blocks, widths, self.gap)
+
     def draw(self, width, height):
         if self.direction == 'horizontal':
-            n = len(self.items) or 1
-            if self.widths:
-                widths = list(self.widths)
-            else:
-                each = (width - self.gap * (n - 1)) // n
-                widths = [each] * n
-                widths[-1] = width - self.gap * (n - 1) - each * (n - 1)
-            blocks = [render_into(c, max(1, w), height)
-                      for c, w in zip(self.items, widths)]
-            return join_columns(blocks, widths, self.gap)
+            per_row = len(self.items) or 1
+            if self.min_width and not self.widths:
+                per_row = max(1, min(per_row, (width + self.gap) //
+                                     (int(self.min_width) + self.gap)))
+                # Balanced rows: 4 cards that fit 3 across become 2 x 2.
+                rows = -(-len(self.items) // per_row)
+                per_row = -(-len(self.items) // rows)
+            if per_row < len(self.items):
+                out = []
+                for start in range(0, len(self.items), per_row):
+                    if start:
+                        out.extend([''] * self.gap)
+                    out.extend(self._row(self.items[start:start + per_row],
+                                         per_row, width, None))
+                return out
+            return self._row(self.items, per_row, width, height)
         out = []
         for i, child in enumerate(self.items):
             if i and self.gap:

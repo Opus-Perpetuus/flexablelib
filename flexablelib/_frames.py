@@ -22,10 +22,16 @@ import os
 from .text_width import (
     measured_clusters as _clusters,
     tokenize as _tokenize,
+    truncate_to_width as _py_truncate,
+)
+# Measuring, stripping and padding go through flexablelib.fast, so the
+# "python" frame backend still uses the core package's own C measurement code
+# when the wheel ships it; only the per-line frame logic is Python then.
+from .fast import (
     pad_to_width as _pad,
     strip_ansi as _py_strip_ansi,
-    truncate_to_width as _py_truncate,
     visible_width as _py_visible_width,
+    widths_of as _fast_widths_of,
 )
 
 __all__ = ['ACCELERATED', 'BACKEND', 'use', 'available', 'visible_width',
@@ -44,7 +50,7 @@ _JUNCTIONS = (-1, 0, 0, 0, 1, 2, 3, 8, 1, 4, 5, 9, 1, 6, 7, 10)
 # Pure-Python reference implementations
 
 def _py_widths_of(texts):
-    return [_py_visible_width(t) for t in texts]
+    return _fast_widths_of(list(texts))
 
 
 def _py_fit_line(text, width, align='l'):
