@@ -42,7 +42,7 @@ ship binary wheels for CPython 3.8–3.14 on:
 | Linux aarch64 / arm64 (musl: Alpine) | `musllinux_1_2_aarch64` |
 | Windows x64 | `win_amd64` |
 | macOS Apple silicon | `macosx_11_0_arm64` |
-| macOS Intel | `macosx_10_9_x86_64` (`macosx_10_13` for the newest Pythons) |
+| macOS Intel | `macosx_10_9_x86_64` (10.13 for 3.12–3.13, 10.15 for 3.14) |
 
 Every wheel is built on a native machine of its architecture and tested
 there: the C code must load and give the same results as the pure Python
