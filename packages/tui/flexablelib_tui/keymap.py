@@ -32,10 +32,9 @@ DEFAULT_ACTIONS = {
     'focus_prev': ['shift+tab'],
     'activate': ['enter', 'space'],
     'cancel': ['escape'],
-    'quit': ['ctrl+q'],
+    'quit': ['ctrl+c'],
     'help': ['f1'],
     'read_screen': ['ctrl+r'],
-    'where_am_i': ['ctrl+w'],
 }
 
 

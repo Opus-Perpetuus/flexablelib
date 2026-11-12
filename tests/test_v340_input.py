@@ -349,7 +349,7 @@ class TestKeyMap:
         km = KeyMap()
         assert km.action_for('tab') == 'focus_next'
         assert km.action_for('shift+tab') == 'focus_prev'
-        assert km.matches(Key('ctrl+q'), 'quit')
+        assert km.matches(Key('ctrl+c'), 'quit')
         assert km.action_for('x') is None
         assert KeyMap(defaults=False).action_for('tab') is None
 
