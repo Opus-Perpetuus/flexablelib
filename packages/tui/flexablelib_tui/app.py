@@ -197,7 +197,8 @@ class App(object):
 
     def __init__(self, body=None, header=None, footer=None, bindings=None,
                  interval=None, on_tick=None, mouse=False, stream=None,
-                 terminal=None):
+                 terminal=None, use_colors=None):
+        self.use_colors = use_colors
         self.screen = Screen(body=body, header=header, footer=footer)
         self.layers = []
         self.focused = None
@@ -209,6 +210,7 @@ class App(object):
         self.stream = stream
         self.terminal = terminal
         self.frames = 0
+        self.clock = time.monotonic
         self.last_frame = ''
         self._dirty = True
         self._focus_stack = []
@@ -240,9 +242,14 @@ class App(object):
     def components(self):
         return [n for n in self.walk() if isinstance(n, Component)]
 
+    def _modal(self):
+        modal = [layer for layer in self.layers
+                 if getattr(layer, '_modal', True)]
+        return modal[-1] if modal else None
+
     def focusables(self):
         """Components that can take focus now, in screen order."""
-        root = self.layers[-1] if self.layers else self.screen
+        root = self._modal() or self.screen
         return [n for n in self.walk(root)
                 if isinstance(n, Component) and n.can_focus and n.on_screen]
 
@@ -280,30 +287,46 @@ class App(object):
 
     # -- dialogs ------------------------------------------------------------
 
-    def push(self, layer):
-        """Show ``layer`` over the screen; it keeps the focus until popped."""
-        self._focus_stack.append(self.focused)
+    def push(self, layer, position='center', modal=True):
+        """
+        Show ``layer`` over the screen. ``position`` is ``'center'``,
+        ``'top'``, ``'bottom'``, ``'top-right'``, ``'bottom-right'`` or an
+        ``(x, y)`` cell (negative counts from the right / bottom). A modal
+        layer keeps the focus until popped; ``modal=False`` floats over the
+        screen without taking keys (notifications, tooltips).
+        """
+        layer._position = position
+        layer._modal = bool(modal)
         self.layers.append(layer)
         for node in self.walk(layer):
             if isinstance(node, Component):
                 node.app = self
-        self.focus(None)
+        if modal:
+            self._focus_stack.append(self.focused)
+            self.focus(None)
         self._dirty = True
         return layer
 
     def pop(self, layer=None):
         """Close the top dialog (or ``layer``) and give the focus back."""
-        if not self.layers:
+        if layer is None:
+            layer = self._modal()
+        if layer is None or layer not in self.layers:
             return None
-        if layer is None or layer is self.layers[-1]:
-            removed = self.layers.pop()
-        else:
-            self.layers.remove(layer)
-            removed = layer
-        previous = self._focus_stack.pop() if self._focus_stack else None
-        self.focus(previous)
+        self.layers.remove(layer)
+        if getattr(layer, '_modal', True):
+            previous = self._focus_stack.pop() if self._focus_stack else None
+            self.focus(previous)
         self._dirty = True
-        return removed
+        return layer
+
+    def notify(self, message, kind='info', seconds=3.0):
+        """A short message in the top-right corner for ``seconds``."""
+        toast = _Toast(message, kind, self.clock() + seconds)
+        toast.use_colors = self.use_colors
+        toasts = [l for l in self.layers if isinstance(l, _Toast)]
+        self.push(toast, position=(-1, 1 + 3 * len(toasts)), modal=False)
+        return toast
 
     # -- drawing ------------------------------------------------------------
 
@@ -315,19 +338,43 @@ class App(object):
         _FRAME[0] += 1
         for node in self.walk():     # give every component its app
             pass
+        now = self.clock()
+        expired = [l for l in self.layers
+                   if isinstance(l, _Toast) and l.until <= now]
+        for layer in expired:
+            self.layers.remove(layer)
         lines = self.screen.render(width=width, height=height).split('\n')
+        rows = len(lines)
         for layer in self.layers:
             want = getattr(layer, 'natural_width', lambda: width - 4)()
             w = max(1, min(width - 2, want))
-            text = layer.render(width=w) if not hasattr(layer, 'height') or \
-                getattr(layer, 'height') is None else \
-                layer.render(width=w, height=min(height - 2, layer.height))
+            fixed = getattr(layer, 'height', None)
+            text = layer.render(width=w) if fixed is None else \
+                layer.render(width=w, height=min(rows - 2, fixed))
             top = text.split('\n') if text else []
-            top = top[:height]
-            x = max(0, (width - w) // 2)
-            y = max(0, (height - len(top)) // 2)
+            top = top[:rows]
+            x, y = self._place(getattr(layer, '_position', 'center'), w,
+                               len(top), width, rows)
             lines = overlay(lines, top, x, y, width)
         return lines
+
+    @staticmethod
+    def _place(position, w, h, width, rows):
+        if isinstance(position, (tuple, list)):
+            x, y = position
+            x = width - w + x + 1 if x < 0 else x
+            y = rows - h + y + 1 if y < 0 else y
+        elif position == 'top':
+            x, y = (width - w) // 2, 1
+        elif position == 'bottom':
+            x, y = (width - w) // 2, rows - h - 1
+        elif position == 'top-right':
+            x, y = width - w - 1, 1
+        elif position == 'bottom-right':
+            x, y = width - w - 1, rows - h - 1
+        else:
+            x, y = (width - w) // 2, (rows - h) // 2
+        return max(0, min(x, width - w)), max(0, min(y, rows - h))
 
     def render(self, width=None, height=None):
         width = render_width(width)
@@ -363,11 +410,10 @@ class App(object):
             if isinstance(node, Component) and node.handle_key(key):
                 return True
             node = getattr(node, 'parent', None)
-        if self.layers:
-            top = self.layers[-1]
-            if isinstance(top, Component) and top is not self.focused and \
-                    id(top) not in seen and top.handle_key(key):
-                return True
+        top = self._modal()
+        if isinstance(top, Component) and top is not self.focused and \
+                id(top) not in seen and top.handle_key(key):
+            return True
         action = self.bindings.get(str(key))
         if action is not None:
             result = action()
@@ -436,6 +482,9 @@ class App(object):
                     self.dispatch(key)
                     if not self.running:
                         break
+                if any(isinstance(l, _Toast) and l.until <= self.clock()
+                       for l in self.layers):
+                    self._dirty = True
                 if self.interval and time.monotonic() >= next_tick:
                     next_tick += self.interval
                     if self.on_tick is not None:
@@ -450,6 +499,33 @@ class App(object):
                         break
         self.live = live
         return self.result
+
+
+class _Toast(Component):
+    """A notification drawn by :meth:`App.notify`."""
+
+    COLORS = {'info': 'blue', 'success': 'green', 'warning': 'yellow',
+              'error': 'red'}
+    ICONS = {'info': 'ℹ', 'success': '✔', 'warning': '⚠', 'error': '✖'}
+
+    def __init__(self, message, kind, until):
+        super(_Toast, self).__init__()
+        self.message = str(message)
+        self.kind = kind
+        self.until = until
+
+    def natural_width(self):
+        return min(48, _fx.visible_width(self.message) + 6)
+
+    def draw(self, width, height):
+        color = self.COLORS.get(self.kind, 'blue')
+        inner = max(1, width - 2)
+        text = _fx.fit_line(self.ICONS.get(self.kind, '•') + ' ' +
+                            self.message, inner)
+        if not self._active():
+            return ['+' + '-' * inner + '+', '|' + text + '|',
+                    '+' + '-' * inner + '+']
+        return [self.paint(' ' + text + ' ', 'bold black on ' + color)]
 
 
 class ScrollView(Component):
