@@ -215,7 +215,7 @@ class Image(_Themed):
         name = self.name
         if url and ok:
             self.used_method = 'link'
-            icon = '->' if _a11y.settings.ascii else '🖼'
+            icon = '->' if _a11y.settings.ascii else '↗'
             text = '{0} {1}'.format(icon, name)
             hint = ' (Enter: abrir en el navegador)' if self.focusable else \
                 ' (abrir en el navegador)'
@@ -228,10 +228,9 @@ class Image(_Themed):
             return lines + self._focus_line(width)
         self.used_method = 'warning'
         symbol = _a11y.status_symbol('warning')
-        why = reason or 'no se puede mostrar'
+        why = reason or 'esta terminal no muestra imágenes'
         if url and not ok:
-            why += '; no hay navegador ni pantalla para abrirla ({0})'.format(
-                how)
+            why += ' y no hay navegador para abrirla ({0})'.format(how)
         elif not url:
             why += '; sin archivo ni URL que abrir'
         text = '{0} {1}: {2}'.format(symbol, name, why)

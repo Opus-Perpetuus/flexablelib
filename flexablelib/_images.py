@@ -959,23 +959,26 @@ def _py_quantize(data, width, height, colors, alpha_threshold):
     used = [k for k in range(32768) if count[k]]
     if not used:
         return b'\x00\x00\x00', bytes([255]) * n
+    def ranges_of(box):
+        return [_box_range(box, 10), _box_range(box, 5), _box_range(box, 0)]
+
     boxes = [used]
     totals = [sum(count[k] for k in used)]
+    spans = [ranges_of(used)]
     while len(boxes) < colors:
         best = -1
         best_range = best_count = -1
         for bi, box in enumerate(boxes):
             if len(box) < 2:
                 continue
-            rng = max(_box_range(box, 10), _box_range(box, 5),
-                      _box_range(box, 0))
+            rng = max(spans[bi])
             if rng > best_range or (rng == best_range and
                                     totals[bi] > best_count):
                 best, best_range, best_count = bi, rng, totals[bi]
         if best < 0:
             break
         box = boxes[best]
-        ranges = [_box_range(box, 10), _box_range(box, 5), _box_range(box, 0)]
+        ranges = spans[best]
         shift = (10, 5, 0)[ranges.index(max(ranges))]
         box = sorted(box, key=lambda k: (((k >> shift) & 31) << 15) | k)
         total = totals[best]
@@ -991,6 +994,7 @@ def _py_quantize(data, width, height, colors, alpha_threshold):
         lt = sum(count[k] for k in left)
         boxes[best:best + 1] = [left, right]
         totals[best:best + 1] = [lt, total - lt]
+        spans[best:best + 1] = [ranges_of(left), ranges_of(right)]
     palette = []
     for box, c in zip(boxes, totals):
         palette.append(tuple(

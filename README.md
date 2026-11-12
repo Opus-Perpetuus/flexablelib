@@ -21,7 +21,7 @@
 
 **flexablelib** turns rows and columns into readable tables for terminals, logs,
 reports and docs. It has **no runtime dependencies**, ships **prebuilt wheels
-with an optional C speed-up**, and is covered by **4,400+ tests** on Python
+with an optional C speed-up**, and is covered by **4,500+ tests** on Python
 3.8 – 3.14 (Linux, Windows, macOS).
 
 Since 3.3.0 the same library builds **complete interactive terminal
@@ -131,6 +131,33 @@ Since 3.4.0: [docs/INPUT.md](https://github.com/Opus-Perpetuus/flexablelib/blob/
 <tr>
 <td><b>One name per key</b> — xterm, rxvt, Linux console, kitty, modifyOtherKeys, Windows<br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v34/10_protocolos.png" alt="Key names across protocols" width="420"></td>
 <td><b>C acceleration</b> — ASCII fallback and click zones<br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v34/09_benchmark.png" alt="C versus Python timings" width="420"></td>
+</tr>
+</table>
+
+### Pictures in the terminal
+
+Since 3.5.0: [docs/IMAGES.md](https://github.com/Opus-Perpetuus/flexablelib/blob/main/docs/IMAGES.md) — kitty, iTerm2, sixel, Unicode blocks, ASCII, then a link to the browser, then a warning. Real terminals under Xvfb.
+
+<table>
+<tr>
+<td width="50%"><b>kitty graphics protocol</b> — detected, Unicode placeholders<br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v35/01_kitty.png" alt="A picture in kitty" width="420"></td>
+<td width="50%"><b>iTerm2 inline images</b> — WezTerm, iTerm2, VS Code, Konsole<br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v35/02_iterm2_wezterm.png" alt="iTerm2 images in WezTerm" width="420"></td>
+</tr>
+<tr>
+<td><b>sixel</b> — xterm, foot, mlterm, Windows Terminal<br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v35/03_sixel_xterm_foot.png" alt="sixel in xterm and foot" width="420"></td>
+<td><b>Unicode blocks</b> — half blocks, quadrants, sextants<br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v35/04_bloques_unicode.png" alt="Unicode block pictures" width="420"></td>
+</tr>
+<tr>
+<td><b>Braille and ASCII</b> — mono with NO_COLOR, ASCII without Unicode<br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v35/05_braille_ascii.png" alt="Braille and ASCII pictures" width="420"></td>
+<td><b>Inside Grid, Card and App</b> — the frame diff keeps working<br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v35/08_card_grid_app.png" alt="Pictures inside a dashboard" width="420"></td>
+</tr>
+<tr>
+<td><b>Link to the browser</b> — OSC 8, Enter or click opens it<br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v35/06_enlace_osc8.png" alt="Link fallback" width="420"></td>
+<td><b>No browser, no display</b> — a warning, nothing opened<br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v35/07_aviso_sin_navegador.png" alt="Warning when no browser is available" width="420"></td>
+</tr>
+<tr>
+<td><b>Redraws in kitty, xterm and WezTerm</b> — ImageViewer in an App<br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v35/09_visor_redibujo.png" alt="ImageViewer switching pictures" width="420"></td>
+<td><b>C acceleration</b> — resize, quantize, sixel, blocks<br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v35/10_benchmark.png" alt="C versus Python picture timings" width="420"></td>
 </tr>
 </table>
 
