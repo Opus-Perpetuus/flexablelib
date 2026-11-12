@@ -72,6 +72,32 @@ border=..., info=..., success=..., warning=..., error=..., field=...)` with
 flexablelib colour specs, and `use_colors`. `App(use_colors=...)` applies to
 everything on screen that did not choose for itself.
 
+Presets: `Theme.preset('high-contrast' | 'high-contrast-light' |
+'deuteranopia' | 'protanopia' | 'tritanopia' | 'monochrome')`, or
+`App(theme='high-contrast')` / `FLEXABLELIB_THEME=high-contrast` for every
+component that did not choose one. `theme.contrast()` gives the WCAG
+contrast ratio of each colour role. See [ACCESSIBILITY.md](ACCESSIBILITY.md).
+
+## Keyboard, mouse and accessibility (3.4.0)
+
+Every component works with the keyboard alone and, with `App(mouse=True)`,
+with the mouse: clicks press, toggle, pick and expand; the wheel scrolls
+tables and lists; drags move `Split` dividers. Without colour (or with
+`focus_marker=True`) focus and selection show text markers. Every
+component has a screen-reader `role`, label, value and states, read in
+`App(screen_reader=True)` mode. Spinners and skeletons stand still with
+`reduced_motion`; status badges, alerts and timelines carry a symbol and a
+word, never colour alone. Details: [INPUT.md](INPUT.md),
+[ACCESSIBILITY.md](ACCESSIBILITY.md).
+
+Common arguments on every component: `a11y_label` (accessible name when
+there is no visible label), `description`, `role`, `tab_index` (`-1`:
+outside Tab, still clickable) and `disabled`.
+
+`DataTable` prints folios, IDs, codes and years without thousands
+separators (`'type': 'id'` / `'number'` per column, `id_columns`,
+`id_names`); see [FOLIOS.md](FOLIOS.md).
+
 ## All components
 
 ### base
@@ -211,6 +237,8 @@ The `flexablelib-tui` package adds `ScrollView`, `ProgressBar`, `Sparkline`,
 
 ## Gallery
 
+![Mouse](https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v34/02_raton.png)
+![Focus without colour](https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v34/03_foco_visible.png)
 ![Dates](https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v33/09_fechas.png)
 ![Display](https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v33/10_visualizacion.png)
 ![Navigation](https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v33/11_navegacion.png)

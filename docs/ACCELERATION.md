@@ -75,3 +75,25 @@ cd packages/speedups && python setup.py build_ext --inplace
 
 Without a compiler the install still succeeds without the C module and
 flexablelib uses its Python frame code.
+
+## 3.4.0: ASCII fallback and click zones
+
+Two more frame functions moved to C in `flexablelib-speedups`, with the
+same Python fallback and the same parity tests (random strings, both
+backends, identical output):
+
+- `ascii_fold` redraws a finished frame with ASCII stand-ins (borders,
+  arrows, status symbols) for `ascii=True` and terminals without Unicode;
+- `extract_marks` removes the invisible component marks from a frame and
+  returns, for each line, which component drew which columns: the map the
+  `App` uses to send a click or the wheel to the right component.
+
+Per call on a 200×60 frame of `examples/admin.py` (best of 5, CPython 3.13,
+x86_64):
+
+| Function | Python | C | Speed-up |
+| --- | ---: | ---: | ---: |
+| `ascii_fold` | 0.594 ms | 0.074 ms | 8.1× |
+| `extract_marks` | 0.159 ms | 0.085 ms | 1.9× |
+
+![Benchmark](https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v34/09_benchmark.png)
