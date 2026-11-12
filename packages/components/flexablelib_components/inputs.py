@@ -297,8 +297,8 @@ class PasswordInput(TextInput):
         if self.revealed:
             return self.text
         n = len(self.text)
-        return '' if not n else '{0} carácter{1}'.format(
-            n, 'es' if n != 1 else '')
+        return '' if not n else '{0} {1}'.format(
+            n, 'carácter' if n == 1 else 'caracteres')
 
 
 class NumberInput(TextInput):

@@ -29,7 +29,7 @@ class Theme(object):
     """
 
     def __init__(self, accent='cyan', muted='bright_black', text=None,
-                 selection='black on cyan', border='bright_black',
+                 selection='bold black on cyan', border='bright_black',
                  info='blue', success='green', warning='yellow',
                  error='red', title='bold', field='on #262626',
                  background='#000000', foreground='#e5e5e5', marker=False,
@@ -97,36 +97,36 @@ THEMES = {
     'default': {},
     'high-contrast': dict(
         accent='#ffff00', muted='#d0d0d0', text='#ffffff',
-        selection='black on #ffff00', border='#ffffff', info='#00ffff',
+        selection='bold black on #ffff00', border='#ffffff', info='#00ffff',
         success='#00ff00', warning='#ffff00', error='#ff6060',
         title='bold #ffffff', field='#ffffff on #1c1c1c',
         background='#000000', foreground='#ffffff', marker=True),
     'high-contrast-light': dict(
         accent='#0000c0', muted='#404040', text='#000000',
-        selection='#ffffff on #0000c0', border='#000000', info='#00008b',
+        selection='bold #ffffff on #0000c0', border='#000000', info='#00008b',
         success='#005a00', warning='#6b4000', error='#b00000',
         title='bold #000000', field='#000000 on #ececec',
         background='#ffffff', foreground='#000000', marker=True),
     'deuteranopia': dict(
         accent='#56b4e9', muted='#c0c0c0', text='#ffffff',
-        selection='black on #56b4e9', border='#a0a0a0', info='#ffffff',
+        selection='bold black on #56b4e9', border='#a0a0a0', info='#ffffff',
         success='#56b4e9', warning='#ffb000', error='#ff6e6e',
         title='bold #ffffff', field='#ffffff on #1c1c1c',
         background='#000000', foreground='#ffffff', marker=True),
     'protanopia': dict(
         accent='#4da6ff', muted='#c0c0c0', text='#ffffff',
-        selection='black on #4da6ff', border='#a0a0a0', info='#ffffff',
+        selection='bold black on #4da6ff', border='#a0a0a0', info='#ffffff',
         success='#4da6ff', warning='#f0e442', error='#ff6e6e',
         title='bold #ffffff', field='#ffffff on #1c1c1c',
         background='#000000', foreground='#ffffff', marker=True),
     'tritanopia': dict(
         accent='#00e0ff', muted='#c0c0c0', text='#ffffff',
-        selection='black on #00e0ff', border='#a0a0a0', info='#a0a0ff',
+        selection='bold black on #00e0ff', border='#a0a0a0', info='#a0a0ff',
         success='#00e0ff', warning='#f0e442', error='#ff6e6e',
         title='bold #ffffff', field='#ffffff on #1c1c1c',
         background='#000000', foreground='#ffffff', marker=True),
     'monochrome': dict(
-        accent='bold', muted='dim', text=None, selection='reverse',
+        accent='bold', muted='dim', text=None, selection='bold reverse',
         border=None, info='bold', success='bold', warning='bold underline',
         error='bold underline', title='bold', field='underline',
         background='#000000', foreground='#e5e5e5', marker=True),
@@ -145,12 +145,49 @@ _BOXES = {
 }
 
 
+_PRESETS = {}
+
+
+def active_theme():
+    """The theme for components that did not choose one: the accessibility
+    setting ``theme`` (``App(theme=...)`` or ``FLEXABLELIB_THEME``) or
+    :data:`DEFAULT_THEME`."""
+    from flexablelib_tui import accessibility as _a11y
+    choice = _a11y.settings.theme
+    if not choice:
+        return DEFAULT_THEME
+    if isinstance(choice, Theme):
+        return choice
+    theme = _PRESETS.get(choice)
+    if theme is None:
+        try:
+            theme = Theme.preset(choice)
+        except KeyError:
+            theme = DEFAULT_THEME
+        _PRESETS[choice] = theme
+    return theme
+
+
 class _Themed(Component):
     """A component with a theme and cached colour specs."""
 
     def __init__(self, theme=None, **kwargs):
         super(_Themed, self).__init__(**kwargs)
-        self.theme = theme or DEFAULT_THEME
+        self.theme = theme
+
+    @property
+    def theme(self):
+        """The component's own theme, else the one the app (``App(theme=)``)
+        or ``FLEXABLELIB_THEME`` sets, else :data:`DEFAULT_THEME`."""
+        if self._theme is not None:
+            return self._theme
+        return active_theme()
+
+    @theme.setter
+    def theme(self, value):
+        if isinstance(value, str):
+            value = Theme.preset(value)
+        self._theme = value
 
     def _marked(self):
         return Component._marked(self) or getattr(self.theme, 'marker', False)

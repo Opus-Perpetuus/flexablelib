@@ -166,6 +166,7 @@ class Table(object):
         self.__float_format = None
         self.__int_format = None
         self.__id_columns = None
+        self.__id_names = None
         self.__id_cache = {}
         self.__custom_format = None
         # Per-column width floors and ceilings (table.max_width is the
@@ -788,6 +789,20 @@ class Table(object):
         return self.__id_columns
 
     @property
+    def id_names(self):
+        """
+        The words that make a column an id column when :attr:`id_columns`
+        is ``'auto'``: ``None`` uses :data:`flexablelib.ID_COLUMN_NAMES`;
+        a list replaces it (``['folio', 'pedido']``).
+        """
+        return self.__id_names
+
+    @id_names.setter
+    def id_names(self, value):
+        self.__id_names = None if value is None else tuple(value)
+        self.__id_cache = {}
+
+    @property
     def custom_format(self):
         """
         Per-column or global formatter applied after type-specific ones.
@@ -1286,7 +1301,7 @@ class Table(object):
         if cached is None:
             if setting == 'auto':
                 from .identifiers import is_id_column
-                cached = is_id_column(header)
+                cached = is_id_column(header, self.__id_names)
             else:
                 cached = header in setting or (
                     column_i is not None and column_i in setting)
@@ -5693,6 +5708,7 @@ class Table(object):
         'hide_columns', 'index_title', 'roman_index', 'number_columns',
         'strip_cells', 'hrules', 'vrules', 'index_start', 'index_step',
         'leading_zeros', 'float_format', 'int_format', 'id_columns',
+        'id_names',
         'custom_format', 'column_min_width', 'column_max_width', 'column_colors',
         'expand_to_window', 'justify', 'suppress_empty', 'show_margin',
         'show_empty_rows', 'show_empty_columns', 'parse_str_numbers',
