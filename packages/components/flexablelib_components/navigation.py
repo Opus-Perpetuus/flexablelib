@@ -100,7 +100,7 @@ class Tabs(_Themed):
                     text = ('▸{0}◂' if self._active() else '[{0}]').format(
                         title)
                 text = self.paint(text, spec) if self._active() else \
-                    '[' + title + ']'
+                    ('[>{0}<]' if self.focused else '[{0}]').format(title)
             else:
                 text = self.paint(text, self.theme.muted)
             parts.append(text)
@@ -247,10 +247,12 @@ class Menu(_Themed):
                 (' ' + shortcut if shortcut else '') + ' '
             if item.get('disabled'):
                 out.append(self.paint(text, 'dim'))
-            elif i == self.index and (self.focused or not self._active()):
+            elif i == self.index and self.focused:
                 out.append(self.mark_current(text, self.theme.selection))
+            elif i == self.index and not self._active():
+                out.append(text)
             elif i == self.index:
-                out.append(self.paint(text, 'bold'))
+                out.append(self.paint(text, 'underline'))
             else:
                 if shortcut:
                     text = text[:-len(shortcut) - 1] + self.paint(
@@ -300,7 +302,7 @@ class MenuButton(Button):
 
     def __init__(self, label, items, **kwargs):
         super(MenuButton, self).__init__(label + ' ▾', **kwargs)
-        self.menu = ContextMenu(items, theme=self.theme,
+        self.menu = ContextMenu(items, theme=self._theme,
                                 use_colors=kwargs.get('use_colors'))
 
     def press(self):
@@ -381,12 +383,15 @@ class Pagination(_Themed):
             if n is None:
                 parts.append(self.paint('…', self.theme.muted))
             elif n == self.page and self._marked() and self._active():
-                parts.append(self.paint('[{0}]'.format(n), self.theme.selection
+                parts.append(self.paint('[{0}]'.format(n), 'bold underline ' +
+                                        self.theme.selection
                                         if self.focused else 'reverse'))
             elif n == self.page:
-                spec = self.theme.selection if self.focused else 'reverse'
+                spec = 'bold underline ' + self.theme.selection \
+                    if self.focused else 'reverse'
                 parts.append(self.paint(' {0} '.format(n), spec) if
-                             self._active() else '[{0}]'.format(n))
+                             self._active() else
+                             ('>{0}<' if self.focused else '[{0}]').format(n))
             else:
                 parts.append(str(n))
         parts.append(self.paint('›', self.theme.muted if
@@ -545,7 +550,7 @@ class Toolbar(_Themed):
     def __init__(self, buttons, gap=1, align='l', **kwargs):
         super(Toolbar, self).__init__(**kwargs)
         self.buttons = [b if isinstance(b, Button) else
-                        Button(b[0], b[1], theme=self.theme,
+                        Button(b[0], b[1], theme=self._theme,
                                use_colors=kwargs.get('use_colors'))
                         for b in buttons]
         self.gap = gap
@@ -607,10 +612,10 @@ class Wizard(_Themed):
         self.error = None
         self.finished = False
         colors = kwargs.get('use_colors')
-        self.back = Button('‹ Atrás', self.previous, theme=self.theme,
+        self.back = Button('‹ Atrás', self.previous, theme=self._theme,
                            use_colors=colors)
         self.next = Button('Siguiente ›', self.advance, kind='primary',
-                           theme=self.theme, use_colors=colors)
+                           theme=self._theme, use_colors=colors)
 
     def children(self):
         content = self.steps[self.index][1] if self.steps else None
@@ -653,7 +658,7 @@ class Wizard(_Themed):
     def draw(self, width, height):
         from .display import Stepper
         stepper = Stepper([t for t, _ in self.steps], self.index,
-                          theme=self.theme, use_colors=self.use_colors)
+                          theme=self._theme, use_colors=self.use_colors)
         out = render_into(stepper, width) + ['']
         self.back.disabled = self.index == 0
         last = self.index + 1 == len(self.steps)
@@ -756,6 +761,8 @@ class Accordion(_Themed):
                     head = self.mark_current(_fx.fit_line(
                         ' ' + arrow + ' ' + str(title), width),
                         self.theme.selection)
+            elif i == self.index:
+                head = self.paint(head, 'bold underline')
             else:
                 head = self.paint(head, 'bold')
             out.append(head)
@@ -816,9 +823,12 @@ class Carousel(_Themed):
                          self.theme.muted) + ' ' + dots + ' ' + \
             self.paint('▶', self.theme.accent if self.focused else
                        self.theme.muted)
+        if self.focused:
+            nav = self.paint('[', 'bold') + nav + self.paint(']', 'bold')
         if room is not None:
             body += [''] * (room - len(body))
-        left = (width - _fx.visible_width(_fx.strip_ansi(nav))) // 2
+        left = (width - _fx.visible_width(_fx.strip_ansi(nav))) // 2 + \
+            (1 if self.focused else 0)
         segments = ['◀'] + dots.split(' ') + ['▶']
         steps = [-1] + [i - self.index for i in range(len(self.slides))] + [1]
         self.hot_parts(len(body), segments, 1, max(0, left),
@@ -1109,7 +1119,8 @@ class CommandPalette(_Themed):
         inner = max(1, width - 4)
         query = self.query or self.paint(self.placeholder, self.theme.muted)
         lines = [self.paint('› ', self.theme.accent) + query +
-                 (self.cursor(' ') if self.focused else ''),
+                 ((self.cursor(' ') if self._active() else '_')
+                  if self.focused else ''),
                  self.paint('─' * inner, self.theme.border)]
         items = self.matches()
         for i, command in enumerate(items[:self.max_visible]):
@@ -1349,9 +1360,12 @@ class SortControl(_Themed):
             if f == self.field:
                 arrow = '↓' if self.descending else '↑'
                 text = '{0} {1}'.format(f, arrow)
-                parts.append(self.paint(' ' + text + ' ', self.theme.selection
+                parts.append(self.paint(' ' + text + ' ', 'bold underline ' +
+                                        self.theme.selection
                                         if self.focused else 'reverse') if
-                             self._active() else '[' + text + ']')
+                             self._active() else
+                             ('>{0}<' if self.focused else '[{0}]').format(
+                                 text))
             else:
                 parts.append(str(f))
         self.hot_parts(0, parts, 1, 0, [None] + [

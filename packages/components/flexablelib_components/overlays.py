@@ -45,7 +45,7 @@ class Modal(_Themed):
             if not isinstance(b, Button):
                 label, action = b[0], b[1] if len(b) > 1 else None
                 kind = b[2] if len(b) > 2 else 'default'
-                b = Button(label, None, kind=kind, theme=self.theme,
+                b = Button(label, None, kind=kind, theme=self._theme,
                            use_colors=colors)
                 b.on_press = self._wrap(action)
             self.buttons.append(b)

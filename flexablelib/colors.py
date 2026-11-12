@@ -150,8 +150,13 @@ def parse_spec(spec: Union[str, int, None]) -> str:
             parameters.extend(_colour_codes(token, background=False))
 
     if background_part:
+        # Attributes may also follow the background ('black on cyan bold'),
+        # which is what composing specs ('<selection> underline') gives.
         for token in background_part.split():
-            parameters.extend(_colour_codes(token, background=True))
+            if token in ATTRIBUTES:
+                parameters.append(ATTRIBUTES[token])
+            else:
+                parameters.extend(_colour_codes(token, background=True))
 
     if not parameters:
         return ''

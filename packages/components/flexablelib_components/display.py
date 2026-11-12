@@ -202,12 +202,13 @@ class Link(_Themed):
 
     def inline(self):
         if not self._active():
-            return '{0} <{1}>'.format(self.text, self.url) \
+            text = '{0} <{1}>'.format(self.text, self.url) \
                 if self.text != self.url else self.url
+            return '>' + text if self.focused else text
         spec = 'underline ' + (self.theme.accent if self.focused else
                                self.theme.info)
-        if self.focused and self._marked():
-            spec = 'bold reverse ' + spec
+        if self.focused:
+            spec = ('bold reverse ' if self._marked() else 'bold ') + spec
         text = '\x1b]8;;{0}\x1b\\{1}\x1b]8;;\x1b\\'.format(
             self.url, self.paint(self.text, spec))
         if self.show_url:
@@ -229,6 +230,9 @@ class Breadcrumbs(_Themed):
     long trails collapse in the middle to fit."""
 
     role = 'navigation'
+
+    def a11y_name(self):
+        return self.a11y_label or 'Ruta'
 
     def a11y_value(self):
         if not self.items:

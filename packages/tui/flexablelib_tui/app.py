@@ -297,7 +297,9 @@ class App(object):
     ``'stderr'``, a path, a stream or a callable); ``reduced_motion``,
     ``ascii`` and ``focus_marker`` override the environment;
     ``min_size=(columns, lines)`` shows a message instead of a squeezed
-    screen; ``title`` names the application for screen readers.
+    screen; ``title`` names the application for screen readers;
+    ``theme`` (a name such as ``'high-contrast'`` or ``'deuteranopia'``, or
+    a ``Theme``) applies to every component that did not choose one.
     """
 
     def __init__(self, body=None, header=None, footer=None, bindings=None,
@@ -305,7 +307,7 @@ class App(object):
                  terminal=None, use_colors=None, keymap=None,
                  screen_reader=None, announce=None, reduced_motion=None,
                  ascii=None, focus_marker=None, min_size=None, title=None,
-                 lang=None):
+                 lang=None, theme=None):
         self.use_colors = use_colors
         self.screen = Screen(body=body, header=header, footer=footer)
         self.layers = []
@@ -328,7 +330,8 @@ class App(object):
                                 ('reduced_motion', reduced_motion),
                                 ('ascii', ascii),
                                 ('focus_marker', focus_marker),
-                                ('lang', lang)) if v is not None)
+                                ('lang', lang), ('theme', theme))
+            if v is not None)
         self.announcer = _a11y.Announcer(announce)
         self.hovered = None
         self._dirty = True

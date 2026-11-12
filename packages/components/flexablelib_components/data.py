@@ -432,7 +432,7 @@ class DataTable(_Themed):
                 line = self.mark_current(_fx.strip_ansi(line),
                                       self.theme.selection)
             elif here:
-                line = self.paint(line, 'bold')
+                line = self.paint(line, 'underline')
             elif self.zebra and n % 2 and self._active():
                 line = self.paint(line, 'on #1c1c1c')
             out.append(line)
@@ -614,7 +614,7 @@ class EditableTable(DataTable):
             value = self._get(self.current, self.columns[self.cursor_col],
                               self.cursor_col)
             self.editor = TextInput(value='' if value is None else str(value),
-                                    theme=self.theme,
+                                    theme=self._theme,
                                     use_colors=self.use_colors)
             self.editor.focused = True
             self.refresh()
@@ -762,6 +762,8 @@ class CatalogGrid(_Themed):
                 self.paint(' ' + str(badge) + ' ', 'black on ' +
                            self.theme.warning) if self._active() else \
                 head + ' [' + str(badge) + ']'
+        if selected and self._marked():
+            head = ('▸ ' if self._active() else '> ') + head
         lines.append(head)
         if item.get('subtitle'):
             lines.append(self.paint(_fx.truncate(str(item['subtitle']), inner,
@@ -778,8 +780,7 @@ class CatalogGrid(_Themed):
         lines = lines[:rows] + [''] * (rows - len(lines))
         color = self.theme.accent if selected else self.theme.border
         return frame([' ' + l for l in lines], width, None, color,
-                     self.paint, style='heavy' if selected and
-                     (not self._active() or self._marked()) else 'rounded')
+                     self.paint, style='heavy' if selected else 'rounded')
 
     def draw(self, width, height):
         cols = max(1, (width + 1) // (self.min_width + 1))
@@ -881,10 +882,10 @@ class Form(_Themed):
         self.submitted = None
         colors = kwargs.get('use_colors')
         self.submit_button = Button(submit_label, self.submit, kind='primary',
-                                    shortcut=None, theme=self.theme,
+                                    shortcut=None, theme=self._theme,
                                     use_colors=colors)
         self.cancel_button = Button(cancel_label, self.cancel,
-                                    theme=self.theme, use_colors=colors) \
+                                    theme=self._theme, use_colors=colors) \
             if on_cancel is not None or cancel_label else None
         for field in self.fields():
             if isinstance(field, TextInput) and field.on_submit is None:
@@ -953,7 +954,7 @@ class Form(_Themed):
             out.append(self.paint(self.title, 'bold ' + self.theme.accent))
             out.append('')
         if self.summary and self.errors:
-            out.extend(ValidationSummary(self.errors, theme=self.theme,
+            out.extend(ValidationSummary(self.errors, theme=self._theme,
                                          use_colors=self.use_colors)
                        .render(width=width).split('\n'))
         pending = []
@@ -1097,10 +1098,10 @@ class FilePreview(_Themed):
         ext = os.path.splitext(name)[1].lower()
         if ext in ('.md', '.markdown'):
             from .display import MarkdownView
-            body = MarkdownView('\n'.join(lines), theme=self.theme,
+            body = MarkdownView('\n'.join(lines), theme=self._theme,
                                 use_colors=self.use_colors)
         else:
             body = Code('\n'.join(lines), self.LANGUAGES.get(ext),
-                        theme=self.theme, use_colors=self.use_colors)
+                        theme=self._theme, use_colors=self.use_colors)
         out.extend(body.render(width=width).split('\n'))
         return out

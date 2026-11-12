@@ -22,6 +22,9 @@ reader:
                                                             text markers in
                                                             colour too
   ``lang``                  ``FLEXABLELIB_LANG=en``          role names
+  ``theme``                 ``FLEXABLELIB_THEME=name``       component theme
+                                                            (e.g.
+                                                            ``high-contrast``)
   ========================  ==============================  ===============
 
   ``FLEXABLELIB_A11Y=1`` turns on ``focus_marker`` and ``reduced_motion``.
@@ -65,10 +68,12 @@ class Settings(object):
     """Accessibility switches (see the module docstring)."""
 
     FIELDS = ('screen_reader', 'reduced_motion', 'ascii', 'focus_marker',
-              'lang')
+              'lang', 'theme')
+    _AS_IS = ('lang', 'theme')
 
     def __init__(self, screen_reader=False, reduced_motion=False, ascii=False,
-                 focus_marker=False, lang='es'):
+                 focus_marker=False, lang='es', theme=None):
+        self.theme = theme
         self.screen_reader = bool(screen_reader)
         self.reduced_motion = bool(reduced_motion)
         self.ascii = bool(ascii)
@@ -85,7 +90,8 @@ class Settings(object):
             'ascii': _flag(env, 'FLEXABLELIB_ASCII'),
             'focus_marker': _flag(env, 'FLEXABLELIB_FOCUS_MARKER'),
         }
-        out = cls(lang=(env.get('FLEXABLELIB_LANG') or 'es')[:2].lower())
+        out = cls(lang=(env.get('FLEXABLELIB_LANG') or 'es')[:2].lower(),
+                  theme=env.get('FLEXABLELIB_THEME') or None)
         for name, value in values.items():
             if value is None:
                 value = a11y and name in ('reduced_motion', 'focus_marker')
@@ -100,7 +106,8 @@ class Settings(object):
             if name not in self.FIELDS:
                 raise TypeError('unknown accessibility setting ' + name)
             if value is not None:
-                setattr(self, name, value if name == 'lang' else bool(value))
+                setattr(self, name, value if name in self._AS_IS
+                        else bool(value))
 
     def __repr__(self):
         return 'Settings({0})'.format(', '.join(
@@ -119,7 +126,8 @@ def configure(**values):
     try:
         yield settings
     finally:
-        settings.update(**saved)
+        for name, value in saved.items():
+            setattr(settings, name, value)
 
 
 # -- descriptions -------------------------------------------------------------
@@ -484,19 +492,21 @@ class AuditIssue(object):
             type(self.component).__name__, self.check, self.message)
 
 
-_COLOR_PARAMS = set(range(30, 38)) | set(range(40, 48)) | \
-    set(range(90, 98)) | set(range(100, 108)) | {39, 49}
+_OFF = {21: (1,), 22: (1, 2), 23: (3,), 24: (4,), 25: (5, 6), 27: (7,),
+        28: (8,), 29: (9,)}
 
 
 def plain_style_signature(text):
     """``text`` with colour codes removed but bold / reverse / underline
-    kept: what someone who cannot tell colours apart still sees."""
+    kept: what someone who cannot tell colours apart still sees. Only
+    changes of those attributes are written, so a coloured span that ends
+    with a reset looks the same as plain text."""
     import re
-    out = []
+    state = [frozenset()]
 
     def keep(match):
-        params = [p for p in match.group(1).split(';')]
-        kept = []
+        attrs = set(state[0])
+        params = match.group(1).split(';')
         k = 0
         while k < len(params):
             p = params[k]
@@ -504,17 +514,20 @@ def plain_style_signature(text):
                 k += 3 if k + 1 < len(params) and params[k + 1] == '5' \
                     else 5
                 continue
-            if p.isdigit() and int(p) in _COLOR_PARAMS:
-                k += 1
-                continue
-            if p and p != '0':
-                kept.append(p)
-            elif p == '0' or p == '':
-                kept.append('0')
+            n = int(p) if p.isdigit() else 0
+            if n == 0:
+                attrs.clear()
+            elif n in _OFF:
+                attrs.difference_update(_OFF[n])
+            elif 1 <= n <= 9:
+                attrs.add(n)
             k += 1
-        return '\x1b[' + ';'.join(kept) + 'm' if kept else ''
-    out.append(re.sub(r'\x1b\[([0-9;]*)m', keep, text))
-    return ''.join(out)
+        attrs = frozenset(attrs)
+        if attrs == state[0]:
+            return ''
+        state[0] = attrs
+        return '\x1b[' + ';'.join(str(a) for a in sorted(attrs)) + 'm'
+    return re.sub(r'\x1b\[([0-9;]*)m', keep, text)
 
 
 def audit(components, width=40, check_focus=True):
