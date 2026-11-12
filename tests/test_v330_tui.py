@@ -44,7 +44,7 @@ class TestKeyParser:
         ('\x1b[1;2A', ['shift+up']), ('\x1b[1;3D', ['alt+left']),
         ('\x1b[1;6B', ['ctrl+shift+down']), ('\x1b[3;5~', ['ctrl+delete']),
         ('\x1bx', ['alt+x']), ('\x1b\x01', ['ctrl+alt+a']),
-        ('\x1b\x1b[A', ['escape', 'up']), ('\x1b[I', ['focusin']),
+        ('\x1b\x1b[A', ['alt+up']), ('\x1b[I', ['focusin']),
         ('\x1b[O', ['focusout']), ('\x1b[99~', []), ('\x1b[q', []),
         ('\x1bOz', []), ('\x1b[1;xA', ['A']),
     ])
@@ -527,7 +527,7 @@ class TestScrollView:
         assert sv.on_key(Key('x')) is False
         lines = sv.render(width=10).split('\n')
         assert len(lines) == 5
-        assert lines[0].endswith('┃')
+        assert lines[0].endswith('█')       # focused, no colour: solid thumb
 
     def test_follow_and_list_and_renderable(self):
         sv = ScrollView(['a', 'b', 'c'], follow=True, height=2)
@@ -620,7 +620,7 @@ def test_run_in_real_pty(tmp_path):
     import struct
     import termios
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 12, 40, 0, 0))
-    env = dict(os.environ, PYTHONPATH=os.pathsep.join(
+    env = dict(os.environ, TERM='xterm-256color', PYTHONPATH=os.pathsep.join(
         [root, os.path.join(root, 'packages', 'tui'),
          os.path.join(root, 'packages', 'speedups')]))
     proc = subprocess.Popen([sys.executable, str(script)], stdin=slave,

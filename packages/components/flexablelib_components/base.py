@@ -7,8 +7,8 @@ from flexablelib import _frames as _fx
 from flexablelib.colors import RESET, parse_spec
 from flexablelib_tui import Component
 
-__all__ = ['Theme', 'DEFAULT_THEME', 'Input', 'frame', 'join_columns',
-           'Box', 'Button']
+__all__ = ['Theme', 'DEFAULT_THEME', 'THEMES', 'Input', 'frame',
+           'join_columns', 'Box', 'Button']
 
 
 class Theme(object):
@@ -19,12 +19,25 @@ class Theme(object):
     ``selection`` the highlighted row of a list or table, and ``info`` /
     ``success`` / ``warning`` / ``error`` the message kinds, ``field`` the
     background of text fields.
+
+    ``background`` / ``foreground`` are the terminal colours the theme is
+    meant for (used by contrast checks), ``marker=True`` shows focus and
+    selection with text markers in colour too. Ready-made themes:
+    ``Theme.preset(name)`` with ``'default'``, ``'high-contrast'``,
+    ``'high-contrast-light'``, ``'deuteranopia'``, ``'protanopia'``,
+    ``'tritanopia'`` and ``'monochrome'`` (see :data:`THEMES`).
     """
 
     def __init__(self, accent='cyan', muted='bright_black', text=None,
-                 selection='black on cyan', border='bright_black',
+                 selection='bold black on cyan', border='bright_black',
                  info='blue', success='green', warning='yellow',
-                 error='red', title='bold', field='on #262626'):
+                 error='red', title='bold', field='on #262626',
+                 background='#000000', foreground='#e5e5e5', marker=False,
+                 name='custom'):
+        self.name = name
+        self.background = background
+        self.foreground = foreground
+        self.marker = bool(marker)
         self.field = field
         self.accent = accent
         self.muted = muted
@@ -41,8 +54,85 @@ class Theme(object):
         """The colour for a message kind ('info', 'success', ...)."""
         return getattr(self, name, None) or self.info
 
+    ROLES = ('accent', 'muted', 'text', 'selection', 'border', 'info',
+             'success', 'warning', 'error', 'title', 'field')
 
-DEFAULT_THEME = Theme()
+    @classmethod
+    def preset(cls, name):
+        """A copy of one of :data:`THEMES` (``KeyError`` lists the names)."""
+        try:
+            values = THEMES[name]
+        except KeyError:
+            raise KeyError('unknown theme {0!r}; choose from {1}'.format(
+                name, ', '.join(sorted(THEMES))))
+        return cls(name=name, **values)
+
+    def contrast(self):
+        """``{role: contrast ratio}`` of each role's text against its
+        background (the theme's ``background`` when the role sets none)."""
+        from flexablelib_tui.accessibility import spec_colors, contrast_ratio
+        out = {}
+        for role in self.ROLES:
+            spec = getattr(self, role)
+            fg, bg, attrs = spec_colors(spec)
+            if fg is None and bg is None:
+                continue
+            if 'reverse' in attrs:
+                fg, bg = bg, fg
+            fg = fg or self.foreground
+            bg = bg or self.background
+            out[role] = round(contrast_ratio(fg, bg), 2)
+        return out
+
+    def __repr__(self):
+        return 'Theme({0!r})'.format(self.name)
+
+
+#: The ready-made themes (``Theme.preset(name)``). The high-contrast ones
+#: reach WCAG AAA (7:1) for text; the colour-blind ones keep every message
+#: kind distinct under that deficiency (checked with the Machado 2009
+#: simulation) at 7:1 or more on a dark background, and all of them show
+#: focus with text markers as well as colour.
+THEMES = {
+    'default': {},
+    'high-contrast': dict(
+        accent='#ffff00', muted='#d0d0d0', text='#ffffff',
+        selection='bold black on #ffff00', border='#ffffff', info='#00ffff',
+        success='#00ff00', warning='#ffff00', error='#ff6060',
+        title='bold #ffffff', field='#ffffff on #1c1c1c',
+        background='#000000', foreground='#ffffff', marker=True),
+    'high-contrast-light': dict(
+        accent='#0000c0', muted='#404040', text='#000000',
+        selection='bold #ffffff on #0000c0', border='#000000', info='#00008b',
+        success='#005a00', warning='#6b4000', error='#b00000',
+        title='bold #000000', field='#000000 on #ececec',
+        background='#ffffff', foreground='#000000', marker=True),
+    'deuteranopia': dict(
+        accent='#56b4e9', muted='#c0c0c0', text='#ffffff',
+        selection='bold black on #56b4e9', border='#a0a0a0', info='#ffffff',
+        success='#56b4e9', warning='#ffb000', error='#ff6e6e',
+        title='bold #ffffff', field='#ffffff on #1c1c1c',
+        background='#000000', foreground='#ffffff', marker=True),
+    'protanopia': dict(
+        accent='#4da6ff', muted='#c0c0c0', text='#ffffff',
+        selection='bold black on #4da6ff', border='#a0a0a0', info='#ffffff',
+        success='#4da6ff', warning='#f0e442', error='#ff6e6e',
+        title='bold #ffffff', field='#ffffff on #1c1c1c',
+        background='#000000', foreground='#ffffff', marker=True),
+    'tritanopia': dict(
+        accent='#00e0ff', muted='#c0c0c0', text='#ffffff',
+        selection='bold black on #00e0ff', border='#a0a0a0', info='#a0a0ff',
+        success='#00e0ff', warning='#f0e442', error='#ff6e6e',
+        title='bold #ffffff', field='#ffffff on #1c1c1c',
+        background='#000000', foreground='#ffffff', marker=True),
+    'monochrome': dict(
+        accent='bold', muted='dim', text=None, selection='bold reverse',
+        border=None, info='bold', success='bold', warning='bold underline',
+        error='bold underline', title='bold', field='underline',
+        background='#000000', foreground='#e5e5e5', marker=True),
+}
+
+DEFAULT_THEME = Theme(name='default')
 
 _SPEC_CACHE = {}
 
@@ -55,12 +145,91 @@ _BOXES = {
 }
 
 
+_PRESETS = {}
+
+
+def active_theme():
+    """The theme for components that did not choose one: the accessibility
+    setting ``theme`` (``App(theme=...)`` or ``FLEXABLELIB_THEME``) or
+    :data:`DEFAULT_THEME`."""
+    from flexablelib_tui import accessibility as _a11y
+    choice = _a11y.settings.theme
+    if not choice:
+        return DEFAULT_THEME
+    if isinstance(choice, Theme):
+        return choice
+    theme = _PRESETS.get(choice)
+    if theme is None:
+        try:
+            theme = Theme.preset(choice)
+        except KeyError:
+            theme = DEFAULT_THEME
+        _PRESETS[choice] = theme
+    return theme
+
+
 class _Themed(Component):
     """A component with a theme and cached colour specs."""
 
     def __init__(self, theme=None, **kwargs):
         super(_Themed, self).__init__(**kwargs)
-        self.theme = theme or DEFAULT_THEME
+        self.theme = theme
+
+    @property
+    def theme(self):
+        """The component's own theme, else the one the app (``App(theme=)``)
+        or ``FLEXABLELIB_THEME`` sets, else :data:`DEFAULT_THEME`."""
+        if self._theme is not None:
+            return self._theme
+        return active_theme()
+
+    @theme.setter
+    def theme(self, value):
+        if isinstance(value, str):
+            value = Theme.preset(value)
+        self._theme = value
+
+    def _marked(self):
+        return Component._marked(self) or getattr(self.theme, 'marker', False)
+
+    # -- mouse: clickable spots registered while drawing --------------------
+
+    _hot = ()
+    _hot_base = 0
+
+    def render(self, width=None, height=None):
+        self._hot = []
+        self._hot_base = 0
+        return Component.render(self, width, height)
+
+    def hot(self, row, action, x0=0, x1=None):
+        """Make columns ``[x0, x1)`` of output row ``row`` clickable: a left
+        press there calls ``action()`` (``False`` from it means unused)."""
+        if isinstance(self._hot, tuple):
+            self._hot = []
+        self._hot.append((self._hot_base + row, x0, x1, action))
+
+    def hot_parts(self, row, parts, gap=1, start=0, actions=()):
+        """Register ``actions[i]`` for the columns ``parts[i]`` take on
+        ``row`` when the parts are joined with ``gap`` columns between them
+        (``None`` actions are skipped)."""
+        x = start
+        for part, action in zip(parts, actions):
+            w = _fx.visible_width(_fx.strip_ansi(part))
+            if action is not None:
+                self.hot(row, action, x, x + w)
+            x += w + gap
+
+    def on_mouse(self, event):
+        if event.action != 'press' or event.button != 0:
+            return False
+        for row, x0, x1, action in reversed(self._hot):
+            if row == event.y and event.x >= x0 and \
+                    (x1 is None or event.x < x1):
+                result = action()
+                self.refresh()
+                return result is not False
+        return False
 
     def paint(self, text, spec):
         if not text or not spec or not self._active():
@@ -71,6 +240,17 @@ class _Themed(Component):
         if not prefix:
             return text
         return prefix + text.replace(RESET, RESET + prefix) + RESET
+
+    def mark_current(self, text, spec=None):
+        """A highlighted row (the current item of a list): the selection
+        colour, and a ``▸`` marker (``>`` without colour) when focus markers
+        are on, so it never depends on colour alone."""
+        if self._marked() and text:
+            text = ('▸' if self._active() else '>') + \
+                _fx.slice_columns(text, 1, max(0, _fx.visible_width(text) - 1))
+        if self._active():
+            text = self.paint(text, spec or self.theme.selection)
+        return text
 
     def cursor(self, char):
         """``char`` drawn as the text cursor."""
@@ -119,6 +299,7 @@ class Box(_Themed):
     """
 
     expand = True
+    role = 'region'
 
     def __init__(self, child, title=None, style='rounded', padding=1,
                  height=None, footer=None, **kwargs):
@@ -163,7 +344,12 @@ class Box(_Themed):
         lines = [pad + _fx.fit_line(line, inner_w) + pad for line in lines]
         focus = self._has_focus()
         color = self.theme.accent if focus else self.theme.border
-        return frame(lines, width, self.title, color, self.paint, self.style,
+        style, title = self.style, self.title
+        if focus and self._marked():
+            # Focus without colour: a heavy (or double) frame and a marker.
+            style = 'double' if style == 'heavy' else 'heavy'
+            title = '▸ ' + (title or '')
+        return frame(lines, width, title, color, self.paint, style,
                      title_color=('bold ' + self.theme.accent) if focus
                      else self.theme.title, footer=self.footer)
 
@@ -259,12 +445,43 @@ class Input(_Themed):
             mark = '*' if self.required else ''
             spec = self.theme.accent if self.focused else self.theme.title
             out.append(self.paint(self.label + mark, spec))
+        self._hot_base = len(out)
         out.extend(self.control(width, height))
+        self._hot_base = 0
         if self.help and not self.error:
             out.append(self.paint(self.help, self.theme.muted))
         if self.error:
             out.append(self.paint('✖ ' + self.error, self.theme.error))
         return out
+
+    role = 'textbox'
+
+    def a11y_value(self):
+        value = self.value
+        if value is None:
+            return ''
+        if isinstance(value, bool):
+            return ''
+        return str(value)
+
+    def a11y_state(self):
+        state = []
+        if self.required:
+            state.append('required')
+        if self.error:
+            state.append('invalid')
+        if self.is_empty() and not isinstance(self.value, bool):
+            state.append('empty')
+        return state
+
+    def a11y_name(self):
+        if self.a11y_label:
+            return str(self.a11y_label)
+        for text in (self.label, getattr(self, 'placeholder', None),
+                     (self.name or '').replace('_', ' ')):
+            if isinstance(text, str) and text.strip():
+                return text.strip()
+        return ''
 
     def marker(self):
         """The gutter that shows focus: a bar when focused."""
@@ -282,6 +499,7 @@ class Button(_Themed):
     """
 
     focusable = True
+    role = 'button'
 
     def __init__(self, label, on_press=None, kind='default', shortcut=None,
                  **kwargs):
@@ -319,11 +537,22 @@ class Button(_Themed):
 
     def draw(self, width, height):
         label = self.text()
-        if not self._active() and self.focused:
-            label = '[>' + label[2:-2] + '<]'
-        return [self.paint(label, self.style())]
+        if self._marked() and self.focused:
+            label = ('[>' + label[2:-2] + '<]') if not self._active() else \
+                ('▸' + label[1:-1] + '◂')
+        style = self.style()
+        if self.hovered and self._active() and not self.disabled:
+            style += ' underline'
+        return [self.paint(label, style)]
 
     def on_key(self, key):
         if str(key) in ('enter', 'space'):
             return self.press()
         return False
+
+    def on_mouse(self, event):
+        if event.action == 'release' and event.button == 0 and \
+                not self.disabled and 0 <= event.y < 1 and \
+                0 <= event.x < self.natural_width():
+            return self.press()
+        return event.action == 'press' and event.button == 0

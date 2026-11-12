@@ -767,6 +767,9 @@ def _excel_number_format(table, value, header, column_i) -> Optional[str]:
     """
     is_int = isinstance(value, int)
     spec = table.int_format if is_int else table.float_format
+    if is_int and spec is not None and getattr(table, 'id_columns', None) \
+            is not None and table.is_id_column(header, column_i):
+        spec = None
     if spec is None and is_int and getattr(table, 'leading_zeros', None):
         return '0' * int(table.leading_zeros)
     if spec is None:

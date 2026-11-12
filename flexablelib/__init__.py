@@ -1,6 +1,7 @@
 from .table import Table
 from .style_compositions import TableComposition, SeparatorLine
 from .layout import Card, Grid, GridCell
+from .identifiers import ID_COLUMN_NAMES, is_id_column
 
 # Terminal interfaces are optional packages, imported on first use:
 #
@@ -16,13 +17,14 @@ _COMPAT = {
     'Text': 'widgets', 'Rule': 'widgets', 'Screen': 'screen', 'Live': 'screen',
 }
 _TUI = ('App', 'Component', 'ScrollView', 'Terminal', 'Key', 'KeyParser',
-        'WindowsKeyParser', 'parse_keys', 'overlay')
+        'WindowsKeyParser', 'parse_keys', 'overlay', 'MouseEvent', 'KeyMap')
 
 # Names, not the objects themselves: `from flexablelib import *` walks this
 # list and raises TypeError on anything that is not a string.
 __all__ = ['Table', 'TableComposition', 'SeparatorLine', 'Card', 'Grid',
            'GridCell', 'ProgressBar', 'Sparkline', 'BarChart', 'StatusBar',
-           'KeyHints', 'LogView', 'Text', 'Rule', 'Screen', 'Live']
+           'KeyHints', 'LogView', 'Text', 'Rule', 'Screen', 'Live',
+           'is_id_column', 'ID_COLUMN_NAMES']
 
 
 def _optional(package, extra):

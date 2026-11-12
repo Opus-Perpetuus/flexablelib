@@ -12,16 +12,21 @@ Everything here is also reachable as ``flexablelib.ProgressBar``,
 ``flexablelib.App`` and so on once installed.
 """
 
-__version__ = '3.3.1'
+__version__ = '3.4.0'
 
 from .widgets import (ProgressBar, Sparkline, BarChart, StatusBar, KeyHints,
                       LogView, Text, Rule)
 from .screen import Screen, Live, render_height
-from .keys import Key, KeyParser, WindowsKeyParser, parse_keys
+from .keys import (Key, MouseEvent, KeyParser, WindowsKeyParser, parse_keys,
+                   normalize_key, key_label)
+from .keymap import KeyMap
+from .capabilities import Capabilities, detect as detect_capabilities
 from .terminal import Terminal
 from .app import App, Component, ScrollView, overlay
 
 __all__ = ['ProgressBar', 'Sparkline', 'BarChart', 'StatusBar', 'KeyHints',
            'LogView', 'Text', 'Rule', 'Screen', 'Live', 'render_height',
-           'Key', 'KeyParser', 'WindowsKeyParser', 'parse_keys', 'Terminal',
+           'Key', 'MouseEvent', 'KeyParser', 'WindowsKeyParser', 'parse_keys',
+           'normalize_key', 'key_label', 'KeyMap', 'Capabilities',
+           'detect_capabilities', 'Terminal',
            'App', 'Component', 'ScrollView', 'overlay', '__version__']

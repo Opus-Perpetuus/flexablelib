@@ -21,7 +21,7 @@
 
 **flexablelib** turns rows and columns into readable tables for terminals, logs,
 reports and docs. It has **no runtime dependencies**, ships **prebuilt wheels
-with an optional C speed-up**, and is covered by **3,900+ tests** on Python
+with an optional C speed-up**, and is covered by **4,400+ tests** on Python
 3.8 – 3.14 (Linux, Windows, macOS).
 
 Since 3.3.0 the same library builds **complete interactive terminal
@@ -104,6 +104,33 @@ in colour or plain text: the full list, what each does and its keys is in
 <tr>
 <td><b>Data</b> — interactive table, filters, editable table, catalog, forms, login<br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v33/12_datos.png" alt="Data components" width="420"></td>
 <td><b>Dialogs</b> — modal, confirm, prompt, loading, popover<br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v33/13_dialogos.png" alt="Dialog components" width="420"></td>
+</tr>
+</table>
+
+### Keyboard, mouse and accessibility
+
+Since 3.4.0: [docs/INPUT.md](https://github.com/Opus-Perpetuus/flexablelib/blob/main/docs/INPUT.md) · [docs/ACCESSIBILITY.md](https://github.com/Opus-Perpetuus/flexablelib/blob/main/docs/ACCESSIBILITY.md) · [docs/FOLIOS.md](https://github.com/Opus-Perpetuus/flexablelib/blob/main/docs/FOLIOS.md).
+
+<table>
+<tr>
+<td width="50%"><b>Every key detected</b> — F1–F24, Ctrl/Alt/Shift/Super, paste, focus, mouse — <code>examples/keys.py</code><br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v34/01_detector_teclas.png" alt="Live key detector" width="420"></td>
+<td width="50%"><b>Mouse in every component</b> — click, wheel, drag<br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v34/02_raton.png" alt="Clicks on buttons, tabs, tables and calendars" width="420"></td>
+</tr>
+<tr>
+<td><b>Focus visible without colour</b> — text markers, not colour alone<br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v34/03_foco_visible.png" alt="Focus with and without colour" width="420"></td>
+<td><b>High contrast</b> — WCAG AAA text, checked by the tests<br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v34/04_alto_contraste.png" alt="High-contrast theme with contrast ratios" width="420"></td>
+</tr>
+<tr>
+<td><b>Colour-blind themes</b> — deuteranopia, protanopia, tritanopia — simulated<br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v34/05_daltonismo.png" alt="Status colours under colour-blindness simulation" width="420"></td>
+<td><b>Screen readers</b> — linear text, roles, labels, announcements<br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v34/06_lector_pantalla.png" alt="Screen-reader linear output" width="420"></td>
+</tr>
+<tr>
+<td><b>ASCII and reduced motion</b> — no Unicode, still spinners<br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v34/07_ascii.png" alt="The app in ASCII mode" width="420"></td>
+<td><b>Folios</b> — IDs without thousands separators, money with them<br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v34/08_folios.png" alt="Folio columns versus money columns" width="420"></td>
+</tr>
+<tr>
+<td><b>One name per key</b> — xterm, rxvt, Linux console, kitty, modifyOtherKeys, Windows<br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v34/10_protocolos.png" alt="Key names across protocols" width="420"></td>
+<td><b>C acceleration</b> — ASCII fallback and click zones<br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v34/09_benchmark.png" alt="C versus Python timings" width="420"></td>
 </tr>
 </table>
 
@@ -396,10 +423,10 @@ Open work and the issue map: [docs/ISSUES.md](https://github.com/Opus-Perpetuus/
 ## Project layout
 
 - `flexablelib/` — the core package (no runtime dependencies): `table.py` (the Table class), `layout.py` (Card, Grid, GridCell), `_frames.py` (frame primitives, C or Python), `columns.py`, `cells.py`, `table_strings.py`, `style_compositions.py` (the 54 styles, as data), `text_width.py` / `fast.py` (terminal-width measurement, C or Python), readers and writers.
-- `packages/tui/` — `flexablelib-tui`: widgets, Screen, Live, App, keyboard input.
+- `packages/tui/` — `flexablelib-tui`: widgets, Screen, Live, App, keyboard and mouse input, accessibility.
 - `packages/components/` — `flexablelib-components`: the terminal components.
 - `packages/speedups/` — `flexablelib-speedups`: the C frame code.
-- `examples/` — `dashboard.py`, `admin.py`.
+- `examples/` — `dashboard.py`, `admin.py`, `keys.py` (live key detector).
 - `tests/` — the pytest suite; `tools/` — benchmarks and generators; `docs/` — guides and images.
 - `ARCHITECTURE.md` — how it all fits together; `style_examples.md` — all 54 styles; `package.json` — the canonical version number.
 
