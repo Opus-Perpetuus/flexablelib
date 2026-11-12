@@ -1,2 +1,3 @@
 # Development dependencies. The package itself has no runtime dependencies.
 pytest>=7.0
+Pillow>=8

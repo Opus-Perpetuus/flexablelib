@@ -39,7 +39,8 @@ __all__ = ['ACCELERATED', 'BACKEND', 'use', 'available', 'visible_width',
            'slice_columns',
            'border_grid', 'changed_lines', 'render_diff', 'ascii_fold',
            'extract_marks', 'mark_open', 'MARK_CLOSE', 'GLYPH_ORDER',
-           'ASCII_FOLD']
+           'ASCII_FOLD', 'GRAPHICS_MARK', 'expand_graphics',
+           'set_graphics_expander']
 
 # The order border_grid() expects its 11 glyphs in.
 GLYPH_ORDER = ('h', 'v', 'tl', 'tr', 'bl', 'br', 'lt', 'rt', 'tt', 'bt', 'x')
@@ -375,3 +376,35 @@ extract_marks = _py_extract_marks
 
 use('python' if os.environ.get('FLEXABLELIB_FRAMES', '').lower() == 'python'
     else 'auto')
+
+
+# +---------------------------------------------------------------------------+
+# Pictures: frames carry a zero-width mark (ESC ] 8971 ; id BEL) where a
+# picture goes; flexablelib_tui.graphics registers the function that turns
+# marks into kitty / iTerm2 / sixel sequences when a frame is printed.
+
+GRAPHICS_MARK = '\x1b]8971;'
+_graphics_expander = None
+
+
+def set_graphics_expander(function):
+    """Install the function :func:`expand_graphics` calls (or ``None``)."""
+    global _graphics_expander
+    _graphics_expander = function
+
+
+def expand_graphics(text):
+    """``text`` with picture marks expanded, when a picture module is
+    loaded and the text has any; otherwise ``text`` unchanged."""
+    if GRAPHICS_MARK not in text:
+        return text
+    function = _graphics_expander
+    if function is None:
+        # This module may have been reloaded after the picture module
+        # registered itself: find it again.
+        import sys
+        module = sys.modules.get('flexablelib_tui.graphics')
+        if module is None:
+            return text
+        function = module.expand
+    return function(text)

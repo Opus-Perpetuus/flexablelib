@@ -2,6 +2,56 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.5.0] - 2026-11-12
+
+### Added
+- **Pictures in the terminal** (`flexablelib-components`, see
+  `docs/IMAGES.md`): `Image` and `ImageViewer`, and `FilePreview` draws
+  image files (and the first page of PDFs and SVGs when `pdftoppm`,
+  PyMuPDF, `rsvg-convert` or cairosvg is available). Automatic fallback
+  chain: **kitty graphics protocol** (Unicode placeholders on kitty 0.28+,
+  Ghostty and through tmux passthrough), **iTerm2 inline images**,
+  **sixel**, Unicode blocks (half blocks, quadrants, sextants, braille in
+  truecolor / 256 / 16 colours or mono), ASCII, then an **OSC 8 link** that
+  opens the picture in the browser (`BROWSER`, `xdg-open`, `gio`, `open`,
+  `start`, `wslview`), and with no browser and no display a **warning**
+  (`⚠` / `!`) with the file name and the reason -- nothing is opened.
+  `fit` (`contain`, `cover`, `fill`, `none`), proportions from the cell
+  size in pixels, `alt`, `caption`, `background`, `animate`, `focusable`
+  (Enter / `o` / click open it).
+- **Graphics detection** (`flexablelib_tui.graphics`, `detect_graphics`,
+  `GraphicsInfo`): environment first (kitty, Ghostty, WezTerm, iTerm2, VS
+  Code, Konsole, mintty, Warp, rio, foot, mlterm, contour, Windows
+  Terminal, Terminal.app, tmux client features and passthrough, GNU
+  screen), then one short query of the terminal (kitty APC query,
+  `CSI 16 t` / `CSI 14 t` cell and window pixels, `TIOCGWINSZ`,
+  XTSMGRAPHICS, XTVERSION, DA1), cached; `App` asks through its terminal
+  and replays keys typed meanwhile. `FLEXABLELIB_IMAGE=kitty|iterm|sixel|
+  blocks|half|quadrant|sextant|braille|ascii|link|none` forces a method,
+  `FLEXABLELIB_NO_BROWSER=1` says there is no browser.
+- **Image decoding without dependencies** (`flexablelib._images`): PNG
+  (every colour type and depth, transparency, Adam7), GIF (frames,
+  disposal, interlace), BMP (1–32 bit, bit fields), PPM/PGM/PBM; Pillow
+  (`flexablelib[images]`) adds JPEG, WebP, TIFF and the rest. URLs with a
+  timeout and a size cap.
+- **C acceleration** in `flexablelib-speedups` for resizing (area
+  average), median-cut quantization, the sixel encoder, PNG unfiltering
+  and the block/braille conversion, byte-identical to the Python fallback
+  (29–87× faster; `tools/bench_images.py`). `FLEXABLELIB_IMAGES=python`
+  forces Python.
+- Extras `images` (Pillow) -- included in `all` -- and `svg` (cairosvg).
+
+### Changed
+- Frames carry pictures as an invisible zero-width mark that becomes the
+  picture sequence when the frame is written (`str()`, `print`, `Live`,
+  `App`): widths, layouts and the frame diff are unchanged. `Live` redraws a
+  picture when a line it covers changes and deletes kitty pictures that
+  left the screen.
+- `Card` and `Grid` without colour keep the invisible component and picture
+  marks (clicks and pictures inside layouts work with `NO_COLOR`).
+- `App` reaches components inside a `Card` body (focus, keys, clicks).
+- The accessibility audit reports `no alt text` for images.
+
 ## [3.4.0] - 2026-11-12
 
 ### Added

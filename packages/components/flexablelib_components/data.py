@@ -1045,8 +1045,10 @@ class LoginForm(Form):
 class FilePreview(_Themed):
     """
     A file's name, size, date and -- for text -- its first lines, with code
-    highlighting by extension. Images, PDFs and other binaries show their
-    details only (a terminal cannot draw them portably).
+    highlighting by extension. Images (and the first page of a PDF or an
+    SVG, when a renderer is installed) are drawn with :class:`Image` in at
+    most ``max_lines`` rows; ``images=False`` keeps them as details only.
+    Other binaries show their details only.
     """
 
     LANGUAGES = {'.py': 'python', '.js': 'javascript', '.ts': 'typescript',
@@ -1057,10 +1059,34 @@ class FilePreview(_Themed):
     def a11y_name(self):
         return self.a11y_label or os.path.basename(self.path)
 
-    def __init__(self, path, max_lines=20, **kwargs):
+    def __init__(self, path, max_lines=20, images=True, method=None,
+                 **kwargs):
         super(FilePreview, self).__init__(**kwargs)
         self.path = path
         self.max_lines = max_lines
+        self.images = images
+        self.method = method
+        self._image = None
+
+    @property
+    def needs_graphics(self):
+        return self._is_image()
+
+    def _is_image(self):
+        from .media import IMAGE_EXTENSIONS
+        return bool(self.images) and os.path.splitext(
+            str(self.path))[1].lower() in IMAGE_EXTENSIONS
+
+    def image(self):
+        """The :class:`Image` used for an image file (or None)."""
+        if not self._is_image():
+            return None
+        if self._image is None or self._image.source != self.path:
+            from .media import Image
+            self._image = Image(self.path, alt=os.path.basename(self.path),
+                                method=self.method, theme=self._theme,
+                                use_colors=self.use_colors, align='left')
+        return self._image
 
     def natural_width(self):
         return 70
@@ -1090,6 +1116,13 @@ class FilePreview(_Themed):
             meta = 'no encontrado'
         out = [self.paint(name, 'bold') + '  ' + self.paint(meta,
                                                             self.theme.muted)]
+        picture = self.image()
+        if picture is not None and meta != 'no encontrado':
+            rows = max(1, min(self.max_lines, (height - 1) if height
+                              else self.max_lines))
+            picture.app = self.app
+            out.extend(picture.render(width, rows).split('\n'))
+            return out
         text, problem = self._content()
         if problem:
             out.append(self.paint(problem, self.theme.muted))

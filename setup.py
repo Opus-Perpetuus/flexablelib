@@ -55,7 +55,12 @@ setup(
     'tui': ['flexablelib-tui==' + VERSION],
     'components': ['flexablelib-components==' + VERSION],
     'speed': ['flexablelib-speedups==' + VERSION],
-    'all': ['pandas>=1.0', 'openpyxl>=3.0', 'lxml>=4.0',
+    # Pictures: JPEG, WebP, GIF, TIFF through Pillow (PNG, PPM, BMP and GIF
+    # decode without it), and SVG through cairosvg (needs the cairo library).
+    'images': ['Pillow>=8', 'flexablelib-tui==' + VERSION,
+               'flexablelib-components==' + VERSION],
+    'svg': ['cairosvg>=2.5'],
+    'all': ['pandas>=1.0', 'openpyxl>=3.0', 'lxml>=4.0', 'Pillow>=8',
             'flexablelib-tui==' + VERSION,
             'flexablelib-components==' + VERSION,
             'flexablelib-speedups==' + VERSION],
