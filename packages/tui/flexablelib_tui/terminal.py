@@ -79,7 +79,7 @@ class Terminal(object):
             return self
         self._active = True
         self._size = self.size()
-        if WINDOWS:   # pragma: no cover - exercised on the Windows CI job
+        if WINDOWS:
             self._enable_vt()
         else:
             self._enter_cbreak()
@@ -98,7 +98,7 @@ class Terminal(object):
             (PASTE_OFF if self.paste else '')
         if codes:
             self._write(codes)
-        if WINDOWS:   # pragma: no cover - exercised on the Windows CI job
+        if WINDOWS:
             self._restore_vt()
         else:
             self._restore_cbreak()
@@ -193,7 +193,7 @@ class Terminal(object):
 
     def _read_raw(self, timeout):
         """Whatever input is available within ``timeout`` seconds."""
-        if WINDOWS:   # pragma: no cover - Windows only
+        if WINDOWS:
             import msvcrt
             deadline = time.monotonic() + max(0.0, timeout)
             chars = []

@@ -234,6 +234,50 @@ class TestTerminalPosix:
         os.close(master)
 
 
+class FakeMsvcrt(object):
+    """Stands in for msvcrt: hands out queued characters."""
+
+    def __init__(self, chars=''):
+        self.chars = list(chars)
+
+    def kbhit(self):
+        return bool(self.chars)
+
+    def getwch(self):
+        return self.chars.pop(0)
+
+
+class TestTerminalWindowsPath:
+    """The Windows branches, driven with a stand-in msvcrt on any OS."""
+
+    def test_keys_and_lifecycle(self, monkeypatch):
+        fake = FakeMsvcrt('ab\xe0H')
+        monkeypatch.setattr(terminal_module, 'WINDOWS', True)
+        monkeypatch.setitem(sys.modules, 'msvcrt', fake)
+        out = io.StringIO()
+        term = Terminal(stdin=io.StringIO(), stdout=out, mouse=True)
+        assert isinstance(term.parser, WindowsKeyParser)
+        with term:
+            assert names(term.read_keys(timeout=0.01)) == ['a', 'b', 'up']
+            assert term.read_keys(timeout=0.01) == []
+        assert '\x1b[?1000h' in out.getvalue()
+        assert '\x1b[?1000l' in out.getvalue()
+
+    def test_waits_until_deadline(self, monkeypatch):
+        monkeypatch.setattr(terminal_module, 'WINDOWS', True)
+        monkeypatch.setitem(sys.modules, 'msvcrt', FakeMsvcrt())
+        term = Terminal(stdin=io.StringIO(), stdout=io.StringIO())
+        start = time.monotonic()
+        assert term._read_raw(0.02) == ''
+        assert time.monotonic() - start >= 0.015
+
+    @pytest.mark.skipif(os.name != 'nt', reason='real console API')
+    def test_real_console(self):
+        term = Terminal(stdin=io.StringIO(), stdout=io.StringIO())
+        with term:
+            assert term.read_keys(timeout=0.01) == []
+
+
 class Counter(Component):
     focusable = True
 
