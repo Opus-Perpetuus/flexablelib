@@ -23,10 +23,13 @@ from .keymap import KeyMap
 from .capabilities import Capabilities, detect as detect_capabilities
 from .terminal import Terminal
 from .app import App, Component, ScrollView, overlay
+from . import graphics
+from .graphics import GraphicsInfo, detect as detect_graphics
 
 __all__ = ['ProgressBar', 'Sparkline', 'BarChart', 'StatusBar', 'KeyHints',
            'LogView', 'Text', 'Rule', 'Screen', 'Live', 'render_height',
            'Key', 'MouseEvent', 'KeyParser', 'WindowsKeyParser', 'parse_keys',
            'normalize_key', 'key_label', 'KeyMap', 'Capabilities',
            'detect_capabilities', 'Terminal',
-           'App', 'Component', 'ScrollView', 'overlay', '__version__']
+           'App', 'Component', 'ScrollView', 'overlay', 'graphics',
+           'GraphicsInfo', 'detect_graphics', '__version__']

@@ -544,7 +544,8 @@ def audit(components, width=40, check_focus=True):
         if not info.get('role'):
             issues.append(AuditIssue(comp, 'role', 'no role'))
         if not (info.get('label') or '').strip():
-            issues.append(AuditIssue(comp, 'label', 'no label'))
+            issues.append(AuditIssue(comp, 'label', 'no alt text' if info.get(
+                'role') == 'img' else 'no label'))
         if check_focus and getattr(comp, 'focusable', False):
             for colors in (False, True):
                 saved = comp.use_colors
