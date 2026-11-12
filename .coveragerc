@@ -1,0 +1,10 @@
+[run]
+branch = True
+omit =
+    */flexablelib/_legacy/*
+    */setup.py
+
+[report]
+precision = 2
+show_missing = True
+skip_covered = True

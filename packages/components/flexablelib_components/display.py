@@ -438,36 +438,38 @@ class MarkdownView(_Themed):
                              self.text.split('\n')), default=0))
 
     def inline(self, text):
-        def sub(pattern, kind, text):
-            def repl(match):
-                inner = next(g for g in match.groups() if g is not None)
-                if kind == 'code':
-                    return self.paint(inner, self.theme.warning) if \
-                        self._active() else '`' + inner + '`'
-                if kind == 'bold':
-                    return self.paint(inner, 'bold')
-                if kind == 'italic':
-                    return self.paint(inner, 'italic')
-                if kind == 'strike':
-                    return self.paint(inner, 'dim')
-                url = match.group(2)
-                if not self._active():
-                    return '{0} <{1}>'.format(inner, url)
-                return '\x1b]8;;{0}\x1b\\{1}\x1b]8;;\x1b\\'.format(
-                    url, self.paint(inner, 'underline ' + self.theme.info))
-            return pattern.sub(repl, text)
-        # Inline code first, protected from the other patterns.
-        codes = []
+        # Each piece is rendered and parked behind a placeholder, so the
+        # escape sequences it adds (which contain '[') are never matched by
+        # the patterns that run after it.
+        store = []
+        token = re.compile('\x00(\\d+)\x00')
 
-        def stash(match):
-            codes.append(match.group(1))
-            return '\x00{0}\x00'.format(len(codes) - 1)
-        text = _INLINE[0][0].sub(stash, text)
-        for pattern, kind in _INLINE[1:]:
-            text = sub(pattern, kind, text)
-        return re.sub('\x00(\\d+)\x00', lambda m: self.paint(
-            codes[int(m.group(1))], self.theme.warning) if self._active()
-            else '`' + codes[int(m.group(1))] + '`', text)
+        def restore(value):
+            return token.sub(lambda m: store[int(m.group(1))], value)
+
+        def keep(rendered):
+            store.append(rendered)
+            return '\x00{0}\x00'.format(len(store) - 1)
+
+        def render(kind, match):
+            inner = restore(next(g for g in match.groups() if g is not None))
+            if kind == 'code':
+                return self.paint(inner, self.theme.warning) if \
+                    self._active() else '`' + inner + '`'
+            if kind == 'bold':
+                return self.paint(inner, 'bold')
+            if kind == 'italic':
+                return self.paint(inner, 'italic')
+            if kind == 'strike':
+                return self.paint(inner, 'dim')
+            url = match.group(2)
+            if not self._active():
+                return '{0} <{1}>'.format(inner, url)
+            return '\x1b]8;;{0}\x1b\\{1}\x1b]8;;\x1b\\'.format(
+                url, self.paint(inner, 'underline ' + self.theme.info))
+        for pattern, kind in _INLINE:
+            text = pattern.sub(lambda m, k=kind: keep(render(k, m)), text)
+        return restore(text)
 
     def _table(self, rows, width):
         from flexablelib import Table

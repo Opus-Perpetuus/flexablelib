@@ -146,9 +146,13 @@ class DataTable(_Themed):
         if self.sort_key is not None:
             ci = self.sort_key
             col = self.columns[ci]
-            idx.sort(key=lambda i: _sort_key(self._get(self.rows[i], col,
-                                                        ci)),
-                     reverse=self.sort_desc)
+            values = {i: self._get(self.rows[i], col, ci) for i in idx}
+            # Empty cells stay at the end in both directions.
+            filled = [i for i in idx if values[i] is not None]
+            empty = [i for i in idx if values[i] is None]
+            filled.sort(key=lambda i: _sort_key(values[i]),
+                        reverse=self.sort_desc)
+            idx = filled + empty
         self._view = idx
         return idx
 
@@ -374,6 +378,8 @@ def parse_query(query, fields=None):
 
 def _compare(cell, op, value):
     if op in ('>', '<', '>=', '<='):
+        if cell is None:
+            return False
         try:
             a, b = float(cell), float(value)
         except (TypeError, ValueError):
