@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.5.1] - 2026-11-12
+
+### Added
+- **Linux aarch64 (arm64) wheels** for `flexablelib` and
+  `flexablelib-speedups`, glibc (manylinux) and musl (musllinux/Alpine),
+  CPython 3.8–3.14, built and tested on native arm64 runners.
+- **macOS Intel (x86_64) wheels** for both projects, CPython 3.8–3.14.
+- Every wheel is checked on its own architecture by `tools/wheel_check.py`:
+  the C extension loads and matches the pure Python code (text measurement,
+  frame primitives, picture resize/quantize/sixel/blocks) on random input.
+
+### Changed
+- 49 binary wheels per extension project (was 28): manylinux and musllinux
+  for x86_64 and aarch64, Windows x64, macOS arm64 and x86_64.
+
 ## [3.5.0] - 2026-11-12
 
 ### Added
