@@ -71,6 +71,8 @@ All notable changes to this project will be documented in this file. See [standa
 - The default selection style is bold as well as coloured; without colour,
   focus and selection use text markers (`[>Guardar<]`, `>` before the
   current item).
+- On `TERM=dumb` the app prints linear text and switches no terminal
+  modes (no paste, focus or mouse escape sequences).
 - `FORCE_COLOR=0` turns colour off. Colour specs accept attributes after
   the background (`black on cyan underline`).
 
