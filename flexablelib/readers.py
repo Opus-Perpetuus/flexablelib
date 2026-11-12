@@ -170,6 +170,9 @@ def _csv_reader_kwargs(delimiter=',', dialect=None, quoting=None,
     return kwargs
 
 
+_BOM = '\ufeff'
+
+
 def from_csv(table_class, source, parse_numbers: bool = True,
              has_header: bool = True, delimiter: str = ',',
              encoding: str = 'utf-8', dialect=None, quoting=None,
@@ -207,6 +210,12 @@ def from_csv(table_class, source, parse_numbers: bool = True,
         with open(source, 'r', newline='', encoding=encoding) as handle:
             rows = [row for row in _csv.reader(handle, **reader_kwargs)]
 
+    if rows and rows[0] and rows[0][0].startswith(_BOM):
+        # Excel and Notepad save UTF-8 CSV with a byte-order mark, which
+        # ``encoding='utf-8'`` keeps as the first character of the first
+        # header: ``table.headers[0] == '\ufeffName'`` and lookups by 'Name'
+        # failed.
+        rows[0][0] = rows[0][0][len(_BOM):]
     if not rows:
         return table_class(**options)
     if has_header:
@@ -596,6 +605,10 @@ def from_markdown(table_class, source, parse_numbers: bool = True, **options):
     else:
         text = source.decode('utf-8') if isinstance(source, bytes) else str(source)
 
+    # A byte-order mark is not whitespace to str.strip(), and left in place
+    # it hid the header row's leading pipe.
+    if text.startswith(_BOM):
+        text = text[len(_BOM):]
     lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
     rows_raw = []
     for ln in lines:
