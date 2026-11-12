@@ -254,6 +254,7 @@ class Image(_Themed):
 
     def draw(self, width, height):
         info = self._info()
+        avail = width
         width = min(width, self.width) if self.width else width
         if self.height:
             height = min(height, self.height) if height else self.height
@@ -270,22 +271,22 @@ class Image(_Themed):
             info, force=self.method, blocks=self.blocks,
             color=color if color != 'none' else 'none')
         if method == 'alt':
-            return self._alt_lines(width)
+            return self._alt_lines(avail)
         if method == 'none':
             self.used_method = 'none'
             return [self.paint('[{0}]'.format(self.alt or self.name),
                                self.theme.muted)][:1]
         if method == 'link':
-            return self._fallback(width, '') + caption
+            return self._fallback(avail, '') + caption
         bm = self.bitmap()
         if bm is None:
-            return self._fallback(width, self.error) + caption
+            return self._fallback(avail, self.error) + caption
         cell = self._cell(info)
         if method == 'text':
             cell_px = _img.CELL_PIXELS[mode]
         cols, rows, crop = self._box(bm, width, height, cell)
         if cols < 2 or rows < 1:
-            return self._fallback(width, 'no cabe ({0}×{1})'.format(
+            return self._fallback(avail, 'no cabe ({0}×{1})'.format(
                 width, height)) + caption
         if crop:
             bm = bm.crop(*crop)
