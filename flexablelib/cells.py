@@ -1,6 +1,7 @@
 """ CELL WRAPPING AND ADJUSTMENT """
 
 from .fast import pad_to_width, visible_width
+from .text_width import expand_tabs
 from .utils import is_some_instance
 from .options import FLT_FILTER, INT_FILTER
 
@@ -532,7 +533,7 @@ def __wrap_cell(cell: Any) -> Union[List[str], Any]:
         if cell != '':
             # If the cell is not empty,
             # apply the str method splitlines
-            return cell.expandtabs(TAB_SIZE).splitlines()
+            return expand_tabs(cell, TAB_SIZE).splitlines()
         else:
             # Return a list with empty string in case of empty cell.
             return ['']
