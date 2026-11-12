@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.3.1] - 2026-11-12
+
+### Fixed
+- Tabs no longer push tables and cards past their width. A tab measures
+  nothing, so a cell holding one was sized and wrapped as narrower than the
+  spaces it became: the table came out wider than ``max_width`` (or
+  ``render(width)``), and in card mode the raw tab displaced the frame.
+  Cells are expanded before they are measured, headers are trimmed on their
+  expanded width with ``overflow='truncate'``, and ``wrap_to_width`` expands
+  tabs itself, so cards, grids, widgets and components get it too.
+- A newline in a card title, or in a title set into a border
+  (``title_position='border'``), split the frame in two; the title now
+  goes on one line. Multi-line table titles and captions are aligned line
+  by line instead of only the first line.
+- ``max_width`` now counts the ``panel`` (two columns) and ``shadow``
+  (one): squeezing, ``expand_to_window`` and ``too_narrow_message`` sized
+  the columns for the full width and then drew the panel outside it.
+- ``from_csv`` and ``from_markdown`` drop a leading UTF-8 byte-order mark
+  (Excel's "CSV UTF-8"): it was kept as the first character of the first
+  header, and a Markdown table gained an extra empty column.
+- A brace format template (``custom_format={'price': '{:,.2f}'}``,
+  ``float_format='$ {:,.2f}'``) no longer aborts the whole render on a text
+  cell in the column; the cell prints as it is, as it already did with a
+  plain spec. A template that needs more than one value raises a
+  ``ValueError`` that says so.
+
+### Added
+- ``flexablelib.text_width.expand_tabs(text, tabsize=8)``: tab expansion
+  that counts terminal columns (wide characters two, escape sequences
+  none).
+
 ## [3.3.0] - 2026-11-12
 
 ### Added
