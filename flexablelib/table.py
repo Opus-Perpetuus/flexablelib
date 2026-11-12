@@ -2102,6 +2102,20 @@ class Table(object):
         console_columns, _ = get_window_size()
         return console_columns
 
+    def __body_width(self) -> int:
+        """
+        Width left for the table itself once the panel and shadow are drawn.
+
+        The panel adds a column each side and the shadow one more on the
+        right, all outside the frame the columns are sized for; leaving them
+        out made a panelled table two columns wider than ``max_width``.
+        """
+        return max(1, self.__available_width() - self.__chrome_width())
+
+    def __chrome_width(self) -> int:
+        """Columns the panel and shadow add around the table."""
+        return (2 if self.__panel else 0) + (1 if self.__shadow else 0)
+
     def __minimum_table_width(self) -> int:
         """
         Narrowest the table could possibly be rendered.
@@ -2999,7 +3013,7 @@ class Table(object):
             # illegible, if the caller asked to be told -- issue #14.
             if self.__too_narrow_message is not None:
                 available = self.__available_width()
-                needed = self.__minimum_table_width()
+                needed = self.__minimum_table_width() + self.__chrome_width()
                 if needed > available:
                     return self.__too_narrow_message.format(
                         needed=needed, available=available
@@ -3145,7 +3159,7 @@ class Table(object):
         """
         adjust = False
         difference = 0
-        available = self.__available_width()
+        available = self.__body_width()
         if available < table_width:
             difference = (table_width - available) + 1
             adjust = True
@@ -3791,7 +3805,7 @@ class Table(object):
 
     def __expand_columns_to_window(self, table_width):
         """Distribute spare horizontal space across user columns."""
-        available = self.__available_width()
+        available = self.__body_width()
         spare = available - table_width
         if spare <= 0:
             return False
