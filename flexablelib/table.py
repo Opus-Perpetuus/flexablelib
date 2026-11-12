@@ -3555,7 +3555,19 @@ class Table(object):
         if not isinstance(fmt, str):
             return value
         if '{' in fmt:
-            return fmt.format(value)
+            try:
+                return fmt.format(value)
+            except (TypeError, ValueError):
+                # A value the template cannot format (text in a number
+                # column, say) prints as it is, as it does with a plain spec;
+                # it used to abort the whole render.
+                return value
+            except (IndexError, KeyError) as error:
+                raise ValueError(
+                    'format {0!r} needs more than the one value it is given '
+                    '(use {{}} or {{0}}, e.g. "{{:,.2f}}"): {1}'.format(
+                        fmt, error)
+                ) from None
         if '%' in fmt and fmt != '%':
             try:
                 return fmt % value
