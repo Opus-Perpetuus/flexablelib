@@ -2,6 +2,78 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.4.0] - 2026-11-12
+
+### Added
+- **Keyboard input, complete** (`flexablelib-tui`, see `docs/INPUT.md`):
+  one key name whatever the terminal sends -- xterm/VT100/VT220 (CSI, SS3,
+  8-bit CSI), rxvt/urxvt, the Linux console, Alt as an ESC prefix, F1–F24
+  (F35 with kitty) with any modifier, Ctrl/Alt/Shift/Meta/Super/Hyper in a
+  fixed order (`ctrl+alt+shift+f12`), the **kitty keyboard protocol**
+  (Ctrl+I vs Tab, Ctrl+Enter, keypad, press/repeat/release), xterm
+  **modifyOtherKeys**, bracketed paste (even split across reads), terminal
+  focus in/out and terminal answers (DA, DECRQM, XTVERSION, kitty flags).
+  `Key` carries `char`, `event`, `mouse`, `data` and `raw`;
+  `normalize_key`, `key_label`.
+- **Windows Console API input** (`wincon`): `ReadConsoleInputW` records
+  with virtual-key codes and modifiers (AltGr, F13–F24, surrogate pairs,
+  mouse, wheel, resize, focus), virtual-terminal input and the `msvcrt`
+  fallback (`Terminal(windows='records' | 'vt' | 'msvcrt')`). CI injects
+  records into a real console on `windows-latest`.
+- **Capability detection** (`detect_capabilities`, `capabilities.probe`):
+  colour level, Unicode, size and terminal from the environment, then a
+  probe of the terminal itself; `Terminal(keyboard='auto')` turns on the
+  kitty protocol or modifyOtherKeys when available and restores everything
+  on exit.
+- **Key map** (`KeyMap`): remap keys, name actions (`focus_next`, `quit`,
+  `help`, `read_screen` ...), `describe`, `conflicts`, save/load JSON;
+  `App(keymap=...)`.
+- **Mouse in every component**: `App(mouse=True)` (or `'hover'`) knows
+  which component drew each cell and focuses and passes clicks to it --
+  buttons, checkboxes, switches, radios, tabs, menus, sidebar, pagination,
+  sort controls, calendars and date pickers, selects, autocomplete, file
+  entries, trees, accordions, carousels, links, alerts, `DataTable` rows,
+  checkbox column and headers, catalog cards. The wheel scrolls what is
+  under the pointer; drags move `Split` dividers and scroll bars, with
+  capture until release. `Component.on_mouse(event)` in local coordinates;
+  `_Themed.hot()` registers clickable spots.
+- **Accessibility** (`flexablelib_tui.accessibility`, see
+  `docs/ACCESSIBILITY.md`): settings from the environment
+  (`FLEXABLELIB_SCREEN_READER`, `_REDUCED_MOTION`, `_ASCII`,
+  `_FOCUS_MARKER`, `_THEME`, `_LANG`, `_A11Y`) or `App(...)` arguments;
+  **screen-reader mode** (linear text with role, label, value, state and
+  description; announcements of focus, changes, dialogs and notifications
+  to stdout, stderr, a file or a callback; Ctrl+R reads the screen);
+  roles, accessible names, values and states for every component;
+  focus visible without colour (text markers); **themes** `high-contrast`,
+  `high-contrast-light`, `deuteranopia`, `protanopia`, `tritanopia`,
+  `monochrome` with WCAG contrast (`Theme.contrast()`, `contrast_ratio`)
+  and colour-blindness simulation (`simulate_cvd`, `delta_e`);
+  `App(theme=...)`; static spinners and skeletons with reduced motion;
+  status with symbol and word (`status_symbol`), chart markers per series;
+  ASCII fallback for frames; `App(min_size=...)`; F1 help screen built from
+  the bindings; `tab_index`; `audit()` checks role, label and visible focus.
+- **Folios** (see `docs/FOLIOS.md`): `Table.id_columns` (`'auto'`, a list,
+  or `None` as before) and `Table.id_names` print identifiers -- folios,
+  IDs, codes, SKUs, postal codes, years -- without thousands separators
+  while quantities and money keep them; `flexablelib.is_id_column` and
+  `ID_COLUMN_NAMES`; `to_excel` follows. `DataTable` column `type`
+  `'id'` / `'number'` / `'money'`, `id_columns`, `id_names`.
+- C: `ascii_fold` (8× faster) and `extract_marks` (click zones, 2× faster)
+  in `flexablelib-speedups`, with Python fallbacks and parity tests.
+- `examples/keys.py`: live key and mouse detector. `examples/admin.py`
+  takes `--theme`, `--screen-reader`, `--ascii`, `--reduced-motion`,
+  `--focus-marker` and `click:X:Y` keys.
+
+### Changed
+- `DataTable` no longer puts thousands separators in identifier columns
+  by name (`id_columns=False` restores 3.3).
+- The default selection style is bold as well as coloured; without colour,
+  focus and selection use text markers (`[>Guardar<]`, `>` before the
+  current item).
+- `FORCE_COLOR=0` turns colour off. Colour specs accept attributes after
+  the background (`black on cyan underline`).
+
 ## [3.3.1] - 2026-11-12
 
 ### Fixed
