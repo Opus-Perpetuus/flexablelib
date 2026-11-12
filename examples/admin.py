@@ -189,7 +189,7 @@ class Admin(object):
                                  ('Cancelar pedido',
                                   lambda: self.confirm_cancel(row))],
                         width=50)
-        self.app.push(modal)
+        modal.open(self.app)
 
     def confirm_cancel(self, row):
         def cancel():
@@ -197,11 +197,11 @@ class Admin(object):
             self.app.notify('Pedido {0} cancelado'.format(row['folio']),
                             'warning')
         self.app.pop()
-        self.app.push(C.ConfirmDialog(
+        C.ConfirmDialog(
             '¿Cancelar el pedido {0} de {1}?'.format(row['folio'],
                                                     row['cliente']),
             on_confirm=cancel, confirm_label='Cancelar pedido',
-            cancel_label='Volver', danger=True))
+            cancel_label='Volver', danger=True).open(self.app)
 
     def palette(self):
         def go(page):
@@ -224,14 +224,15 @@ class Admin(object):
             C.DateInput('Alta', TODAY, today=TODAY),
             C.Select('Ciudad', ['Mérida', 'Monterrey', 'CDMX', 'Puebla'])],
             on_submit=save, on_cancel=lambda: self.app.pop())
-        self.app.push(C.Modal(form, title='Nuevo cliente', width=64))
+        C.Modal(form, title='Nuevo cliente', width=64).open(self.app)
 
     def help(self):
-        self.app.push(C.Modal(C.MarkdownView(
+        C.Modal(C.MarkdownView(
             '**Tab** cambia el foco · **Ctrl-B** menú · **Ctrl-K** comandos'
             '\n\n- Tabla: flechas, `1`-`9` ordena, `/` filtra, Espacio '
             'selecciona, Enter abre\n- Filtros: `estado:pagado total>5000`'
-            '\n- **Esc** cierra los diálogos'), title='Ayuda', width=60))
+            '\n- **Esc** cierra los diálogos'), title='Ayuda',
+            width=60).open(self.app)
 
 
 def main(argv=None):
