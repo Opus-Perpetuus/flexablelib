@@ -30,7 +30,7 @@ from .columns import (
     ALIGNMENTS_PER_TYPE as type_alignments
 )
 from .fast import truncate_to_width, visible_width, wrap_to_width
-from .text_width import strip_ansi
+from .text_width import expand_tabs, strip_ansi
 from .table_strings import (
     _get_separators, 
     _get_data_rows, 
@@ -59,6 +59,7 @@ from .options import (
     INVISIBLE_SEPARATOR,
 )
 from .cells import (
+    TAB_SIZE,
     _wrap_rows,
     _zip_wrapped_rows
 )
@@ -4009,9 +4010,15 @@ class Table(object):
             for column_i, header in enumerate(headers):
                 if column_i >= len(row):
                     continue
-                rows[row_i][column_i] = self.__format_display_value(
+                shown = self.__format_display_value(
                     row[column_i], header, column_i
                 )
+                if isinstance(shown, str) and '\t' in shown:
+                    # Expand before anything measures or wraps the cell: a
+                    # tab measures nothing, so a column sized around it came
+                    # out narrower than the spaces it later turned into.
+                    shown = expand_tabs(shown, TAB_SIZE)
+                rows[row_i][column_i] = shown
                 # rows_with_i has the index at 0.
                 with_i_i = column_i + 1
                 if with_i_i < len(rows_with_i[row_i]):
@@ -4609,6 +4616,12 @@ class Table(object):
 
     def __aligned_label(self, text, table_width, spec=None):
         """Place ``text`` left/centre/right over ``table_width`` columns."""
+        text = expand_tabs(str(text), TAB_SIZE)
+        if '\n' in text:
+            # Every line is placed on its own; aligning the block as a whole
+            # left the lines after the first at column 0.
+            return '\n'.join(self.__aligned_label(line, table_width, spec)
+                             for line in text.split('\n'))
         if spec and self.__colors_active:
             text = colorize(text, spec)
         width = visible_width(text)
@@ -4766,12 +4779,15 @@ class Table(object):
         if not self.__caption or self.__caption_position == 'border':
             return None
         table_width = drawn_width or self.__get_string_table_width()
-        caption = self.__caption
-        caption_width = visible_width(caption)
-        if caption_width >= table_width:
-            return caption
-        left = (table_width - caption_width) // 2
-        return (' ' * left) + caption
+        lines = []
+        for caption in expand_tabs(self.__caption, TAB_SIZE).split('\n'):
+            caption_width = visible_width(caption)
+            if caption_width >= table_width:
+                lines.append(caption)
+            else:
+                left = (table_width - caption_width) // 2
+                lines.append((' ' * left) + caption)
+        return '\n'.join(lines)
 
     def __apply_table_align(self, table_string):
         """Pad every line so the table sits left, centre or right."""
