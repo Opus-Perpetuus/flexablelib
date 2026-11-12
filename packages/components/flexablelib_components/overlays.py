@@ -184,10 +184,11 @@ class LoadingOverlay(Modal):
         lines = self.spinner.render(width=max(1, width - 4)).split('\n')
         if self.progress is not None:
             inner = max(1, width - 10)
-            done = int(round(inner * max(0.0, min(1.0, self.progress))))
+            fraction = max(0.0, min(1.0, self.progress))
+            done = int(round(inner * fraction))
             lines.append(self.paint('█' * done, self.theme.accent) +
                          self.paint('░' * (inner - done), self.theme.muted) +
-                         ' {0:>3.0f}%'.format(self.progress * 100))
+                         ' {0:>3.0f}%'.format(fraction * 100))
         return frame([' ' + l for l in [''] + lines + ['']], width, None,
                      self.theme.accent, self.paint)
 

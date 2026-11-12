@@ -411,6 +411,10 @@ class App(object):
                 return True
             node = getattr(node, 'parent', None)
         top = self._modal()
+        if top is None and self.focused is None:
+            # Nothing has the focus: the screen's own components still get
+            # their keys (a shell's shortcuts, a page with no inputs).
+            top = self.screen.body
         if isinstance(top, Component) and top is not self.focused and \
                 id(top) not in seen and top.handle_key(key):
             return True
