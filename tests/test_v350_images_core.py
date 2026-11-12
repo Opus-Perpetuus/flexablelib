@@ -262,12 +262,22 @@ class TestLoading:
         monkeypatch.setattr(builtins, '__import__', no)
         monkeypatch.setattr(I, '_which', lambda name: '/bin/' + name)
         seen = []
-        monkeypatch.setattr(I, '_run', lambda cmd, data=None, timeout=20:
-                            seen.append(cmd) or png)
+        def run(cmd, data=None, timeout=20):
+            seen.append(cmd)
+            if cmd[0] == 'pdftoppm':
+                with open(cmd[-1] + '.png', 'wb') as handle:
+                    handle.write(png)
+            return png
+        monkeypatch.setattr(I, '_run', run)
         assert I.render_svg(b'<svg/>', 40) == png
         assert I.render_pdf(b'%PDF') == png
         assert seen[0][:3] == ['rsvg-convert', '-f', 'png']
         assert seen[1][0] == 'pdftoppm'
+        monkeypatch.setattr(I, '_run', lambda *a, **k: None)
+        with pytest.raises(I.ImageError):
+            I.render_pdf(b'%PDF')
+        with pytest.raises(I.ImageError):
+            I.render_svg(b'<svg/>')
 
 
 class TestColours:
@@ -383,3 +393,279 @@ class TestPrimitives:
                     I.use('c')
         finally:
             I.use(old)
+
+
+def _bmp(width, height, bits, rows, compression=0, masks=None, header=40,
+         palette=b''):
+    stride = ((width * bits + 31) // 32) * 4
+    pixels = b''.join(r.ljust(stride, b'\0') for r in rows)
+    extra = b''
+    if masks:
+        extra = struct.pack('<' + 'I' * len(masks), *masks)
+    info = struct.pack('<IiiHHIIiiII', header, width, height, 1, bits,
+                       compression, len(pixels), 2835, 2835,
+                       len(palette) // 4, 0)
+    info = info.ljust(header, b'\0')
+    if masks and header >= 52:
+        info = info[:40] + extra + info[40 + len(extra):]
+        extra = b''
+    offset = 14 + header + len(extra) + len(palette)
+    head = b'BM' + struct.pack('<IHHI', offset + len(pixels), 0, 0, offset)
+    return head + info + extra + palette + pixels
+
+
+class TestMoreDecoding:
+    def test_python_unfilter_all_filters(self):
+        rnd = random.Random(2)
+        for bpp in (1, 3, 4, 8):
+            stride, rows = bpp * 5, 4
+            data = bytearray()
+            for r in range(rows):
+                data.append(r % 5)
+                data += bytes(rnd.randrange(256) for _ in range(stride))
+            got = I._py_unfilter(bytes(data), rows, stride, bpp)
+            if 'c' in I.available():
+                assert I._C.unfilter(bytes(data), rows, stride, bpp) == got
+        with pytest.raises(I.ImageError):
+            I._py_unfilter(b'\x09' + b'\0' * 4, 1, 4, 1)
+        with pytest.raises(I.ImageError):
+            I._py_unfilter(b'\x00', 1, 4, 1)
+
+    def test_png_python_backend(self, backend):
+        Image = pytest.importorskip('PIL.Image')
+        rnd = random.Random(8)
+        im = Image.new('RGBA', (9, 9))
+        im.putdata([tuple(rnd.randrange(256) for _ in range(4))
+                    for _ in range(81)])
+        for interlace in (0, 1):
+            buf = io.BytesIO()
+            im.save(buf, 'PNG', interlace=interlace)
+            assert I.decode_png(buf.getvalue()).data == im.tobytes()
+
+    def test_png_transparency_keys(self):
+        def chunk(kind, data):
+            return (struct.pack('>I', len(data)) + kind + data +
+                    struct.pack('>I', zlib.crc32(kind + data) & 0xffffffff))
+        bm = I.decode_png(_png(2, 1, 0, 8, [b'\x05\x09'],
+                               chunk(b'tRNS', b'\x00\x05')))
+        assert bm.pixel(0, 0)[3] == 0 and bm.pixel(1, 0)[3] == 255
+        bm = I.decode_png(_png(1, 1, 0, 16, [b'\x12\x34'],
+                               chunk(b'tRNS', b'\x12\x34')))
+        assert bm.pixel(0, 0)[3] == 0
+        bm = I.decode_png(_png(2, 1, 2, 8, [b'\x01\x02\x03\x04\x05\x06'],
+                               chunk(b'tRNS', b'\x00\x01\x00\x02\x00\x03')))
+        assert bm.pixel(0, 0)[3] == 0 and bm.pixel(1, 0)[3] == 255
+        bm = I.decode_png(_png(1, 1, 2, 16, [b'\x01\x00\x02\x00\x03\x00'],
+                               chunk(b'tRNS', b'\x01\x00\x02\x00\x03\x00')))
+        assert bm.pixel(0, 0)[3] == 0
+        bm = I.decode_png(_png(1, 1, 6, 16, [b'\xff\x00' * 4]))
+        assert bm.pixel(0, 0) == (255, 255, 255, 255)
+        bm = I.decode_png(_png(1, 1, 4, 16, [b'\x80\x00\xff\xff']))
+        assert bm.pixel(0, 0) == (128, 128, 128, 255)
+
+    def test_png_bad_headers(self):
+        with pytest.raises(I.ImageError):
+            I.decode_png(_png(1, 1, 7, 8, [b'\0']))
+        with pytest.raises(I.ImageError):
+            I.decode_png(_png(1, 1, 3, 8, [b'\0']))      # no palette
+        good = _png(1, 1, 0, 8, [b'\0'])
+        with pytest.raises(I.ImageError):
+            I.decode_png(good[:40])
+
+    def test_bmp_variants(self):
+        bm = I.decode_bmp(_bmp(2, 1, 24, [b'\x01\x02\x03\x04\x05\x06']))
+        assert bm.pixel(0, 0) == (3, 2, 1, 255)
+        bm = I.decode_bmp(_bmp(1, 2, 24, [b'\x00\x00\xff', b'\xff\x00\x00']))
+        assert bm.pixel(0, 0)[:3] == (0, 0, 255)       # bottom-up
+        bm = I.decode_bmp(_bmp(1, -2, 24, [b'\x00\x00\xff', b'\xff\x00\x00']))
+        assert bm.pixel(0, 0)[:3] == (255, 0, 0)       # top-down
+        v = (31 << 10) | (0 << 5) | 31
+        bm = I.decode_bmp(_bmp(1, 1, 16, [struct.pack('<H', v)]))
+        assert bm.pixel(0, 0)[:3] == (255, 0, 255)
+        bm = I.decode_bmp(_bmp(1, 1, 32, [b'\x01\x02\x03\x00']))
+        assert bm.pixel(0, 0) == (3, 2, 1, 255)
+        masks = (0xF800, 0x07E0, 0x001F)
+        bm = I.decode_bmp(_bmp(1, 1, 16, [struct.pack('<H', 0xF800)], 3,
+                               masks))
+        assert bm.pixel(0, 0) == (255, 0, 0, 255)
+        masks = (0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000)
+        bm = I.decode_bmp(_bmp(1, 1, 32, [b'\x10\x20\x30\x80'], 3, masks,
+                               header=108))
+        assert bm.pixel(0, 0) == (0x30, 0x20, 0x10, 0x80)
+        pal = b'\x00\x00\xff\x00' + b'\xff\x00\x00\x00'
+        bm = I.decode_bmp(_bmp(3, 1, 1, [b'\x40'], palette=pal))
+        assert bm.pixel(1, 0)[:3] == (0, 0, 255)
+        assert bm.pixel(0, 0)[:3] == (255, 0, 0)
+        bm = I.decode_bmp(_bmp(2, 1, 4, [b'\x10'], palette=pal))
+        assert bm.pixel(0, 0)[:3] == (0, 0, 255)
+        bm = I.decode_bmp(_bmp(2, 1, 2, [b'\x40'], palette=pal))
+        assert bm.pixel(0, 0)[:3] == (0, 0, 255)
+
+    def test_bmp_errors(self):
+        with pytest.raises(I.ImageError):
+            I.decode_bmp(b'BM')
+        with pytest.raises(I.ImageError):
+            I.decode_bmp(_bmp(1, 1, 8, [b'\0'], compression=1,
+                              palette=b'\0' * 4))
+        data = _bmp(4, 4, 24, [b'\0' * 12] * 4)
+        with pytest.raises(I.ImageError):
+            I.decode_bmp(data[:-20])
+
+    def test_gif_features(self):
+        Image = pytest.importorskip('PIL.Image')
+        rnd = random.Random(4)
+        im = Image.new('P', (20, 19))
+        im.putpalette(bytes(rnd.randrange(256) for _ in range(768)))
+        im.putdata([rnd.randrange(256) for _ in range(380)])
+        buf = io.BytesIO()
+        im.save(buf, 'GIF', interlace=True)
+        assert I.decode_gif(buf.getvalue()).data == \
+            Image.open(io.BytesIO(buf.getvalue())).convert('RGBA').tobytes()
+        frames = [Image.new('RGB', (6, 6), (255, 0, 0)),
+                  Image.new('RGB', (6, 6), (0, 0, 255))]
+        for disposal in (2, 3):
+            buf = io.BytesIO()
+            frames[0].save(buf, 'GIF', save_all=True,
+                           append_images=frames[1:], disposal=disposal,
+                           duration=40, transparency=0)
+            got = I.decode_gif(buf.getvalue(), all_frames=True)
+            assert len(got) == 2
+
+    def test_gif_errors(self):
+        with pytest.raises(I.ImageError):
+            I.decode_gif(b'GIF00a')
+        head = b'GIF89a' + struct.pack('<HHBBB', 1, 1, 0, 0, 0)
+        with pytest.raises(I.ImageError):
+            I.decode_gif(head + b'\x3b')
+        with pytest.raises(I.ImageError):
+            I.decode_gif(head + b'\x99')
+        # local colour table, no global one, code beyond the table
+        frame = b'\x2c' + struct.pack('<HHHHB', 0, 0, 1, 1, 0x80) + \
+            b'\x00\x00\x00\xff\xff\xff' + b'\x02\x02\xff\xff\x00\x3b'
+        with pytest.raises(I.ImageError):
+            I.decode_gif(head + frame)
+        plain_frame = b'\x2c' + struct.pack('<HHHHB', 0, 0, 1, 1, 0) + \
+            b'\x02\x02\x44\x01\x00\x3b'
+        assert I.decode_gif(head + plain_frame).size == (1, 1)
+
+    def test_read_source_http(self, tmp_path):
+        import http.server
+        import threading
+        png = I.encode_png(_gradient(2, 2))
+        (tmp_path / 'a.png').write_bytes(png)
+
+        class Quiet(http.server.SimpleHTTPRequestHandler):
+            def __init__(self, *a, **k):
+                super().__init__(*a, directory=str(tmp_path), **k)
+
+            def log_message(self, *a):
+                pass
+        server = http.server.HTTPServer(('127.0.0.1', 0), Quiet)
+        t = threading.Thread(target=server.serve_forever, daemon=True)
+        t.start()
+        try:
+            url = 'http://127.0.0.1:{0}/'.format(server.server_port)
+            assert I.read_source(url + 'a.png')[0] == png
+            with pytest.raises(I.ImageError):
+                I.read_source(url + 'a.png', max_bytes=10)
+            with pytest.raises(I.ImageError):
+                I.read_source(url + 'missing.png')
+        finally:
+            server.shutdown()
+
+    def test_read_source_errors(self, tmp_path):
+        with pytest.raises(I.ImageError):
+            I.read_source(str(tmp_path))
+        big = tmp_path / 'big.bin'
+        big.write_bytes(b'x' * 20)
+        with pytest.raises(I.ImageError):
+            I.read_source(str(big), max_bytes=10)
+        assert I.read_source(io.BytesIO(b'ab'))[0] == b'ab'
+
+    def test_svg_pdf_real_tools(self, tmp_path):
+        import shutil
+        if shutil.which('rsvg-convert'):
+            svg = (b'<svg xmlns="http://www.w3.org/2000/svg" width="8" '
+                   b'height="4"><rect width="8" height="4" fill="red"/></svg>')
+            bm = I.decode(svg)
+            assert bm.size[0] > 0 and bm.pixel(1, 1)[0] > 200
+        if shutil.which('pdftoppm'):
+            Image = pytest.importorskip('PIL.Image')
+            buf = io.BytesIO()
+            Image.new('RGB', (40, 20), (0, 0, 255)).save(buf, 'PDF')
+            bm = I.decode(buf.getvalue())
+            assert bm.size[0] > 10 and bm.pixel(5, 5)[2] > 200
+
+    def test_run_failures(self):
+        assert I._run(['/nonexistent/tool']) is None
+        assert I._run(['false']) is None if os.name != 'nt' else True
+
+
+_ADAM7 = ((0, 0, 8, 8), (4, 0, 8, 8), (0, 4, 4, 8), (2, 0, 4, 4),
+          (0, 2, 2, 4), (1, 0, 2, 2), (0, 1, 1, 2))
+
+
+def _adam7_png(bm):
+    """An interlaced RGBA PNG of ``bm`` (filter 0 in every pass)."""
+    def chunk(kind, data):
+        return (struct.pack('>I', len(data)) + kind + data +
+                struct.pack('>I', zlib.crc32(kind + data) & 0xffffffff))
+    raw = bytearray()
+    for x0, y0, dx, dy in _ADAM7:
+        for y in range(y0, bm.height, dy):
+            xs = list(range(x0, bm.width, dx))
+            if not xs:
+                continue
+            raw.append(0)
+            for x in xs:
+                raw += bytes(bm.pixel(x, y))
+    ihdr = struct.pack('>IIBBBBB', bm.width, bm.height, 8, 6, 0, 0, 1)
+    return (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', ihdr) +
+            chunk(b'IDAT', zlib.compress(bytes(raw))) + chunk(b'IEND', b''))
+
+
+class TestEdgeCases:
+    def test_adam7(self, backend):
+        for w, h in ((1, 1), (3, 2), (9, 11), (17, 5)):
+            bm = _gradient(w, h, alpha=True)
+            assert I.decode_png(_adam7_png(bm)).data == bm.data
+
+    def test_pnm_errors_and_depths(self):
+        for bad in (b'P6\nx y\n255\n', b'P6\n2 2\n255\n\x00',
+                    b'P4\n9 2\n\x00', b'P3\n2 1\n255\n1 2 3'):
+            with pytest.raises(I.ImageError):
+                I.decode_pnm(bad)
+        assert I.decode_pnm(b'P2\n1 1\n65535\n65535').pixel(0, 0)[0] == 255
+        assert I.decode_pnm(b'P5\n1 1\n15\n\x0f').pixel(0, 0)[0] == 255
+
+    def test_decode_misc(self, monkeypatch):
+        monkeypatch.setenv('FLEXABLELIB_NO_PILLOW', '1')
+        with pytest.raises(I.ImageError):
+            I.decode(b'')
+        png = I.encode_png(_gradient(2, 2))
+        assert len(I.decode(png, all_frames=True)) == 1
+        assert I.detect_format(b'II*\x00') == 'tiff'
+        assert I.detect_format(b'\x00\x00\x01\x00') == 'ico'
+
+    def test_flatten_mixed_alpha(self):
+        bm = I.Bitmap(2, 1, bytes([10, 20, 30, 255, 200, 200, 200, 0]))
+        flat = bm.flatten((1, 2, 3))
+        assert flat.pixel(0, 0) == (10, 20, 30, 255)
+        assert flat.pixel(1, 0) == (1, 2, 3, 255)
+
+    @pytest.mark.parametrize('mode', ['half', 'quadrant', 'sextant',
+                                      'braille', 'ascii'])
+    def test_cells_transparency_and_flat(self, backend, mode):
+        pw, ph = I.CELL_PIXELS[mode]
+        w, h = pw * 3, ph
+        clear = bytes(w * h * 4)
+        solid = bytes([200, 10, 10, 255]) * (w * h)
+        mixed = bytearray(solid)
+        for i in range(0, len(mixed), 8):
+            mixed[i + 3] = 0
+        for data in (clear, solid, bytes(mixed)):
+            for color in ('truecolor', 'none', '16'):
+                lines = I.cells(data, w, h, mode, color, 128)
+                assert len(lines) == 1
+        line, = I.cells(clear, w, h, mode, 'none', 128)
+        assert line.strip() == ''

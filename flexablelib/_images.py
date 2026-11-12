@@ -264,6 +264,8 @@ def decode_png(data):
     channels = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}.get(ctype)
     if channels is None or depth not in (1, 2, 4, 8, 16):
         raise ImageError('PNG no soportado')
+    if ctype == 3 and not palette:
+        raise ImageError('PNG con paleta pero sin PLTE')
     try:
         raw = zlib.decompress(b''.join(idat))
     except zlib.error:
@@ -715,10 +717,19 @@ def render_pdf(data, dpi=96):
         except Exception as error:
             raise ImageError('PDF dañado: {0}'.format(error))
     if _which('pdftoppm'):
-        out = _run(['pdftoppm', '-png', '-f', '1', '-l', '1', '-r', str(dpi),
-                    '-singlefile', '-', '-'], data)
-        if out:
-            return out
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            src = os.path.join(tmp, 'in.pdf')
+            with open(src, 'wb') as handle:
+                handle.write(data)
+            base = os.path.join(tmp, 'page')
+            _run(['pdftoppm', '-png', '-f', '1', '-l', '1', '-r', str(dpi),
+                  '-singlefile', src, base])
+            try:
+                with open(base + '.png', 'rb') as handle:
+                    return handle.read()
+            except OSError:
+                pass
     raise ImageError('PDF necesita PyMuPDF o pdftoppm (poppler)')
 
 
