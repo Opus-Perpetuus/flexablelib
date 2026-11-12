@@ -396,6 +396,15 @@ def set_graphics_expander(function):
 def expand_graphics(text):
     """``text`` with picture marks expanded, when a picture module is
     loaded and the text has any; otherwise ``text`` unchanged."""
-    if _graphics_expander is None or GRAPHICS_MARK not in text:
+    if GRAPHICS_MARK not in text:
         return text
-    return _graphics_expander(text)
+    function = _graphics_expander
+    if function is None:
+        # This module may have been reloaded after the picture module
+        # registered itself: find it again.
+        import sys
+        module = sys.modules.get('flexablelib_tui.graphics')
+        if module is None:
+            return text
+        function = module.expand
+    return function(text)
