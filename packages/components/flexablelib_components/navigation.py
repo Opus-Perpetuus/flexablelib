@@ -1384,6 +1384,11 @@ class AppShell(_Themed):
     expand = True
     role = 'application'
 
+    def a11y_name(self):
+        if self.a11y_label:
+            return self.a11y_label
+        return getattr(self.topbar, 'title', '') or ''
+
     def __init__(self, content=None, sidebar=None, topbar=None, pages=None,
                  sidebar_below=70, **kwargs):
         super(AppShell, self).__init__(**kwargs)

@@ -215,9 +215,15 @@ _LABELS = {'ctrl': 'Ctrl', 'alt': 'Alt', 'shift': 'Shift', 'meta': 'Meta',
            'pagedown': 'PgDn', 'escape': 'Esc', 'enter': 'Enter',
            'backspace': 'Backspace', 'delete': 'Supr', 'insert': 'Insert',
            'space': 'Espacio', 'tab': 'Tab', 'up': '↑', 'down': '↓',
-           'left': '←', 'right': '→', 'home': 'Inicio', 'end': 'Fin'}
+           'left': '←', 'right': '→', 'home': 'Inicio', 'end': 'Fin',
+           'scrollup': 'Rueda ↑', 'scrolldown': 'Rueda ↓',
+           'scrollleft': 'Rueda ←', 'scrollright': 'Rueda →',
+           'paste': 'Pegar', 'focusin': 'Foco ganado',
+           'focusout': 'Foco perdido', 'mouse': 'Ratón'}
 _ASCII_LABELS = {'up': 'Arriba', 'down': 'Abajo', 'left': 'Izq',
-                 'right': 'Der'}
+                 'right': 'Der', 'scrollup': 'Rueda arriba',
+                 'scrolldown': 'Rueda abajo', 'scrollleft': 'Rueda izq',
+                 'scrollright': 'Rueda der'}
 
 
 def key_label(name, ascii=False):
