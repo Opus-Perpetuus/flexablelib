@@ -30,7 +30,8 @@ import time
 
 from flexablelib import _frames as _fx
 from flexablelib.colors import RESET, parse_spec, supports_color
-from flexablelib.layout import Grid, GridCell, _render_child, render_width
+from flexablelib.layout import (Card, Grid, GridCell, _render_child,
+                                render_width)
 
 from . import accessibility as _a11y
 from .keys import Key, MouseEvent, key_label
@@ -267,6 +268,10 @@ def _child_nodes(node):
         return list(node.children)
     if isinstance(node, GridCell):
         return [node.child]
+    if isinstance(node, Card):
+        body = node.body
+        return [body] if body is not None and not isinstance(body, str) \
+            else []
     if isinstance(node, App):
         return [node.screen] + list(node.layers)
     return []

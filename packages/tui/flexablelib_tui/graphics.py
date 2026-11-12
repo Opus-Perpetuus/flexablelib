@@ -365,6 +365,16 @@ def _finish(info):
     return info
 
 
+def _query_text(info):
+    """The query sent to the terminal: kitty graphics, cell and window
+    size, sixel colour registers (not asked of kitty, which has no sixel),
+    XTVERSION and DA1 last (every terminal answers DA1)."""
+    text = GRAPHICS_QUERY
+    if info.terminal == 'kitty':
+        text = text.replace('\x1b[?1;1;0S', '')
+    return text + '\x1b[>0q\x1b[c'
+
+
 def _query_wanted(info, env):
     if info.dumb or info.tmux:
         return False
@@ -403,7 +413,7 @@ def query(info=None, env=None, timeout=0.3, tty_path='/dev/tty'):
     keys = []
     try:
         tty.setraw(fd)
-        os.write(fd, (GRAPHICS_QUERY + '\x1b[>0q\x1b[c').encode())
+        os.write(fd, _query_text(info).encode())
         deadline = time.monotonic() + timeout
         done = False
         while not done and time.monotonic() < deadline:
@@ -435,7 +445,7 @@ def probe_terminal(terminal, timeout=0.3, env=None):
     env = dict(os.environ) if env is None else env
     info = guess(env)
     if terminal.is_tty() and _query_wanted(info, env):
-        terminal.write(GRAPHICS_QUERY + '\x1b[>0q\x1b[c')
+        terminal.write(_query_text(info))
         deadline = time.monotonic() + timeout
         typed = []
         done = False
