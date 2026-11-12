@@ -13,14 +13,17 @@ extra always installs the matching release.
 | Extra | Installs | What you get |
 | --- | --- | --- |
 | `tui` | `flexablelib-tui` | `App` (focus, key bindings, dialogs, notifications, ticks, resize), keyboard input on Linux, macOS and Windows, `ScrollView`, and the widgets/`Screen`/`Live` (moved here in 3.3.0; still importable from `flexablelib`). Pure Python. |
-| `components` | `flexablelib-components` + `flexablelib-tui` | the 83 components in [COMPONENTS.md](COMPONENTS.md). Pure Python. |
-| `speed` | `flexablelib-speedups` | C code for interface frames ([ACCELERATION.md](ACCELERATION.md)). Prebuilt wheels for CPython 3.8–3.14 on Linux (manylinux, musllinux x86_64), Windows x64 and macOS arm64; elsewhere it compiles from source, and without a compiler it installs without the C module and flexablelib keeps its Python frame code. |
+| `components` | `flexablelib-components` + `flexablelib-tui` | the 85 components in [COMPONENTS.md](COMPONENTS.md), including `Image` (PNG, GIF, BMP and PPM decode without dependencies). Pure Python. |
+| `images` | Pillow + `flexablelib-components` | pictures in JPEG, WebP, TIFF, ICO and every Pillow format, faster decoding ([IMAGES.md](IMAGES.md)). |
+| `svg` | cairosvg | SVG pictures (needs the cairo system library; `rsvg-convert` works without it). |
+| `speed` | `flexablelib-speedups` | C code for interface frames and pictures (resize, quantization, sixel, blocks) ([ACCELERATION.md](ACCELERATION.md)). Prebuilt wheels for CPython 3.8–3.14 on Linux (manylinux, musllinux x86_64), Windows x64 and macOS arm64; elsewhere it compiles from source, and without a compiler it installs without the C module and flexablelib keeps its Python frame code. |
 | `pandas`, `excel`, `html` | pandas, openpyxl, lxml | readers and writers. |
-| `all` | all of the above | |
+| `all` | all of the above except `svg` | |
 
 ```
 pip install "flexablelib[tui]"
 pip install "flexablelib[components,speed]"
+pip install "flexablelib[images]"
 pip install "flexablelib[all]"
 ```
 
@@ -35,7 +38,15 @@ print(implementation(), _frames.BACKEND)       # 'C extension' 'c'
 ```
 
 `FLEXABLELIB_FRAMES=python` forces the Python frame code even when the C
-package is installed.
+package is installed; `FLEXABLELIB_IMAGES=python` does the same for the
+picture code (`flexablelib._images.BACKEND`).
+
+What the terminal can show as pictures:
+
+```python
+from flexablelib_tui import detect_graphics
+print('\n'.join(detect_graphics().summary()))
+```
 
 ## Without the extras
 

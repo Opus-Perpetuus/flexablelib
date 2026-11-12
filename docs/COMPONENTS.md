@@ -1,9 +1,9 @@
 # Terminal components
 
 `pip install "flexablelib[components]"` installs `flexablelib-components`
-(and `flexablelib-tui`, which it builds on). It adds 83 components for
-interactive terminal applications: inputs, dates, display, navigation, data
-and dialogs. Each one
+(and `flexablelib-tui`, which it builds on). It adds 85 components for
+interactive terminal applications: inputs, dates, display, navigation, data,
+dialogs and pictures. Each one
 
 - renders at any width (`component.render(width=60)`), every line exactly
   that wide, in colour or as plain text (`use_colors=False`, `NO_COLOR`);
@@ -97,6 +97,19 @@ outside Tab, still clickable) and `disabled`.
 `DataTable` prints folios, IDs, codes and years without thousands
 separators (`'type': 'id'` / `'number'` per column, `id_columns`,
 `id_names`); see [FOLIOS.md](FOLIOS.md).
+
+## Pictures (3.5.0)
+
+`Image` shows a picture with the best method the terminal has -- kitty
+graphics, iTerm2 inline images, sixel, Unicode blocks, braille, ASCII --
+detected automatically; without any, a link opens it in the browser, and
+without a browser a warning (`⚠`) gives the file name and the reason.
+`ImageViewer` pages through pictures and `FilePreview` draws image files.
+They work inside `Card`, `Grid`, `Live` and `App` (frames carry an invisible
+mark; the picture is written with the frame and redrawn when its lines
+change). Details: [IMAGES.md](IMAGES.md).
+
+![Image and FilePreview inside Grid, Card and App](https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v35/08_card_grid_app.png)
 
 ## All components
 
@@ -205,7 +218,14 @@ separators (`'type': 'id'` / `'number'` per column, `id_columns`,
 | `Form` | Fields with labels, help and validation, laid out in `columns`, with submit / cancel buttons. `fields`: inputs, section titles (strings) or tuples of inputs for one row. Enter in a one-line field moves to the next; Ctrl-S (or the submit button) validates and calls `on_submit(values)`; Escape calls `on_cancel()`. `values()` is the `{name: value}` dict; `errors` the last validation. |
 | `ValidationSummary` | The list of errors of a form: `{field: message}`. |
 | `LoginForm` | User and password, a "remember me" box and an Enter button. `on_login(user, password, remember)` returns True, or an error message shown above the fields. |
-| `FilePreview` | A file's name, size, date and -- for text -- its first lines, with code highlighting by extension. Images, PDFs and other binaries show their details only (a terminal cannot draw them portably). |
+| `FilePreview` | A file's name, size, date and -- for text -- its first lines, with code highlighting by extension. Images (and the first page of PDFs and SVGs when a renderer is installed) are drawn with `Image` in `max_lines` rows; `images=False` shows details only. Other binaries show their details only. |
+
+### media
+
+| Component | What it is |
+| --- | --- |
+| `Image` | A picture from a path, URL, bytes, file object or Pillow image: kitty, iTerm2, sixel, Unicode blocks (`half`, `quadrant`, `sextant`, `braille`) or ASCII, whichever the terminal supports (`method=` or `FLEXABLELIB_IMAGE` forces one); otherwise a link to open it in the browser, or a warning when there is no browser. `alt` is the text alternative; `width`, `height`, `fit` (`contain`, `cover`, `fill`, `none`), `align`, `background`, `upscale`, `animate`, `caption`, `focusable` / `on_open` (Enter, `o`, click: open in the browser). See [IMAGES.md](IMAGES.md). |
+| `ImageViewer` | Several pictures, one at a time: Left/Right change, `f` cycles the fit, Enter opens the current one. Items are sources or `(source, alt)`. |
 
 ### overlays
 
@@ -227,7 +247,7 @@ The `flexablelib-tui` package adds `ScrollView`, `ProgressBar`, `Sparkline`,
 | Not included | Why |
 | --- | --- |
 | Signature pads (drawing with a pointer) | A terminal has no freehand pointer input; mouse reports are cell clicks, not strokes. |
-| Image viewers, image inputs, image and PDF previews | Terminal image protocols (sixel, kitty, iTerm2) are not universal and decoding images needs third-party libraries. `FilePreview` shows text files. |
+| Image inputs (picking a picture by drawing or pasting it) | A terminal cannot paste pixels; `FileInput` picks the file and `Image` shows it. Image viewers and previews exist since 3.5.0 (`Image`, `ImageViewer`, `FilePreview`). |
 | Rich-text (HTML/PDF) editors | WYSIWYG editing needs a document model and a renderer far beyond a terminal widget; `TextArea`, `MarkdownView` and `HtmlView` cover writing and showing text. |
 | On-screen numeric keypad | The physical keyboard is always there. |
 | Share banners | Web sharing has no terminal equivalent; a `Link` (OSC 8) opens a URL in terminals that support it. |
@@ -237,6 +257,7 @@ The `flexablelib-tui` package adds `ScrollView`, `ProgressBar`, `Sparkline`,
 
 ## Gallery
 
+![Pictures in every terminal](https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v35/09_visor_redibujo.png)
 ![Mouse](https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v34/02_raton.png)
 ![Focus without colour](https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v34/03_foco_visible.png)
 ![Dates](https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v33/09_fechas.png)

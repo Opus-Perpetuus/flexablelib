@@ -799,3 +799,19 @@ class TestViewerAndPreview:
         assert p.image() is p.image()
         q = fc.FilePreview(picture, images=False)
         assert not q.needs_graphics and q.image() is None
+
+
+class TestSmallPieces:
+    def test_query_text(self):
+        kitty = g.guess({'TERM': 'xterm-kitty'}, 'posix')
+        assert '\x1b[?1;1;0S' not in g._query_text(kitty)
+        other = g.guess({'TERM': 'xterm-256color'}, 'posix')
+        text = g._query_text(other)
+        assert '\x1b[?1;1;0S' in text and text.endswith('\x1b[>0q\x1b[c')
+
+    def test_app_reaches_components_inside_cards(self, picture):
+        v = fc.ImageViewer([picture, picture])
+        app = App(body=Card('Visor', body=v))
+        app.run(keys=['right'], size=(40, 12))
+        assert v.index == 1
+        assert App(body=Card('t', body='texto')).components() == []

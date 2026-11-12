@@ -97,3 +97,24 @@ x86_64):
 | `extract_marks` | 0.159 ms | 0.085 ms | 1.9× |
 
 ![Benchmark](https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v34/09_benchmark.png)
+
+## 3.5.0: pictures
+
+`flexablelib-speedups` gained `_images`, the C versions of the picture
+primitives in `flexablelib._images`: area-average resizing, median-cut
+quantization, the sixel encoder, PNG unfiltering and the conversion to
+half blocks, quadrants, sextants, braille and ASCII. Same Python fallback,
+same parity tests (random pictures, both backends, identical bytes).
+`FLEXABLELIB_IMAGES=python` switches the C code off.
+
+| Operation | Python | C | Speed-up |
+| --- | ---: | ---: | ---: |
+| resize 640×400 → 320×200 | 78.4 ms | 0.93 ms | 84× |
+| quantize 320×200, 255 colours | 454.5 ms | 15.60 ms | 29× |
+| sixel encode 320×200 | 113.0 ms | 2.60 ms | 43× |
+| half blocks 80×24 (truecolor) | 2.7 ms | 0.56 ms | 5× |
+| braille 80×24 (mono) | 7.1 ms | 0.08 ms | 87× |
+
+Best of 5, CPython 3.13, x86_64; `python tools/bench_images.py`.
+
+![Benchmark](https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v35/10_benchmark.png)
