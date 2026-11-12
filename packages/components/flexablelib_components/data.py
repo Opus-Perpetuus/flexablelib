@@ -731,9 +731,10 @@ class Form(_Themed):
 
     def children(self):
         kids = [f for row in self.rows for f in row if not isinstance(f, str)]
-        kids.append(self.submit_button)
+        # Same order as drawn: Tab walks the buttons left to right.
         if self.cancel_button is not None:
             kids.append(self.cancel_button)
+        kids.append(self.submit_button)
         return kids
 
     def natural_width(self):
