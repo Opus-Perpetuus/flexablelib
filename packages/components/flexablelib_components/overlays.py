@@ -23,6 +23,14 @@ class Modal(_Themed):
     closes it when ``closable``. ``width`` caps its width.
     """
 
+    role = 'dialog'
+
+    def a11y_name(self):
+        return self.a11y_label or self.title or ''
+
+    def a11y_value(self):
+        return self.content if isinstance(self.content, str) else ''
+
     def __init__(self, content, title=None, buttons=(), width=60,
                  closable=True, on_close=None, **kwargs):
         super(Modal, self).__init__(**kwargs)
@@ -105,6 +113,8 @@ class ConfirmDialog(Modal):
     """Yes / no: ``on_confirm()`` or ``on_cancel()``; ``danger=True``
     colours the confirm button as destructive."""
 
+    role = 'alertdialog'
+
     def __init__(self, message, on_confirm=None, on_cancel=None,
                  title='Confirmar', confirm_label='Aceptar',
                  cancel_label='Cancelar', danger=False, **kwargs):
@@ -168,6 +178,19 @@ class LoadingOverlay(Modal):
                                              width=kwargs.pop('width', 40),
                                              **kwargs)
 
+    role = 'progressbar'
+
+    def a11y_name(self):
+        return self.a11y_label or self.spinner.message or 'Cargando'
+
+    def a11y_value(self):
+        if self.progress is None:
+            return 'ocupado'
+        return '{0:.0f}%'.format(max(0.0, min(1.0, self.progress)) * 100)
+
+    def a11y_state(self):
+        return ['busy']
+
     def children(self):
         return []
 
@@ -213,6 +236,11 @@ class HelpLine(_Themed):
     ``tooltip`` or ``hint`` attribute. Put it above the footer; it is the
     terminal version of a tooltip.
     """
+
+    role = 'status'
+
+    def a11y_name(self):
+        return self.a11y_label or 'ayuda'
 
     def __init__(self, default='', **kwargs):
         super(HelpLine, self).__init__(**kwargs)

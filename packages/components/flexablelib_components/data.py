@@ -71,6 +71,59 @@ class DataTable(_Themed):
 
     focusable = True
     expand = True
+    role = 'grid'
+
+    def a11y_value(self):
+        view = self.view()
+        if not view:
+            return self.empty
+        row = self.current
+        n = min(self.cursor_row, len(view) - 1)
+        cells = ', '.join('{0} {1}'.format(c['title'], self.text(row, ci))
+                          for ci, c in enumerate(self.columns))
+        text = 'fila {0} de {1}: {2}'.format(n + 1, len(view), cells)
+        if self.sort_key is not None:
+            text += '; ordenada por {0} {1}'.format(
+                self.columns[self.sort_key]['title'],
+                'descendente' if self.sort_desc else 'ascendente')
+        return text
+
+    def a11y_state(self):
+        view = self.view()
+        if self.selectable and view and \
+                view[min(self.cursor_row, len(view) - 1)] in self.selected:
+            return ['selected']
+        return []
+
+    def _click_row(self, n, x):
+        view = self.view()
+        if n >= len(view):
+            return True
+        if self.selectable and x < 2:
+            i = view[n]
+            self.selected.symmetric_difference_update([i])
+            if self.on_select is not None:
+                self.on_select(self.selected_rows())
+            self.cursor_row = n
+            return True
+        if n == self.cursor_row and self.on_activate is not None:
+            self.on_activate(self.current)
+        self.cursor_row = n
+        return True
+
+    def on_mouse(self, event):
+        if event.action == 'scroll' and event.button in (64, 65):
+            self._move(-3 if event.button == 64 else 3)
+            self.refresh()
+            return True
+        if event.action == 'press' and event.button == 0:
+            for row, x0, x1, action in self._hot:
+                if row == event.y and x0 <= event.x < (x1 or 1 << 30):
+                    action(event.x) if getattr(action, 'wants_x', False) \
+                        else action()
+                    self.refresh()
+                    return True
+        return False
 
     def __init__(self, columns, rows=(), height=None, selectable=False,
                  on_activate=None, on_select=None, zebra=True,
@@ -320,7 +373,10 @@ class DataTable(_Themed):
         order = sorted(widths)
         mark_w = 2 if self.selectable else 0
         head = ' ' * mark_w
+        x = mark_w
         for ci in order:
+            self.hot(0, lambda ci=ci: self.sort_by(ci), x, x + widths[ci] + 2)
+            x += widths[ci] + 2
             col = self.columns[ci]
             title = col['title']
             if ci == self.sort_key:
@@ -354,6 +410,9 @@ class DataTable(_Themed):
                                   self.theme.muted))
         for n, i in enumerate(shown):
             row = self.rows[i]
+            pick = (lambda x, n=n: self._click_row(self.top + n, x))
+            pick.wants_x = True
+            self.hot(len(out), pick)
             line = ''
             if mark_w:
                 on = i in self.selected
@@ -444,6 +503,8 @@ class FilterBar(TextInput):
     is the row filter; ``table`` (a :class:`DataTable`) is refreshed on
     every change.
     """
+
+    role = 'searchbox'
 
     def __init__(self, fields=None, table=None, label=None, **kwargs):
         self.fields = list(fields) if fields else None
@@ -572,7 +633,31 @@ class EditableTable(DataTable):
             return True
         return super(EditableTable, self).on_key(key)
 
+    def _click_row(self, n, x):
+        widths = self._widths(self._last_width)
+        left = 2 if self.selectable else 0
+        for ci in sorted(widths):
+            if left <= x < left + widths[ci] + 2:
+                self.cursor_col = ci
+                break
+            left += widths[ci] + 2
+        if self.editor is not None:
+            return True
+        return DataTable._click_row(self, n, x)
+
+    _last_width = 80
+
+    def a11y_value(self):
+        text = DataTable.a11y_value(self)
+        if self.view() and 0 <= self.cursor_col < len(self.columns):
+            text += '; celda {0}'.format(
+                self.columns[self.cursor_col]['title'])
+            if self.editor is not None:
+                text += ' (editando: {0})'.format(self.editor.text)
+        return text
+
     def draw(self, width, height):
+        self._last_width = width
         lines = super(EditableTable, self).draw(width, height)
         view = self.view()
         if not view or not self.focused:
@@ -614,6 +699,23 @@ class CatalogGrid(_Themed):
 
     focusable = True
     expand = True
+    role = 'listbox'
+
+    def a11y_value(self):
+        if not self.items:
+            return 'Sin elementos'
+        item = self.items[min(self.index, len(self.items) - 1)]
+        text = '{0} ({1} de {2})'.format(item.get('title', ''),
+                                         self.index + 1, len(self.items))
+        if item.get('price') is not None:
+            text += ', precio {0}'.format(item['price'])
+        return text
+
+    def _click(self, i):
+        if i == self.index and self.on_select is not None:
+            self.on_select(self.items[i])
+        self.index = i
+        return True
 
     def __init__(self, items, min_width=24, on_select=None, card_height=6,
                  **kwargs):
@@ -677,7 +779,7 @@ class CatalogGrid(_Themed):
         color = self.theme.accent if selected else self.theme.border
         return frame([' ' + l for l in lines], width, None, color,
                      self.paint, style='heavy' if selected and
-                     not self._active() else 'rounded')
+                     (not self._active() or self._marked()) else 'rounded')
 
     def draw(self, width, height):
         cols = max(1, (width + 1) // (self.min_width + 1))
@@ -701,6 +803,9 @@ class CatalogGrid(_Themed):
                     break
                 blocks.append(self._card(self.items[i], card_w,
                                          self.focused and i == self.index))
+                for k in range(self.card_height):
+                    self.hot(len(out) + k, lambda i=i: self._click(i),
+                             c * (card_w + 1), c * (card_w + 1) + card_w)
             out.extend(join_columns(blocks, [card_w] * len(blocks)))
         if not self.items:
             out.append(self.paint('Sin elementos', self.theme.muted))
@@ -709,6 +814,15 @@ class CatalogGrid(_Themed):
 
 class ValidationSummary(_Themed):
     """The list of errors of a form: ``{field: message}``."""
+
+    role = 'alert'
+
+    def a11y_name(self):
+        return self.a11y_label or self.title
+
+    def a11y_value(self):
+        return '; '.join('{0}: {1}'.format(f, m)
+                         for f, m in self.errors.items())
 
     def __init__(self, errors=None, title='Revisa estos campos', **kwargs):
         super(ValidationSummary, self).__init__(**kwargs)
@@ -734,6 +848,19 @@ class Form(_Themed):
     ``on_submit(values)``; Escape calls ``on_cancel()``. ``values()`` is the
     ``{name: value}`` dict; ``errors`` the last validation.
     """
+
+    role = 'form'
+
+    def a11y_name(self):
+        return self.a11y_label or self.title or ''
+
+    def a11y_value(self):
+        if self.errors:
+            return '{0} errores'.format(len(self.errors))
+        return ''
+
+    def a11y_state(self):
+        return ['invalid'] if self.errors else []
 
     def __init__(self, fields, on_submit=None, on_cancel=None,
                  submit_label='Guardar', cancel_label='Cancelar', columns=1,
@@ -923,6 +1050,11 @@ class FilePreview(_Themed):
 
     LANGUAGES = {'.py': 'python', '.js': 'javascript', '.ts': 'typescript',
                  '.sql': 'sql', '.sh': 'bash', '.json': 'json'}
+
+    role = 'document'
+
+    def a11y_name(self):
+        return self.a11y_label or os.path.basename(self.path)
 
     def __init__(self, path, max_lines=20, **kwargs):
         super(FilePreview, self).__init__(**kwargs)
