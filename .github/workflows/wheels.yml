@@ -11,7 +11,7 @@ on:
   push:
     tags: ['v*']
   pull_request:
-    paths: ['setup.py', 'flexablelib/_speedups.c', '.github/workflows/wheels.yml', 'MANIFEST.in', 'packages/**']
+    paths: ['setup.py', 'flexablelib/_speedups.c', '.github/workflows/wheels.yml', 'MANIFEST.in', 'packages/**', 'tools/wheel_check.py']
   # Recovery: run on a tag ref (Actions -> wheels -> Run workflow -> tag) to
   # rebuild and publish that tag; files already on PyPI are skipped.
   workflow_dispatch:
@@ -28,12 +28,14 @@ concurrency:
 env:
   CIBW_BUILD: 'cp38-* cp39-* cp310-* cp311-* cp312-* cp313-* cp314-*'
   CIBW_SKIP: '*-win32 *_i686'
-  CIBW_TEST_COMMAND: >-
-    python -c "from flexablelib.fast import ACCELERATED; assert ACCELERATED"
+  # Every wheel is installed and checked on its own architecture: the C
+  # extension loads and matches the pure Python code on random input.
+  CIBW_TEST_COMMAND: python {project}/tools/wheel_check.py core
 
 jobs:
-  # 28 wheels per extension project: flexablelib (text measurement) and
-  # flexablelib-speedups (frame drawing), built in the same job.
+  # 49 wheels per extension project: flexablelib (text measurement) and
+  # flexablelib-speedups (frames and pictures), built in the same job, on a
+  # native runner per architecture (no emulation).
   wheels:
     name: wheels (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -41,10 +43,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # ubuntu: manylinux + musllinux x86_64 (14), windows: amd64 (7),
-        # macos-15: arm64 (7). macos-14 is retired; Intel macOS would be
-        # macos-15-intel if x86_64 wheels are ever wanted.
-        os: [ubuntu-latest, windows-latest, macos-15]
+        # ubuntu-latest: manylinux + musllinux x86_64 (14),
+        # ubuntu-24.04-arm: manylinux + musllinux aarch64 (14),
+        # windows: amd64 (7), macos-15: arm64 (7), macos-15-intel: x86_64 (7).
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-15,
+             macos-15-intel]
     steps:
       - uses: actions/checkout@v5
       - uses: pypa/cibuildwheel@v3.4.1
@@ -52,8 +55,10 @@ jobs:
         with:
           package-dir: packages/speedups
         env:
-          CIBW_TEST_COMMAND: >-
-            python -c "from flexablelib_speedups import _frames, _images; assert _frames.fit_line('abc', 2) == 'ab'; assert _images.resize(b'\xff' * 16, 2, 2, 1, 1) == b'\xff' * 4"
+          # The checks compare with the core's Python code: install the core
+          # of this commit (with its own C extension) first.
+          CIBW_BEFORE_TEST: python -m pip install {project}
+          CIBW_TEST_COMMAND: python {project}/tools/wheel_check.py speedups
       - uses: actions/upload-artifact@v6
         with:
           name: wheels-${{ matrix.os }}
@@ -97,9 +102,10 @@ jobs:
           [ "refs/tags/v$version" = "$GITHUB_REF" ] || { echo "tag $GITHUB_REF does not match package.json $version"; exit 1; }
           for project in flexablelib flexablelib_speedups; do
             wheels=$(ls dist/$project-$version-*.whl | wc -l)
-            [ "$wheels" -eq 28 ] || { echo "expected 28 $project wheels, got $wheels"; exit 1; }
-            for os in manylinux musllinux win_amd64 macosx; do
-              n=$(ls dist/$project-$version-*.whl | grep -c "$os" || true)
+            [ "$wheels" -eq 49 ] || { echo "expected 49 $project wheels, got $wheels"; exit 1; }
+            for os in 'manylinux.*x86_64' 'musllinux.*x86_64' 'manylinux.*aarch64' \
+                      'musllinux.*aarch64' win_amd64 'macosx.*arm64' 'macosx.*x86_64'; do
+              n=$(ls dist/$project-$version-*.whl | grep -cE "$os" || true)
               [ "$n" -eq 7 ] || { echo "expected 7 $os $project wheels, got $n"; exit 1; }
             done
           done
@@ -109,7 +115,7 @@ jobs:
           for project in flexablelib flexablelib_speedups flexablelib_tui flexablelib_components; do
             [ -f "dist/$project-$version.tar.gz" ] || { echo "missing $project sdist"; exit 1; }
           done
-          [ "$(ls dist | wc -l)" -eq 62 ] || { echo "expected 62 files"; exit 1; }
+          [ "$(ls dist | wc -l)" -eq 104 ] || { echo "expected 104 files"; exit 1; }
           mkdir core extras
           mv dist/flexablelib-$version* core/
           mv dist/* extras/
