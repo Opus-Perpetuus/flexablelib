@@ -139,3 +139,16 @@ def test_responsive_cards_with_tab_and_newline_in_the_title_column():
     assert '\t' not in out
     assert _widths(out) == {30}
     assert 'line1 line2' in out.split('\n')[0]
+
+
+@pytest.mark.parametrize('overflow', ['wrap', 'truncate'])
+def test_headers_with_tabs_respect_max_width(overflow):
+    table = Table(rows=[['a' * 30, 'b' * 30, 'c']],
+                  headers=['x\ty\tz', 'h', 'q\tr'])
+    table.use_colors = False
+    table.overflow = overflow
+    table.max_width = 30
+    out = table.compose()
+    assert '\t' not in out
+    assert max(_widths(out)) <= 30
+    assert len(_widths(out)) == 1
