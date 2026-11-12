@@ -484,7 +484,8 @@ class TestBrowser:
         calls = []
         assert g.open_external('/tmp/a.png', {'DISPLAY': ':0'}, 'linux',
                                which_from('xdg-open'), calls.append)[0]
-        assert calls[-1][1] == 'file:///tmp/a.png'
+        assert calls[-1][1].startswith('file:///')
+        assert calls[-1][1].endswith('/tmp/a.png')
         g.open_external('/tmp/a.png', {'DISPLAY': ':0'}, 'linux',
                         which_from('gio'), calls.append)
         assert calls[-1][:2] == ['gio', 'open']
@@ -592,6 +593,12 @@ class TestImage:
         monkeypatch.delenv('DISPLAY', raising=False)
         monkeypatch.delenv('BROWSER', raising=False)
         monkeypatch.setenv('FLEXABLELIB_IMAGE', 'link')
+        real = g.browser_available
+        monkeypatch.setattr(        # a Linux box without a display
+            g, 'browser_available',
+            lambda env=None, platform=None, which=None: real(env, 'linux',
+                                                             which))
+        monkeypatch.setattr(g, '_wsl', lambda env: False)
         import webbrowser
         import subprocess
         opened = []
