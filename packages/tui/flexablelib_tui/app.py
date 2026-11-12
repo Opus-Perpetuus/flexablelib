@@ -791,8 +791,11 @@ class App(object):
         if not chain:
             return self._modal() is not None    # outside a dialog: swallow
         if action == 'press' and event.button in (0, 1, 2):
+            # Only what Tab could reach: an inner picker (a calendar inside
+            # a date input) leaves the focus on the input that owns it.
+            reachable = set(map(id, self.focusables()))
             for comp in chain:
-                if comp.can_focus:
+                if id(comp) in reachable:
                     if (comp.tab_index or 0) >= -1:
                         self.focus(comp)
                     break

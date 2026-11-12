@@ -172,6 +172,17 @@ class _Themed(Component):
             self._hot = []
         self._hot.append((self._hot_base + row, x0, x1, action))
 
+    def hot_parts(self, row, parts, gap=1, start=0, actions=()):
+        """Register ``actions[i]`` for the columns ``parts[i]`` take on
+        ``row`` when the parts are joined with ``gap`` columns between them
+        (``None`` actions are skipped)."""
+        x = start
+        for part, action in zip(parts, actions):
+            w = _fx.visible_width(_fx.strip_ansi(part))
+            if action is not None:
+                self.hot(row, action, x, x + w)
+            x += w + gap
+
     def on_mouse(self, event):
         if event.action != 'press' or event.button != 0:
             return False

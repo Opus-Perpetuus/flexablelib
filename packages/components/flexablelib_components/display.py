@@ -12,6 +12,8 @@ import re
 from flexablelib import _frames as _fx
 from flexablelib.text_width import wrap_to_width
 
+from flexablelib_tui import accessibility as _a11y
+
 from .base import _Themed, frame
 
 __all__ = ['Badge', 'Tag', 'StatusBadge', 'Alert', 'Link', 'Breadcrumbs',
@@ -31,6 +33,16 @@ def _wrap(text, width):
 class Badge(_Themed):
     """A short label on a coloured background: ``kind`` is a theme kind
     (``'info'``, ``'success'``, ``'warning'``, ``'error'``) or ``color``."""
+
+    role = 'status'
+
+    def a11y_name(self):
+        return self.a11y_label or self.text
+
+    def a11y_value(self):
+        word = _a11y.STATUS_SYMBOLS.get(self.kind)
+        return (word[2] if _a11y.settings.lang == 'es' else word[3]) \
+            if word else ''
 
     def __init__(self, text, kind='info', color=None, **kwargs):
         super(Badge, self).__init__(**kwargs)
@@ -78,6 +90,12 @@ class StatusBadge(Badge):
     def inline(self):
         kind = self.kind
         color = self.color or getattr(self.theme, kind, None) or kind
+        known = kind in _a11y.STATUS_SYMBOLS
+        if self._marked() and known:
+            # The symbol says the kind too (✔ ⚠ ✖ ℹ), not just the colour.
+            symbol = _a11y.status_symbol(kind, ascii=not self._active() or
+                                         None)
+            return self.paint(symbol, color) + ' ' + self.text
         dot = self.paint('●', color) if self._active() else '*'
         return dot + ' ' + self.text
 
@@ -89,6 +107,24 @@ class Alert(_Themed):
     """
 
     ICONS = {'info': 'ℹ', 'success': '✔', 'warning': '⚠', 'error': '✖'}
+    role = 'alert'
+
+    def a11y_name(self):
+        if self.a11y_label:
+            return self.a11y_label
+        return _a11y.status_symbol(self.kind, word=True).split(' ', 1)[-1] \
+            + (': ' + self.title if self.title else '')
+
+    def a11y_value(self):
+        return str(self.message) if self.visible else ''
+
+    def on_mouse(self, event):
+        if self.dismissible and event.action == 'press' and \
+                event.button == 0:
+            self.visible = False
+            self.refresh()
+            return True
+        return False
 
     def __init__(self, message, kind='info', title=None, dismissible=False,
                  **kwargs):
@@ -137,6 +173,20 @@ class Link(_Themed):
     """
 
     focusable = True
+    role = 'link'
+
+    def a11y_name(self):
+        return self.a11y_label or str(self.text)
+
+    def a11y_value(self):
+        return self.url if self.url != self.text else ''
+
+    def on_mouse(self, event):
+        if event.action == 'press' and event.button == 0 and \
+                self.on_open is not None:
+            self.on_open(self.url)
+            return True
+        return False
 
     def __init__(self, text, url=None, show_url=False, on_open=None,
                  **kwargs):
@@ -156,6 +206,8 @@ class Link(_Themed):
                 if self.text != self.url else self.url
         spec = 'underline ' + (self.theme.accent if self.focused else
                                self.theme.info)
+        if self.focused and self._marked():
+            spec = 'bold reverse ' + spec
         text = '\x1b]8;;{0}\x1b\\{1}\x1b]8;;\x1b\\'.format(
             self.url, self.paint(self.text, spec))
         if self.show_url:
@@ -175,6 +227,13 @@ class Link(_Themed):
 class Breadcrumbs(_Themed):
     """``Inicio › Ventas › Pedido 1281``: the last item is the current one;
     long trails collapse in the middle to fit."""
+
+    role = 'navigation'
+
+    def a11y_value(self):
+        if not self.items:
+            return ''
+        return ' › '.join(self.items) + ' (actual: {0})'.format(self.items[-1])
 
     def __init__(self, items, separator=' › ', **kwargs):
         super(Breadcrumbs, self).__init__(**kwargs)
@@ -206,6 +265,13 @@ class EmptyState(_Themed):
     """A centred icon, title and hint for a view with nothing to show."""
 
     expand = True
+    role = 'status'
+
+    def a11y_name(self):
+        return self.a11y_label or self.title
+
+    def a11y_value(self):
+        return ' '.join(str(x) for x in (self.message, self.action) if x)
 
     def __init__(self, title='Sin datos', message=None, icon='∅',
                  action=None, **kwargs):
@@ -240,6 +306,12 @@ class ErrorPanel(EmptyState):
                                          icon='✖', action=hint, **kwargs)
         self.code = code
 
+    role = 'alert'
+
+    def a11y_name(self):
+        return self.a11y_label or ('Error {0}: {1}'.format(
+            self.code, self.title) if self.code is not None else self.title)
+
     def draw(self, width, height):
         lines = super(ErrorPanel, self).draw(width, None)
         lines[0] = _fx.fit_line(self.paint(
@@ -265,13 +337,31 @@ class Spinner(_Themed):
         self.frames = self.STYLES.get(style, style)
         self.index = 0
 
+    role = 'status'
+    #: Shown instead of the animation with reduced motion.
+    STILL = '…'
+
+    def a11y_name(self):
+        return self.a11y_label or self.message or 'Cargando'
+
+    def a11y_value(self):
+        return 'ocupado'
+
+    def a11y_state(self):
+        return ['busy']
+
     def natural_width(self):
         return _fx.visible_width(self.message) + 2
 
     def tick(self):
+        if _a11y.settings.reduced_motion:
+            return
         self.index = (self.index + 1) % len(self.frames)
 
     def draw(self, width, height):
+        if _a11y.settings.reduced_motion:
+            return [self.paint(self.STILL, self.theme.accent) +
+                    (' ' + self.message if self.message else '')]
         glyph = self.frames[self.index % len(self.frames)]
         self.tick()
         return [self.paint(glyph, self.theme.accent) +
@@ -280,6 +370,14 @@ class Spinner(_Themed):
 
 class Skeleton(_Themed):
     """Grey placeholder bars while content loads (``lines`` of them)."""
+
+    role = 'status'
+
+    def a11y_name(self):
+        return self.a11y_label or 'Cargando contenido'
+
+    def a11y_state(self):
+        return ['busy']
 
     def __init__(self, lines=3, **kwargs):
         super(Skeleton, self).__init__(**kwargs)
@@ -374,6 +472,16 @@ class Code(_Themed):
     ``title`` frames it.
     """
 
+    role = 'code'
+
+    def a11y_name(self):
+        return self.a11y_label or self.title or (
+            'código ' + self.language if self.language else 'código')
+
+    def a11y_value(self):
+        n = self.code.count('\n') + 1
+        return '{0} línea{1}'.format(n, 's' if n != 1 else '')
+
     def __init__(self, code, language=None, line_numbers=True, title=None,
                  start=1, **kwargs):
         super(Code, self).__init__(**kwargs)
@@ -428,6 +536,16 @@ class MarkdownView(_Themed):
     code (highlighted), quotes, ordered / unordered / task lists, rules,
     links and pipe tables (as flexablelib tables), wrapped to the width.
     """
+
+    role = 'document'
+
+    def a11y_name(self):
+        if self.a11y_label:
+            return self.a11y_label
+        for line in self.text.split('\n'):
+            if line.startswith('#'):
+                return line.lstrip('# ').strip()
+        return ''
 
     def __init__(self, text, **kwargs):
         super(MarkdownView, self).__init__(**kwargs)
@@ -694,6 +812,12 @@ class DetailView(_Themed):
     section heading. ``columns=2`` lays the pairs out in two columns.
     """
 
+    role = 'list'
+
+    def a11y_value(self):
+        return '; '.join('{0}: {1}'.format(k, v) for k, v in self.fields
+                         if not str(k).startswith('#'))
+
     def __init__(self, fields, columns=1, label_color=None, **kwargs):
         super(DetailView, self).__init__(**kwargs)
         self.fields = list(fields.items()) if isinstance(fields, dict) \
@@ -746,6 +870,18 @@ class Timeline(_Themed):
     ``kind`` per event (``'success'``, ``'error'`` ...).
     """
 
+    role = 'list'
+
+    def a11y_value(self):
+        parts = []
+        for when, title, detail, kind in self.events:
+            text = '{0} {1}'.format(when, title).strip()
+            if kind in _a11y.STATUS_SYMBOLS:
+                text += ' ({0})'.format(_a11y.status_symbol(
+                    kind, word=True).split(' ', 1)[-1])
+            parts.append(text)
+        return '; '.join(parts)
+
     def __init__(self, events, **kwargs):
         super(Timeline, self).__init__(**kwargs)
         self.events = [self._event(e) for e in events]
@@ -770,6 +906,9 @@ class Timeline(_Themed):
         for i, (when, title, detail, kind) in enumerate(self.events):
             color = self.theme.kind(kind) if kind else self.theme.accent
             dot = self.paint('●', color) if self._active() else 'o'
+            if kind in _a11y.STATUS_SYMBOLS and self._marked():
+                dot = self.paint(_a11y.status_symbol(
+                    kind, ascii=not self._active() or None), color)
             line = '│' if i < len(self.events) - 1 else ' '
             stem = self.paint(line, self.theme.muted) if self._active() \
                 else ('|' if line != ' ' else ' ')
@@ -790,6 +929,18 @@ class Stepper(_Themed):
     is the active step's index; ``layout='vertical'`` lists them with their
     ``descriptions``.
     """
+
+    role = 'progressbar'
+
+    def a11y_value(self):
+        if not self.steps:
+            return ''
+        text = 'paso {0} de {1}: {2}'.format(
+            self.current + 1, len(self.steps),
+            self.steps[min(self.current, len(self.steps) - 1)])
+        if self.failed is not None:
+            text += ', falló {0}'.format(self.steps[self.failed])
+        return text
 
     def __init__(self, steps, current=0, layout='horizontal',
                  descriptions=None, failed=None, **kwargs):
@@ -851,6 +1002,13 @@ class CommentList(_Themed):
     ``replies`` (indented below).
     """
 
+    role = 'feed'
+
+    def a11y_value(self):
+        def count(items):
+            return sum(1 + count(c.get('replies', [])) for c in items)
+        return '{0} comentarios'.format(count(self.comments))
+
     def __init__(self, comments, **kwargs):
         super(CommentList, self).__init__(**kwargs)
         self.comments = list(comments)
@@ -896,6 +1054,12 @@ class AttachmentList(_Themed):
              'docx': '📘', 'png': '🖼', 'jpg': '🖼', 'jpeg': '🖼', 'gif': '🖼',
              'zip': '📦', 'txt': '📄', 'json': '📄', 'md': '📄'}
 
+    role = 'list'
+
+    def a11y_value(self):
+        return ', '.join('{0} ({1})'.format(n, human_size(s)) if s is not None
+                         else str(n) for n, s in self.files)
+
     def __init__(self, files, **kwargs):
         super(AttachmentList, self).__init__(**kwargs)
         self.files = [(f.get('name'), f.get('size')) if isinstance(f, dict)
@@ -921,6 +1085,19 @@ class Stat(_Themed):
     text; positive is green unless ``invert=True``) and an optional trend
     sparkline (``trend`` values).
     """
+
+    role = 'status'
+
+    def a11y_name(self):
+        return self.a11y_label or str(self.label)
+
+    def a11y_value(self):
+        text = str(self.value)
+        if self.delta is not None:
+            delta = self.delta if isinstance(self.delta, str) else \
+                '{0:+g}{1}'.format(self.delta, self.suffix)
+            text += ', cambio ' + delta
+        return text
 
     def __init__(self, label, value, delta=None, trend=None, invert=False,
                  suffix='', **kwargs):
@@ -976,6 +1153,26 @@ class LineChart(_Themed):
     """
 
     COLORS = ['cyan', 'magenta', 'yellow', 'green', 'blue', 'red']
+    #: Point markers per series when colour cannot tell them apart (no
+    #: colours, or focus markers / an accessible theme).
+    MARKERS = ['●', '■', '▲', '◆', '✚', '★']
+    ASCII_MARKERS = ['*', '#', '+', 'o', 'x', '@']
+    role = 'img'
+
+    def a11y_value(self):
+        parts = []
+        for name, data in self.series.items():
+            if data:
+                parts.append('{0}{1} valores, de {2} a {3}, último {4}'.format(
+                    (name + ': ') if name else '', len(data),
+                    self.y_format.format(min(data)),
+                    self.y_format.format(max(data)),
+                    self.y_format.format(data[-1])))
+        return '; '.join(parts)
+
+    def _markers(self):
+        return self.MARKERS if self._active() and not _a11y.settings.ascii \
+            else self.ASCII_MARKERS
 
     def __init__(self, series, height=8, labels=None, colors=None,
                  y_format='{0:g}', legend=True, **kwargs):
@@ -1026,6 +1223,15 @@ class LineChart(_Themed):
                     cells[r][c] |= bits[yy % 4][x % 2]
                     owner[r][c] = n
                 prev = y
+        marked = len(self.series) > 1 and self._marked()
+        points = {}
+        if marked:
+            markers = self._markers()
+            for n, data in enumerate(self.series.values()):
+                for i, v in enumerate(data):
+                    c = int(round(i * (cols - 1) / float(max(1, len(data) - 1))))
+                    r = int(round((high - v) / (high - low) * (dots_h - 1))) // 4
+                    points[(r, c)] = (markers[n % len(markers)], n)
         out = []
         for r in range(rows):
             label = labels[0] if r == 0 else (labels[1] if r == rows - 1
@@ -1033,6 +1239,11 @@ class LineChart(_Themed):
             line = []
             for c in range(cols):
                 bitsum = cells[r][c]
+                if (r, c) in points:
+                    mark, n = points[(r, c)]
+                    line.append(self.paint(mark, self.colors[
+                        n % len(self.colors)]))
+                    continue
                 if not bitsum:
                     line.append(' ')
                     continue
@@ -1051,8 +1262,10 @@ class LineChart(_Themed):
             out.append(' ' * (axis_w + 1) + self.paint(
                 first + ' ' * gap + last, self.theme.muted))
         if self.legend and len(self.series) > 1:
-            parts = [self.paint('━━', self.colors[n % len(self.colors)]) +
-                     ' ' + name for n, name in enumerate(self.series)]
+            parts = [self.paint(
+                (self._markers()[n % 6] + '━') if marked else '━━',
+                self.colors[n % len(self.colors)]) + ' ' + name
+                for n, name in enumerate(self.series)]
             out.append(' ' * (axis_w + 1) + '   '.join(parts))
         return out
 

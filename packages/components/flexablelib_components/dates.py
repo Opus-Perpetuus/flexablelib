@@ -9,7 +9,11 @@ import time
 
 from flexablelib import _frames as _fx
 
+from flexablelib_tui import Key
+
 from .base import Input, _Themed, join_columns
+
+_ENTER = Key('enter')
 
 __all__ = ['Calendar', 'DateInput', 'TimeInput', 'DateTimeInput',
            'WeekInput', 'MonthInput', 'YearInput', 'WeekdayInput',
@@ -64,6 +68,35 @@ class Calendar(_Themed):
     """
 
     focusable = True
+    role = 'calendar'
+    #: A click on a day chooses it at once (inside a date input); otherwise
+    #: the first click moves the cursor there and a second one chooses it.
+    single_click = False
+
+    def a11y_value(self):
+        day = self.cursor
+        text = '{0} {1} de {2} de {3}'.format(
+            self.names['weekdays'][day.weekday()], day.day,
+            self.names['months'][day.month - 1].lower(), day.year)
+        if day == self.today:
+            text += ', hoy'
+        return text
+
+    def a11y_state(self):
+        return ['selected'] if self.selected == self.cursor else []
+
+    def _click(self, day):
+        if not self._enabled_day(day):
+            return True
+        again = day == self.cursor
+        self.cursor = day
+        if again or self.single_click:
+            return self.on_key(_ENTER)
+        return True
+
+    def _enabled_day(self, day):
+        return not ((self.minimum and day < self.minimum) or
+                    (self.maximum and day > self.maximum))
 
     def __init__(self, value=None, on_select=None, locale='es',
                  minimum=None, maximum=None, mode='day', today=None,
@@ -161,6 +194,7 @@ class Calendar(_Themed):
                                         cursor_week and self.focused
                                         else self.theme.muted))
             row = ''
+            x = 3 if week_col else 0
             for k, day in enumerate(week):
                 text = '{0:>2}'.format(day.day)
                 sep = ' ' if k or week_col else ''
@@ -179,11 +213,18 @@ class Calendar(_Themed):
                 if day == self.cursor and self.focused:
                     if self._active():
                         spec = self.theme.selection
+                        if self._marked():
+                            spec += ' bold underline'
+                            if k or week_col:
+                                sep = '▸'
                     elif k or week_col:
                         sep = '>'
                 if (self.minimum and day < self.minimum) or \
                         (self.maximum and day > self.maximum):
                     spec = 'dim'
+                self.hot(len(out), lambda day=day: self._click(day), x,
+                         x + len(sep) + 2)
+                x += len(sep) + 2
                 row += sep + self.paint(text, spec.strip() if spec else None)
             out.append(''.join(cells) + row)
         return out
@@ -191,6 +232,27 @@ class Calendar(_Themed):
 
 class _Picker(Input):
     """An input that opens an inline picker below its value."""
+
+    role = 'combobox'
+
+    def a11y_value(self):
+        if self.open:
+            picker = self.picker()
+            if picker is not None:
+                return picker.a11y_value()
+        return self.shown()
+
+    def a11y_state(self):
+        return ['expanded' if self.open else 'collapsed'] + \
+            Input.a11y_state(self)
+
+    def _toggle(self):
+        if self.open:
+            self.open = False
+        else:
+            self.open = True
+            self.sync()
+        return True
 
     def __init__(self, label=None, value=None, **kwargs):
         self.open = False
@@ -248,6 +310,7 @@ class _Picker(Input):
                           self.theme.muted)
         out = [self.marker() + ' ' + _fx.fit_line(body, max(1, width - 4)) +
                ' ' + icon]
+        self.hot(0, self._toggle)
         if self.open:
             picker = self.picker()
             picker.focused = True
@@ -271,6 +334,7 @@ class DateInput(_Picker):
                                  maximum=maximum, today=today,
                                  theme=kwargs.get('theme'))
         self.calendar.on_select = self.chosen
+        self.calendar.single_click = True
         super(DateInput, self).__init__(label=label, value=value, **kwargs)
 
     def coerce(self, value):
@@ -328,6 +392,21 @@ class TimeInput(Input):
     def _parts(self):
         return 3 if self.seconds else 2
 
+    role = 'spinbutton'
+
+    def a11y_value(self):
+        t = self._value
+        if t is None:
+            return ''
+        names = ['hora', 'minutos', 'segundos']
+        text = t.strftime('%H:%M:%S' if self.seconds else '%H:%M')
+        return text + ', editando ' + names[self.part]
+
+    def _pick_part(self, i):
+        self.part = i
+        self._typed = ''
+        return True
+
     def _change(self, delta, part=None):
         t = self._value or _dt.time(0, 0)
         part = self.part if part is None else part
@@ -380,9 +459,12 @@ class TimeInput(Input):
         for i in range(self._parts()):
             text = values[i]
             if self.focused and i == self.part:
-                text = self.paint(text, self.theme.selection) if \
+                text = self.paint(text, self.theme.selection + (
+                    ' underline' if self._marked() else '')) if \
                     self._active() else '[' + text + ']'
             parts.append(text)
+        self.hot_parts(0, parts, 1, 2, [(lambda i=i: self._pick_part(i))
+                                        for i in range(len(parts))])
         return [self.marker() + ' ' + ':'.join(parts)]
 
 
@@ -390,6 +472,11 @@ class DateTimeInput(Input):
     """A date and a time side by side; the value is a ``datetime``."""
 
     focusable = False
+    role = 'group'
+
+    def a11y_value(self):
+        value = self.value
+        return '' if value is None else value.isoformat(' ')
 
     def __init__(self, label=None, value=None, seconds=False, locale='es',
                  today=None, **kwargs):
@@ -438,6 +525,7 @@ class WeekInput(_Picker):
         self.calendar = Calendar(value, locale=locale, mode='week',
                                  today=today, theme=kwargs.get('theme'))
         self.calendar.on_select = self.chosen
+        self.calendar.single_click = True
         super(WeekInput, self).__init__(label=label, value=value, **kwargs)
 
     def coerce(self, value):
@@ -466,6 +554,19 @@ class _GridPicker(_Themed):
     """A grid of labelled choices (months, years)."""
 
     focusable = True
+    role = 'grid'
+
+    def a11y_value(self):
+        if not self.labels:
+            return ''
+        return '{0} ({1} de {2})'.format(self.labels[self.index],
+                                         self.index + 1, len(self.labels))
+
+    def _click(self, i):
+        self.index = i
+        if self.on_select:
+            self.on_select(i)
+        return True
 
     def __init__(self, labels, columns, index=0, title='', **kwargs):
         super(_GridPicker, self).__init__(**kwargs)
@@ -499,7 +600,11 @@ class _GridPicker(_Themed):
             cells = []
             for i in range(r, min(len(self.labels), r + self.columns)):
                 text = _fx.fit_line(self.labels[i], cell, 'c')
+                self.hot(len(out), lambda i=i: self._click(i),
+                         (i - r) * cell, (i - r + 1) * cell)
                 if i == self.index and self.focused:
+                    if self._marked():
+                        text = '[' + text[1:-1] + ']'
                     text = self.paint(text, self.theme.selection) if \
                         self._active() else '[' + text[1:-1] + ']'
                 cells.append(text)
@@ -605,6 +710,11 @@ class WeekdayInput(Input):
     def coerce(self, value):
         return None if value is None else int(value) % 7
 
+    role = 'radiogroup'
+
+    def a11y_value(self):
+        return '' if self._value is None else self.names[self._value]
+
     def on_key(self, key):
         k = str(key)
         if k in ('left', 'right'):
@@ -621,10 +731,14 @@ class WeekdayInput(Input):
         for i, name in enumerate(self.names):
             text = ' {0} '.format(name)
             if i == self._value:
+                if self._marked():
+                    text = '[' + name + ']'
                 text = self.paint(text, self.theme.selection if self.focused
                                   else 'reverse') if self._active() else \
                     '[' + name + ']'
             parts.append(text)
+        self.hot_parts(0, parts, 0, 2, [(lambda i=i: self.set_value(i))
+                                        for i in range(len(parts))])
         return [self.marker() + ' ' + ''.join(parts)]
 
 
@@ -644,6 +758,7 @@ class DateRangeInput(_Picker):
         self.calendar = Calendar(locale=locale, today=self.today,
                                  theme=kwargs.get('theme'))
         self.calendar.on_select = self._mark
+        self.calendar.single_click = True
         self.calendar.range = (None, None)
         self.preset = 0
         self.in_presets = True
@@ -716,6 +831,17 @@ class DateRangeInput(_Picker):
         start, end = self._value
         return '{0:%Y-%m-%d} → {1:%Y-%m-%d}'.format(start, end)
 
+    def _preset_click(self, i):
+        self.preset = i
+        self.in_presets = True
+        self.chosen(self.preset_range(i))
+        return True
+
+    def a11y_value(self):
+        if self.open and self.in_presets:
+            return self.PRESETS[self.preset]
+        return _Picker.a11y_value(self)
+
     def control(self, width, height):
         out = super(DateRangeInput, self).control(width, height)
         if not self.open:
@@ -725,6 +851,7 @@ class DateRangeInput(_Picker):
         cal = self.calendar.render(width=22).split('\n')
         presets = []
         for i, name in enumerate(self.PRESETS):
+            self.hot(1 + i, lambda i=i: self._preset_click(i), 2, 19)
             text = _fx.fit_line(' ' + name, 17)
             if i == self.preset and self.in_presets:
                 text = self.mark_current(text, self.theme.selection)
@@ -745,6 +872,20 @@ class Timer(_Themed):
     resets. ``clock`` returns seconds (``time.monotonic`` by default) and is
     only used by the stopwatch; ``start`` / ``end`` may be datetimes.
     """
+
+    role = 'timer'
+
+    def a11y_value(self):
+        text = self.text()
+        if self.interactive:
+            text += ', ' + ('en marcha' if self.running else 'detenido')
+        return text
+
+    def on_mouse(self, event):
+        if self.interactive and event.action == 'press' and \
+                event.button == 0:
+            return self.toggle()
+        return False
 
     def __init__(self, start=None, end=None, interactive=False, label=None,
                  clock=time.monotonic, now=None, **kwargs):
