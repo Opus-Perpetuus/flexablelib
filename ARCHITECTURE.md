@@ -260,6 +260,12 @@ unusual for a Python package and worth knowing before you cut a release:
   standard-version toolchain was removed, along with `package-lock.json`, because it only
   produced Dependabot noise). There is nothing to `npm install`.
 - `setup.py` reads it at build time: `version = read_json('./package.json')['version']`.
+- Since 3.3.0 three optional distributions live in `packages/` and are released in lockstep
+  with the core: `flexablelib-tui`, `flexablelib-components` and `flexablelib-speedups`. Each
+  keeps its version in `__version__` of its `__init__.py`; bump all four together (the core's
+  extras pin `==` the same version). The wheels workflow builds 28 wheels for each C project,
+  the two pure-Python wheels and four sdists (62 files) and publishes the core first, then the
+  optional projects.
 - To release: bump `version` in `package.json`, add the `CHANGELOG.md` entry by hand, merge
   `dev-yael` into `main`, then push a `vX.Y.Z` tag. The `wheels` workflow builds the sdist and
   the cibuildwheel wheels (CPython 3.8–3.14 on Linux, Windows and macOS arm64: 28 wheels) and
@@ -363,6 +369,24 @@ returns, because only that function knows how many rule lines it put between
 rows; and where the body starts is counted off the same list of parts that gets
 joined into the table. Reconstructing either of them separately is how a title
 line, or a divider, used to shift every merge out of place.
+
+## Optional packages (3.3.0)
+
+- `flexablelib._frames` is the single entry point for per-line frame work. It binds
+  `flexablelib_speedups._frames` (C) when importable, else its own Python definitions, which
+  measure through `flexablelib.fast`. Both are checked against each other in
+  `tests/test_v330_frames.py`.
+- `flexablelib/__init__.py` resolves the widget, `Screen` and `Live` names lazily: from
+  `flexablelib_tui` when installed, else from the frozen 3.2.0 copies in `flexablelib/_legacy`
+  (with a `DeprecationWarning`). `flexablelib.widgets` and `flexablelib.screen` are shims doing
+  the same.
+- `packages/tui/flexablelib_tui/app.py` owns the event loop: `Terminal` (raw input, key
+  parsing, resize) → `App.dispatch` (focused component, its parents, the modal layer, the
+  bindings) → `App.render` → `Live.update` (diff via `_frames.render_diff`).
+- Components (`packages/components`) are `Component` subclasses that return lines from
+  `draw(width, height)`; they never write to the terminal themselves.
+- `tests/conftest.py` puts `packages/*` on `sys.path`; `FLEXABLELIB_CORE_ONLY=1` leaves them
+  out to test a bare install.
 
 ## Known gaps
 

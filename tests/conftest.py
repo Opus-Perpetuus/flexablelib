@@ -23,8 +23,16 @@ TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(TESTS_DIR)
 
 # Import the package from the source tree without installing it first, and
-# make ``helpers`` importable from the test modules.
-for path in (REPO_ROOT, TESTS_DIR):
+# make ``helpers`` importable from the test modules. The optional packages
+# (packages/tui, packages/components, packages/speedups) are imported from the
+# tree too, unless FLEXABLELIB_CORE_ONLY=1 asks for a bare core install -- the
+# CI job that checks the 3.2.0 compatibility copies and the Python fallbacks.
+CORE_ONLY = os.environ.get('FLEXABLELIB_CORE_ONLY') == '1'
+_paths = [REPO_ROOT, TESTS_DIR]
+if not CORE_ONLY:
+    _paths += [os.path.join(REPO_ROOT, 'packages', name)
+               for name in ('tui', 'components', 'speedups')]
+for path in _paths:
     if path not in sys.path:
         sys.path.insert(0, path)
 

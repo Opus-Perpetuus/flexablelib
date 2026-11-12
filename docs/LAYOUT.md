@@ -140,12 +140,23 @@ Grid(cells, column_widths={0: ['1fr'],
 ```python
 GridCell(child, span=1, row_span=1, align='l', valign=None, title=None,
          title_align='l', color=None, stretch=None, padding=None,
-         hide_below=None)
+         hide_below=None, row=None, column=None)
 ```
 
 * `row_span` makes a cell cover several rows (a sidebar). Placement follows
   CSS "sparse" auto-placement: left to right, skipping slots a spanning cell
   above already holds.
+* `row=` and `column=` (3.3.0, zero-based) pin a cell to a slot, like CSS
+  `grid-row` / `grid-column`. Pinned cells are placed first; the others flow
+  around them. Either one alone works too: `column=2` takes the first free
+  slot in that column, `row=1` the first free slot in that row. A pinned
+  cell that does not fit the current layout (its column is past the last one
+  at this width, or its row is full) flows with the others instead, so a
+  responsive grid keeps working when it collapses to fewer columns; two
+  cells pinned to the same slot raise `ValueError`.
+* In a bordered grid, slots no cell covers are closed: the frame is drawn
+  around them as empty cells (`Grid(fill_gaps=False)` keeps the 3.2.0 open
+  gaps).
 * `valign` (`'top'`, `'middle'`, `'bottom'`) places a shorter child in its
   slot; `Grid(valign=...)` sets the default.
 * `title` is set into the cell's top border (bordered grids only). It never
@@ -204,6 +215,11 @@ stays closed.
 
 ## Widgets (3.2.0)
 
+Since 3.3.0 the widgets, `Screen` and `Live` live in the optional package
+`flexablelib-tui` (`pip install "flexablelib[tui]"`) and are re-exported by
+`flexablelib`, so imports do not change. A bare install still has them: a
+frozen 3.2.0 copy loads with a one-time `DeprecationWarning`.
+
 All in `flexablelib` (and `flexablelib.widgets`). Each has `render(width=None,
 height=None)`, `natural_width()` and `str()`, so they drop into grids, cards
 and screens.
@@ -249,7 +265,8 @@ Live(screen).run(step, interval=1.0, iterations=None)   # step(i) -> False stops
 ```
 
 On a terminal it switches to the alternate screen, hides the cursor and
-repaints from the top-left; on exit it restores both and prints the last
+(since 3.3.0) writes only the lines that changed since the previous frame --
+a resize repaints everything; on exit it restores both and prints the last
 frame (`transient=True` leaves nothing). On a pipe or file each frame is
 written once, plainly. `screen=False`, `hide_cursor=False`, `force_terminal`
 and `stream` adjust that.
@@ -269,6 +286,24 @@ screen = Grid([
 print(screen.render())
 ```
 
+## Interactive applications (3.3.0)
+
+`flexablelib_tui.App` reads the keyboard (Linux, macOS, Windows), keeps the
+focus, routes keys to the focused component and its parents, runs key
+bindings, opens dialogs and notifications, ticks on an interval and redraws
+on resize. `ScrollView` scrolls any content (arrows, PgUp/PgDn, Home/End,
+the mouse wheel). The components in
+[COMPONENTS.md](COMPONENTS.md) (`flexablelib[components]`) are built on it.
+Grids, cards, tables and widgets go inside an `App` unchanged.
+
+## Frame primitives (3.3.0)
+
+Layouts, widgets and components do their per-line work through
+`flexablelib._frames`: `visible_width`, `fit_line` (cut and pad to an exact
+width), `slice_columns`, `border_grid` (junctions of a shared border),
+`changed_lines` / `render_diff` (what `Live` writes). With
+`flexablelib[speed]` these run in C. See [ACCELERATION.md](ACCELERATION.md).
+
 ## Panel and shadow
 
 `flexablelib.layout.wrap_panel(text, panel=True, color=None)` and
@@ -277,15 +312,14 @@ share, so `panel='double'` or `shadow='▒'` look the same on both.
 
 ## Limitations
 
-* Merged cells are not carried into cards: each card shows the row's own
-  values.
+* Merged cells are carried into cards since 3.3.0: every card a vertical
+  merge covers shows its value, and a horizontal merge shows once, under the
+  joined labels (`Q1 · Q2`).
 * Without `column_widths`, grid columns are equal width (a bordered grid
   hands out the leftover columns; an open one leaves them at the right, as
   before).
-* Placement is automatic only: there is no explicit `row=`/`column=` for a
-  cell, and an unfilled slot leaves a gap in a bordered grid's frame.
-* `Live` redraws; it does not read the keyboard. Key handling (and so
-  scrolling or focus) is up to the application.
+* `Live` alone redraws and does not read the keyboard; `App`
+  (`flexablelib[tui]`) adds the keyboard, focus, scrolling and bindings.
 * A border title cannot sit over a column junction: on a table whose columns
   are all narrower than the title it falls back to a line above, and with
   `'l'` / `'r'` it may sit over the first column wide enough rather than the

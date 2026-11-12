@@ -2,6 +2,7 @@ from setuptools import setup, Extension
 from flexablelib.utils import read_json, read_file
 import os
 
+VERSION = read_json(f'.{os.sep}package.json')['version']
 
 # Accelerated text measurement. Marked optional so a machine with no compiler,
 # or a platform with no published wheel, still gets a working install -- the
@@ -16,10 +17,10 @@ speedups = Extension(
 setup(
   ext_modules=[speedups],
   name = 'flexablelib',         
-  packages = ['flexablelib'],
+  packages = ['flexablelib', 'flexablelib._legacy'],
   package_data = {'flexablelib': ['py.typed']},
   include_package_data = True,
-  version = read_json(f'.{os.sep}package.json')['version'],      
+  version = VERSION,      
   description = ('Fast, dependency-free terminal tables for Python: 54 border '
                  'styles, ANSI colors, cell merges, decimal alignment, '
                  'width fitting, and CSV/Markdown/HTML/Excel/LaTeX I/O.'),
@@ -45,11 +46,19 @@ setup(
   install_requires=[],
   # The base install stays dependency-free. Readers and writers that need a
   # third-party library are opt-in: pip install flexablelib[pandas,excel]
+  # The terminal-interface layers are separate distributions released in
+  # lockstep with this one: pip install flexablelib[tui,components,speed]
   extras_require={
     'pandas': ['pandas>=1.0'],
     'excel': ['openpyxl>=3.0'],
     'html': ['lxml>=4.0'],
-    'all': ['pandas>=1.0', 'openpyxl>=3.0', 'lxml>=4.0'],
+    'tui': ['flexablelib-tui==' + VERSION],
+    'components': ['flexablelib-components==' + VERSION],
+    'speed': ['flexablelib-speedups==' + VERSION],
+    'all': ['pandas>=1.0', 'openpyxl>=3.0', 'lxml>=4.0',
+            'flexablelib-tui==' + VERSION,
+            'flexablelib-components==' + VERSION,
+            'flexablelib-speedups==' + VERSION],
   },
   python_requires='>=3.8',
   classifiers=[
