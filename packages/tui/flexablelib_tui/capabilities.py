@@ -40,12 +40,13 @@ PROBE_QUERY = ('\x1b[?u' + ''.join('\x1b[?{0}$p'.format(m) for m in _MODES)
 def color_level(env=None, tty=None):
     """``'none'``, ``'16'``, ``'256'`` or ``'truecolor'`` for this terminal.
 
-    ``NO_COLOR`` (non-empty) turns colour off; ``FORCE_COLOR`` forces it
+    ``NO_COLOR`` (any value, as in :func:`flexablelib.colors.supports_color`)
+    turns colour off; ``FORCE_COLOR`` forces it
     (``0``/``false`` off, ``1``/empty 16 colours, ``2`` 256, ``3`` true
     colour); ``TERM=dumb`` and output that is no terminal have none.
     """
     env = os.environ if env is None else env
-    if env.get('NO_COLOR'):
+    if 'NO_COLOR' in env:
         return 'none'
     force = env.get('FORCE_COLOR')
     if force is not None:

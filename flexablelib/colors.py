@@ -177,14 +177,19 @@ def supports_color(stream=None) -> bool:
 
     Honours the NO_COLOR convention (https://no-color.org): any value, even
     empty, disables colour. FORCE_COLOR overrides in the other direction, which
-    is what CI systems and pipes into `less -R` need.
+    is what CI systems and pipes into `less -R` need (``FORCE_COLOR=0`` /
+    ``false`` turns colour off, as in other tools).
 
     Otherwise colour is emitted only to a terminal, so redirecting output to a
     file does not fill it with escape sequences.
     """
     if 'NO_COLOR' in os.environ:
         return False
-    if os.environ.get('FORCE_COLOR'):
+    force = os.environ.get('FORCE_COLOR')
+    if force is not None and force.strip().lower() in ('0', 'false', 'no',
+                                                        'off'):
+        return False
+    if force:
         return True
 
     if stream is None:
