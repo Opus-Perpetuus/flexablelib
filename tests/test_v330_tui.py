@@ -44,7 +44,7 @@ class TestKeyParser:
         ('\x1b[1;2A', ['shift+up']), ('\x1b[1;3D', ['alt+left']),
         ('\x1b[1;6B', ['ctrl+shift+down']), ('\x1b[3;5~', ['ctrl+delete']),
         ('\x1bx', ['alt+x']), ('\x1b\x01', ['ctrl+alt+a']),
-        ('\x1b\x1b[A', ['escape', 'up']), ('\x1b[I', ['focusin']),
+        ('\x1b\x1b[A', ['alt+up']), ('\x1b[I', ['focusin']),
         ('\x1b[O', ['focusout']), ('\x1b[99~', []), ('\x1b[q', []),
         ('\x1bOz', []), ('\x1b[1;xA', ['A']),
     ])
