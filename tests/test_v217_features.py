@@ -126,15 +126,19 @@ def test_style_name_works_outside_the_repository_root(tmp_path):
 
 # --- README quickstart stays true -----------------------------------------
 
-def test_readme_quickstart_prints_the_output_shown_below_it(capsys):
-    """The first python block in README.md is what new users paste."""
+def test_readme_demonstrations_are_images_that_exist():
+    """
+    README demonstrations are images, never code blocks (some viewers render
+    them out of order), and every image it points at is in the repository.
+    """
     with open(_repo_file('README.md'), encoding='utf-8') as handle:
         readme = handle.read()
-    section = readme[readme.index('## 30-second quickstart'):]
-    code = re.search(r'```python\n(.*?)```', section, re.S).group(1)
-    shown = re.search(r'```\n(╭.*?)```', section, re.S).group(1).strip('\n')
-    exec(compile(code, 'README.md', 'exec'), {})
-    assert bare(capsys.readouterr().out).strip('\n') == shown
+    assert '```' not in readme
+    prefix = 'https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/'
+    paths = re.findall(re.escape(prefix) + r'([^"\s)]+)', readme)
+    assert any(p.endswith('docs/img/readme/quickstart.png') for p in paths)
+    for path in paths:
+        assert os.path.isfile(_repo_file(path)), path
 
 
 # --- to_html: cell text cannot break out of the inline script --------------
