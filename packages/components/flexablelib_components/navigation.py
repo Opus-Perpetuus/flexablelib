@@ -218,8 +218,7 @@ class Menu(_Themed):
             if item.get('disabled'):
                 out.append(self.paint(text, 'dim'))
             elif i == self.index and (self.focused or not self._active()):
-                out.append(self.paint(text, self.theme.selection) if
-                           self._active() else '>' + text[1:])
+                out.append(self.mark_current(text, self.theme.selection))
             elif i == self.index:
                 out.append(self.paint(text, 'bold'))
             else:
@@ -420,8 +419,7 @@ class Sidebar(Menu):
                 ' ' + self._text(item)
             text = _fx.fit_line(text, width)
             if i == self.index and self.focused:
-                text = self.paint(text, self.theme.selection) if \
-                    self._active() else '>' + text[1:]
+                text = self.mark_current(text, self.theme.selection)
             elif i == self.active:
                 text = self.paint('▌', self.theme.accent) + \
                     self.paint(text[1:], 'bold') if self._active() else \
@@ -850,8 +848,7 @@ class Tree(_Themed):
             label = '  ' * depth + arrow + ' ' + str(key)
             line = _fx.fit_line(label, min(width, _fx.visible_width(label)))
             if i == self.index and self.focused:
-                line = self.paint(line, self.theme.selection) if \
-                    self._active() else '>' + line[1:]
+                line = self.mark_current(line, self.theme.selection)
             value_text = self._value_text(value, branch) if \
                 isinstance(self.data, (dict, list)) or branch else ''
             out.append(line + (': ' if value_text and not branch else '  ') +
@@ -967,9 +964,8 @@ class CommandPalette(_Themed):
             room = max(1, inner - len(hint) - 1)
             text = _fx.fit_line(' ' + command['label'], room) + ' ' + hint
             if i == self.index:
-                text = self.paint(_fx.fit_line(text, inner),
-                                  self.theme.selection) if self._active() \
-                    else '>' + text[1:]
+                text = self.mark_current(_fx.fit_line(text, inner),
+                                      self.theme.selection)
             elif hint:
                 text = text[:-len(hint)] + self.paint(hint, self.theme.muted)
             lines.append(text)

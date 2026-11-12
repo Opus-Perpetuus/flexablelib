@@ -727,8 +727,7 @@ class DateRangeInput(_Picker):
         for i, name in enumerate(self.PRESETS):
             text = _fx.fit_line(' ' + name, 17)
             if i == self.preset and self.in_presets:
-                text = self.paint(text, self.theme.selection) if \
-                    self._active() else '>' + text[1:]
+                text = self.mark_current(text, self.theme.selection)
             presets.append(text)
         out.extend('  ' + line for line in
                    join_columns([presets, cal], [17, 22], gap=2))
