@@ -370,8 +370,8 @@ class DataTable(_Themed):
             line = _fx.fit_line(line, width)
             here = self.top + n == self.cursor_row
             if here and self.focused:
-                line = self.paint(_fx.strip_ansi(line), self.theme.selection) \
-                    if self._active() else '>' + line[1:]
+                line = self.mark_current(_fx.strip_ansi(line),
+                                      self.theme.selection)
             elif here:
                 line = self.paint(line, 'bold')
             elif self.zebra and n % 2 and self._active():
