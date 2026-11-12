@@ -563,6 +563,9 @@ class App(object):
         layer._position = position
         layer._modal = bool(modal)
         self.layers.append(layer)
+        pushed = getattr(layer, '_pushed', None)
+        if callable(pushed):
+            pushed()
         for node in self.walk(layer):
             if isinstance(node, Component):
                 node.app = self
@@ -588,6 +591,9 @@ class App(object):
         if self._capture is not None and self._capture is layer:
             self._capture = None
         self._dirty = True
+        popped = getattr(layer, '_popped', None)
+        if callable(popped):
+            popped()
         return layer
 
     def notify(self, message, kind='info', seconds=3.0):

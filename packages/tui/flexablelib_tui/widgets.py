@@ -559,7 +559,9 @@ class Text(_Widget):
 
     def __init__(self, text, align='l', color=None, wrap=True, width=None,
                  use_colors=None):
-        self.text = str(text)
+        # A bare \r (Windows \r\n, old Mac \r) would send the cursor back
+        # to column 0 and break the frame: every line ending is \n here.
+        self.text = str(text).replace('\r\n', '\n').replace('\r', '\n')
         self.align = _align(align)
         self.color = color
         self.wrap = wrap
