@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Real-pty checks for flexablelib 3.4.0: special keys, combinations, kitty,
 modifyOtherKeys, paste, focus, injected mouse, App clicks, screen-reader mode."""
-import json, os, pty, select, sys, time
+import json, os, pty, select, time
 
 OUT = "/tmp/flex_pty_%d.jsonl" % os.getpid()
 
