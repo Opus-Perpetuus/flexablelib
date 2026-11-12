@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.5.2] - 2026-11-12
+
+### Fixed
+- **Dialogs shown with `app.push()`** (`Modal`, `ConfirmDialog`,
+  `PromptDialog`, `Popover`) now close with Escape, their buttons and
+  `close()`, as when shown with `open(app)`. `close()` looks at the app's
+  layers instead of a flag only `open()` set.
+- **A `Form` inside a modal** closes with Escape from any field, with or
+  without `on_cancel`. When the form's `on_cancel` (or any code) calls
+  `app.pop()`, the dialog's `is_open` goes back to False and `on_close` runs
+  once.
+- **`Text` with `\r\n` or `\r` line endings** (for example the output of
+  `Table.to_csv()`): every line ending counts as a new line, so no `\r`
+  reaches the terminal and frames, grids and cards keep their borders.
+
 ## [3.5.1] - 2026-11-12
 
 ### Added
