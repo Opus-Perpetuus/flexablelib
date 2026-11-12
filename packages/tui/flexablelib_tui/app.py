@@ -380,6 +380,13 @@ class App(object):
         width = render_width(width)
         if height is None:
             height = self.screen.height
+        if self.use_colors is not None:
+            # App(use_colors=...) is the default for every piece on screen
+            # (widgets and components alike) that did not choose for itself.
+            for node in self.walk():
+                if node is not self and \
+                        getattr(node, 'use_colors', False) is None:
+                    node.use_colors = self.use_colors
         lines = self._compose(width, height)
         candidates = self.focusables()
         if self.focused not in candidates:

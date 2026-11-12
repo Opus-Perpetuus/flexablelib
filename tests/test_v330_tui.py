@@ -658,3 +658,15 @@ def test_run_in_real_pty(tmp_path):
     offset = int(err.decode().split('RESULT')[1].split()[0])
     assert offset >= 2
     assert b'PTY' in out and b'\x1b[?1049h' in out
+
+
+def test_app_use_colors_reaches_widgets(monkeypatch):
+    from flexablelib_tui import KeyHints
+    monkeypatch.setenv('FORCE_COLOR', '1')
+    hints = KeyHints([('q', 'Salir')])
+    explicit = KeyHints([('x', 'Otra')], use_colors=True)
+    app = App(body=Counter('c'), header=explicit, footer=hints,
+              use_colors=False)
+    out = app.render(40, 6)
+    assert hints.use_colors is False and explicit.use_colors is True
+    assert '\x1b' in out.split('\n')[0] and '\x1b' not in out.split('\n')[-1]
