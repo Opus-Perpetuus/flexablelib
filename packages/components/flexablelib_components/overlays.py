@@ -67,12 +67,23 @@ class Modal(_Themed):
 
     def open(self, app):
         app.push(self)
-        self.is_open = True
         return self
 
     def close(self):
-        if self.app is not None and self.is_open:
-            self.app.pop(self)
+        # Also when it was shown with app.push() rather than open(): what
+        # counts is being on the app's layers, not how it got there.
+        if self.app is not None and self in self.app.layers:
+            self.app.pop(self)  # calls _popped()
+        else:
+            self._popped()
+
+    def _pushed(self):
+        self.is_open = True
+
+    def _popped(self):
+        # The app took it off the screen (close(), Escape, a button, or a
+        # form's on_cancel calling app.pop()): keep is_open in step and run
+        # on_close once.
         self.is_open = False
         if self.on_close is not None:
             self.on_close()
@@ -226,7 +237,6 @@ class Popover(Modal):
 
     def open(self, app, position='center', modal=True):
         app.push(self, position=position, modal=modal)
-        self.is_open = True
         return self
 
 
