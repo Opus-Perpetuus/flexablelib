@@ -8,7 +8,11 @@ the application shell that wires them together.
 from flexablelib import _frames as _fx
 from flexablelib.layout import _accepts_height, _natural_width, _render_child
 
+from flexablelib_tui import Key
+
 from .base import Button, _Themed, frame, join_columns
+
+_Enter = Key('enter')
 
 __all__ = ['Tabs', 'Menu', 'ContextMenu', 'MenuButton', 'Pagination',
            'Sidebar', 'TopBar', 'Toolbar', 'Wizard', 'Accordion',
@@ -42,6 +46,13 @@ class Tabs(_Themed):
 
     focusable = True
     expand = True
+    role = 'tablist'
+
+    def a11y_value(self):
+        if not self.tabs:
+            return ''
+        return '{0} ({1} de {2})'.format(self.tabs[self.index][0],
+                                         self.index + 1, len(self.tabs))
 
     def __init__(self, tabs, index=0, on_change=None, **kwargs):
         super(Tabs, self).__init__(**kwargs)
@@ -85,11 +96,16 @@ class Tabs(_Themed):
             text = ' {0} '.format(title)
             if i == self.index:
                 spec = self.theme.selection if self.focused else 'bold reverse'
+                if self._marked():
+                    text = ('▸{0}◂' if self._active() else '[{0}]').format(
+                        title)
                 text = self.paint(text, spec) if self._active() else \
-                    '[' + title + ']'
+                    ('[>{0}<]' if self.focused else '[{0}]').format(title)
             else:
                 text = self.paint(text, self.theme.muted)
             parts.append(text)
+        self.hot_parts(0, parts, 1, 0, [
+            (lambda i=i: self.select(i)) for i in range(len(parts))])
         bar = self.paint('│', self.theme.border).join(parts) if \
             self._active() else ' '.join(parts)
         out = [bar, self.paint('─' * width, self.theme.accent if self.focused
@@ -109,6 +125,18 @@ class Menu(_Themed):
     """
 
     focusable = True
+    role = 'menu'
+
+    def a11y_value(self):
+        if not self.items or not self._enabled(self.index):
+            return ''
+        item = self.items[self.index]
+        n = [i for i in range(len(self.items)) if self._enabled(i)]
+        text = '{0} ({1} de {2})'.format(item['label'],
+                                         n.index(self.index) + 1, len(n))
+        if item.get('shortcut'):
+            text += ', atajo ' + item['shortcut']
+        return text
 
     def __init__(self, items, on_select=None, index=0, max_visible=None,
                  **kwargs):
@@ -212,16 +240,19 @@ class Menu(_Themed):
                 out.append(self.paint('─' * width, self.theme.border))
                 continue
             shortcut = item.get('shortcut') or ''
+            if not item.get('disabled'):
+                self.hot(len(out), lambda i=i: self.activate(i))
             room = max(1, width - 2 - (len(shortcut) + 1 if shortcut else 0))
             text = ' ' + _fx.fit_line(self._text(item), room) + \
                 (' ' + shortcut if shortcut else '') + ' '
             if item.get('disabled'):
                 out.append(self.paint(text, 'dim'))
-            elif i == self.index and (self.focused or not self._active()):
-                out.append(self.paint(text, self.theme.selection) if
-                           self._active() else '>' + text[1:])
+            elif i == self.index and self.focused:
+                out.append(self.mark_current(text, self.theme.selection))
+            elif i == self.index and not self._active():
+                out.append(text)
             elif i == self.index:
-                out.append(self.paint(text, 'bold'))
+                out.append(self.paint(text, 'underline'))
             else:
                 if shortcut:
                     text = text[:-len(shortcut) - 1] + self.paint(
@@ -261,6 +292,8 @@ class ContextMenu(Menu):
 
     def draw(self, width, height):
         inner = super(ContextMenu, self).draw(max(1, width - 2), height)
+        self._hot = [(r + 1, x0 + 1, None if x1 is None else x1 + 1, a)
+                     for r, x0, x1, a in self._hot]
         return frame(inner, width, None, self.theme.accent, self.paint)
 
 
@@ -269,7 +302,7 @@ class MenuButton(Button):
 
     def __init__(self, label, items, **kwargs):
         super(MenuButton, self).__init__(label + ' ▾', **kwargs)
-        self.menu = ContextMenu(items, theme=self.theme,
+        self.menu = ContextMenu(items, theme=self._theme,
                                 use_colors=kwargs.get('use_colors'))
 
     def press(self):
@@ -286,6 +319,10 @@ class Pagination(_Themed):
     """
 
     focusable = True
+    role = 'navigation'
+
+    def a11y_value(self):
+        return 'página {0} de {1}'.format(self.page, self.pages)
 
     def __init__(self, total, page_size=20, page=1, on_change=None,
                  **kwargs):
@@ -339,18 +376,30 @@ class Pagination(_Themed):
         end = min(self.total, self.page * self.page_size)
         info = '{0}–{1} de {2}'.format(start, end, self.total)
         parts = [self.paint('‹', self.theme.muted if self.page == 1 else None)]
+        actions = [lambda: self.go(self.page - 1)]
         for n in self.numbers():
+            actions.append(None if n is None else
+                           (lambda n=n: self.go(n)))
             if n is None:
                 parts.append(self.paint('…', self.theme.muted))
+            elif n == self.page and self._marked() and self._active():
+                parts.append(self.paint('[{0}]'.format(n), 'bold underline ' +
+                                        self.theme.selection
+                                        if self.focused else 'reverse'))
             elif n == self.page:
-                spec = self.theme.selection if self.focused else 'reverse'
+                spec = 'bold underline ' + self.theme.selection \
+                    if self.focused else 'reverse'
                 parts.append(self.paint(' {0} '.format(n), spec) if
-                             self._active() else '[{0}]'.format(n))
+                             self._active() else
+                             ('>{0}<' if self.focused else '[{0}]').format(n))
             else:
                 parts.append(str(n))
         parts.append(self.paint('›', self.theme.muted if
                                 self.page == self.pages else None))
+        actions.append(lambda: self.go(self.page + 1))
         line = ' '.join(parts)
+        if _fx.visible_width(line) <= width:
+            self.hot_parts(0, parts, 1, 0, actions)
         if _fx.visible_width(line) + len(info) + 3 <= width:
             line += '   ' + self.paint(info, self.theme.muted)
         elif _fx.visible_width(line) > width:
@@ -363,6 +412,8 @@ class Sidebar(Menu):
     Navigation down the side: ``sections`` maps a heading to items (as in
     :class:`Menu`). ``collapsed=True`` (or Ctrl-B) shows only the icons.
     """
+
+    role = 'navigation'
 
     expand = True
 
@@ -416,12 +467,16 @@ class Sidebar(Menu):
                 out.append(self.paint('─' * width, self.theme.border))
                 continue
             icon = item.get('icon') or item['label'][:1]
+            if not item.get('disabled'):
+                self.hot(len(out), lambda i=i: self.activate(i))
             text = ' ' + icon + ' ' if self.collapsed else \
                 ' ' + self._text(item)
             text = _fx.fit_line(text, width)
             if i == self.index and self.focused:
-                text = self.paint(text, self.theme.selection) if \
-                    self._active() else '>' + text[1:]
+                text = self.mark_current(text, self.theme.selection)
+            elif i == self.active and self._marked() and self._active():
+                text = self.paint('▌', self.theme.accent) + \
+                    self.paint('•' + text[1:], 'bold')
             elif i == self.active:
                 text = self.paint('▌', self.theme.accent) + \
                     self.paint(text[1:], 'bold') if self._active() else \
@@ -447,6 +502,17 @@ class TopBar(_Themed):
         self.actions = actions or []
         self.status = status
         self.color = color
+
+    role = 'banner'
+
+    def a11y_name(self):
+        return self.a11y_label or self.title or ''
+
+    def a11y_value(self):
+        parts = [' › '.join(str(b) for b in self.breadcrumbs)]
+        if self.status:
+            parts.append(str(self.status))
+        return ', '.join(p for p in parts if p)
 
     def natural_width(self):
         return 60
@@ -479,10 +545,12 @@ class Toolbar(_Themed):
     move between them while one has focus; each keeps its own shortcut.
     """
 
+    role = 'toolbar'
+
     def __init__(self, buttons, gap=1, align='l', **kwargs):
         super(Toolbar, self).__init__(**kwargs)
         self.buttons = [b if isinstance(b, Button) else
-                        Button(b[0], b[1], theme=self.theme,
+                        Button(b[0], b[1], theme=self._theme,
                                use_colors=kwargs.get('use_colors'))
                         for b in buttons]
         self.gap = gap
@@ -524,6 +592,16 @@ class Wizard(_Themed):
     """
 
     expand = True
+    role = 'form'
+
+    def a11y_value(self):
+        if not self.steps:
+            return ''
+        return 'paso {0} de {1}: {2}'.format(self.index + 1, len(self.steps),
+                                             self.steps[self.index][0])
+
+    def a11y_state(self):
+        return ['invalid'] if self.error else []
 
     def __init__(self, steps, on_finish=None, validate=None, **kwargs):
         super(Wizard, self).__init__(**kwargs)
@@ -534,10 +612,10 @@ class Wizard(_Themed):
         self.error = None
         self.finished = False
         colors = kwargs.get('use_colors')
-        self.back = Button('‹ Atrás', self.previous, theme=self.theme,
+        self.back = Button('‹ Atrás', self.previous, theme=self._theme,
                            use_colors=colors)
         self.next = Button('Siguiente ›', self.advance, kind='primary',
-                           theme=self.theme, use_colors=colors)
+                           theme=self._theme, use_colors=colors)
 
     def children(self):
         content = self.steps[self.index][1] if self.steps else None
@@ -580,7 +658,7 @@ class Wizard(_Themed):
     def draw(self, width, height):
         from .display import Stepper
         stepper = Stepper([t for t, _ in self.steps], self.index,
-                          theme=self.theme, use_colors=self.use_colors)
+                          theme=self._theme, use_colors=self.use_colors)
         out = render_into(stepper, width) + ['']
         self.back.disabled = self.index == 0
         last = self.index + 1 == len(self.steps)
@@ -609,6 +687,22 @@ class Accordion(_Themed):
     """
 
     focusable = True
+    role = 'tree'
+
+    def a11y_value(self):
+        if not self.sections:
+            return ''
+        return '{0} ({1} de {2})'.format(self.sections[self.index][0],
+                                         self.index + 1, len(self.sections))
+
+    def a11y_state(self):
+        if not self.sections:
+            return []
+        return ['expanded' if self.index in self.opened else 'collapsed']
+
+    def _click(self, i):
+        self.index = i
+        return self.toggle(i)
 
     def __init__(self, sections, open=(0,), multiple=True, **kwargs):
         super(Accordion, self).__init__(**kwargs)
@@ -659,9 +753,16 @@ class Accordion(_Themed):
             arrow = ('▾' if is_open else '▸') if self._active() else \
                 ('v' if is_open else '>')
             head = _fx.fit_line(arrow + ' ' + str(title), width)
+            self.hot(len(out), lambda i=i: self._click(i))
             if i == self.index and self.focused:
                 head = self.paint(head, self.theme.selection) if \
                     self._active() else '*' + head[1:]
+                if self._marked() and self._active():
+                    head = self.mark_current(_fx.fit_line(
+                        ' ' + arrow + ' ' + str(title), width),
+                        self.theme.selection)
+            elif i == self.index:
+                head = self.paint(head, 'bold underline')
             else:
                 head = self.paint(head, 'bold')
             out.append(head)
@@ -676,6 +777,11 @@ class Carousel(_Themed):
     ``autoplay`` (in ticks) advances on :meth:`tick`."""
 
     focusable = True
+    role = 'region'
+
+    def a11y_value(self):
+        return 'diapositiva {0} de {1}'.format(self.index + 1,
+                                               len(self.slides))
 
     def __init__(self, slides, index=0, autoplay=None, **kwargs):
         super(Carousel, self).__init__(**kwargs)
@@ -717,8 +823,16 @@ class Carousel(_Themed):
                          self.theme.muted) + ' ' + dots + ' ' + \
             self.paint('▶', self.theme.accent if self.focused else
                        self.theme.muted)
+        if self.focused:
+            nav = self.paint('[', 'bold') + nav + self.paint(']', 'bold')
         if room is not None:
             body += [''] * (room - len(body))
+        left = (width - _fx.visible_width(_fx.strip_ansi(nav))) // 2 + \
+            (1 if self.focused else 0)
+        segments = ['◀'] + dots.split(' ') + ['▶']
+        steps = [-1] + [i - self.index for i in range(len(self.slides))] + [1]
+        self.hot_parts(len(body), segments, 1, max(0, left),
+                       [(lambda s=s: self.go(s)) for s in steps])
         return body + [_fx.fit_line(nav, width, 'c')]
 
 
@@ -732,6 +846,32 @@ class Tree(_Themed):
 
     focusable = True
     expand = True
+    role = 'tree'
+
+    def a11y_value(self):
+        rows = self.rows()
+        if not rows:
+            return ''
+        path, key, value, depth, branch = rows[min(self.index, len(rows) - 1)]
+        text = '{0}, nivel {1}'.format(key, depth + 1)
+        if not branch and value is not None:
+            text += ': ' + str(value)
+        return text
+
+    def a11y_state(self):
+        rows = self.rows()
+        if not rows:
+            return []
+        path, _, _, _, branch = rows[min(self.index, len(rows) - 1)]
+        if not branch:
+            return []
+        return ['expanded' if path in self.expanded else 'collapsed']
+
+    def _click(self, i):
+        if i == self.index:
+            return self.on_key(_Enter)
+        self.index = i
+        return True
 
     def __init__(self, data, expanded_depth=1, on_select=None,
                  max_value_width=40, **kwargs):
@@ -848,10 +988,10 @@ class Tree(_Themed):
             else:
                 arrow = ' '
             label = '  ' * depth + arrow + ' ' + str(key)
+            self.hot(len(out), lambda i=i: self._click(i))
             line = _fx.fit_line(label, min(width, _fx.visible_width(label)))
             if i == self.index and self.focused:
-                line = self.paint(line, self.theme.selection) if \
-                    self._active() else '>' + line[1:]
+                line = self.mark_current(line, self.theme.selection)
             value_text = self._value_text(value, branch) if \
                 isinstance(self.data, (dict, list)) or branch else ''
             out.append(line + (': ' if value_text and not branch else '  ') +
@@ -868,6 +1008,26 @@ class CommandPalette(_Themed):
     """
 
     focusable = True
+    role = 'dialog'
+
+    def a11y_name(self):
+        return self.a11y_label or self.title or ''
+
+    def a11y_value(self):
+        items = self.matches()
+        text = 'búsqueda: ' + (self.query or '(vacía)')
+        if items:
+            i = min(self.index, len(items) - 1)
+            text += ', {0} ({1} de {2})'.format(items[i]['label'], i + 1,
+                                                 len(items))
+        else:
+            text += ', sin resultados'
+        return text
+
+    def _run(self, i):
+        self.index = i
+        self.on_key(_Enter)
+        return True
 
     def __init__(self, commands, placeholder='Buscar…', max_visible=8,
                  title='Comandos', **kwargs):
@@ -959,7 +1119,8 @@ class CommandPalette(_Themed):
         inner = max(1, width - 4)
         query = self.query or self.paint(self.placeholder, self.theme.muted)
         lines = [self.paint('› ', self.theme.accent) + query +
-                 (self.cursor(' ') if self.focused else ''),
+                 ((self.cursor(' ') if self._active() else '_')
+                  if self.focused else ''),
                  self.paint('─' * inner, self.theme.border)]
         items = self.matches()
         for i, command in enumerate(items[:self.max_visible]):
@@ -967,11 +1128,12 @@ class CommandPalette(_Themed):
             room = max(1, inner - len(hint) - 1)
             text = _fx.fit_line(' ' + command['label'], room) + ' ' + hint
             if i == self.index:
-                text = self.paint(_fx.fit_line(text, inner),
-                                  self.theme.selection) if self._active() \
-                    else '>' + text[1:]
+                text = self.mark_current(_fx.fit_line(text, inner),
+                                      self.theme.selection)
             elif hint:
                 text = text[:-len(hint)] + self.paint(hint, self.theme.muted)
+            self.hot(len(lines) + 1, lambda i=i: self._run(i), 2,
+                     width - 1)
             lines.append(text)
         if not items:
             lines.append(self.paint(' Sin resultados', self.theme.muted))
@@ -997,9 +1159,31 @@ class Split(_Themed):
         self.direction = direction
         self.divider = bool(divider)
         self.minimum = minimum
+        self._geometry = None
+        self.dragging = False
+
+    role = 'group'
 
     def children(self):
         return [self.first, self.second]
+
+    def on_mouse(self, event):
+        """Drag the divider with the mouse."""
+        if self._geometry is None or event.button != 0:
+            return False
+        vertical, at, size = self._geometry
+        pos = event.y if vertical else event.x
+        if event.action == 'press':
+            self.dragging = abs(pos - at) <= 1
+            return self.dragging
+        if event.action == 'drag' and self.dragging:
+            self.ratio = max(0.1, min(0.9, float(pos) / max(1, size)))
+            self.refresh()
+            return True
+        if event.action == 'release':
+            was, self.dragging = self.dragging, False
+            return was
+        return False
 
     def natural_width(self):
         if self.direction == 'vertical':
@@ -1027,8 +1211,10 @@ class Split(_Themed):
             top = render_into(self.first, width, top_h)
             top += [''] * (top_h - len(top))
             bottom = render_into(self.second, width, avail - top_h)
-            mid = [self.paint('─' * width, self.theme.border)] \
+            divider = '━' if self.dragging else '─'
+            mid = [self.paint(divider * width, self.theme.border)] \
                 if self.divider else []
+            self._geometry = (True, top_h, avail)
             return top + mid + bottom
         gap = 3 if self.divider else 1
         avail = max(2, width - gap)
@@ -1039,7 +1225,9 @@ class Split(_Themed):
         left = render_into(self.first, left_w, height)
         right = render_into(self.second, right_w, height)
         rows = height or max(len(left), len(right))
-        sep = ' ' + self.paint('│', self.theme.border) + ' ' if \
+        self._geometry = (False, left_w + gap // 2, avail)
+        sep = ' ' + self.paint('┃' if self.dragging else '│',
+                               self.theme.border) + ' ' if \
             self.divider else ' '
         out = []
         for k in range(rows):
@@ -1056,6 +1244,8 @@ class Stack(_Themed):
     children would get narrower than that (four cards become 2 x 2, then a
     column).
     """
+
+    role = 'group'
 
     def __init__(self, children, direction='vertical', gap=0, widths=None,
                  min_width=None, **kwargs):
@@ -1120,6 +1310,18 @@ class SortControl(_Themed):
     """
 
     focusable = True
+    role = 'radiogroup'
+
+    def a11y_value(self):
+        return '{0}, {1}'.format(self.field, 'descendente' if self.descending
+                                 else 'ascendente')
+
+    def _click(self, f):
+        if f == self.field:
+            self.descending = not self.descending
+        else:
+            self.field = f
+        return self._changed()
 
     def __init__(self, fields, field=None, descending=False, on_change=None,
                  **kwargs):
@@ -1158,11 +1360,16 @@ class SortControl(_Themed):
             if f == self.field:
                 arrow = '↓' if self.descending else '↑'
                 text = '{0} {1}'.format(f, arrow)
-                parts.append(self.paint(' ' + text + ' ', self.theme.selection
+                parts.append(self.paint(' ' + text + ' ', 'bold underline ' +
+                                        self.theme.selection
                                         if self.focused else 'reverse') if
-                             self._active() else '[' + text + ']')
+                             self._active() else
+                             ('>{0}<' if self.focused else '[{0}]').format(
+                                 text))
             else:
                 parts.append(str(f))
+        self.hot_parts(0, parts, 1, 0, [None] + [
+            (lambda f=f: self._click(f)) for f in self.fields])
         return [' '.join(parts)]
 
 
@@ -1175,6 +1382,12 @@ class AppShell(_Themed):
     """
 
     expand = True
+    role = 'application'
+
+    def a11y_name(self):
+        if self.a11y_label:
+            return self.a11y_label
+        return getattr(self.topbar, 'title', '') or ''
 
     def __init__(self, content=None, sidebar=None, topbar=None, pages=None,
                  sidebar_below=70, **kwargs):

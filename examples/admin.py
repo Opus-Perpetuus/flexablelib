@@ -7,11 +7,16 @@ terminal packages (``pip install flexablelib[tui,components,speed]``).
     python examples/admin.py --frame 120x36      # print one frame and exit
     python examples/admin.py --frame 120x36 --keys "tab,down,down,enter"
     python examples/admin.py --frame 80x24 --no-color
+    python examples/admin.py --theme high-contrast --screen-reader
+    python examples/admin.py --frame 100x30 --keys "click:3:5" --ascii
 
 Keys: Tab / Shift-Tab move the focus, Ctrl-B shows or hides the sidebar,
 Ctrl-K opens the command palette, Ctrl-N a new-customer form, F1 the help,
-Ctrl-Q quits. In the orders table: arrows, 1-9 sort, / filter, Space
-selects, Enter opens the order.
+Ctrl-Q quits, Ctrl-R reads the screen aloud (screen-reader mode). In the
+orders table: arrows, 1-9 sort, / filter, Space selects, Enter opens the
+order. The mouse works too: click to focus and press, wheel to scroll,
+drag the scroll bars; ``--theme`` picks a theme (high-contrast,
+deuteranopia, protanopia, tritanopia, monochrome ...).
 
 Pieces: AppShell (sidebar, top bar, pages), Stat cards, LineChart,
 DataTable bound to a FilterBar, Form with validation, Calendar, Timeline,
@@ -36,7 +41,7 @@ for path in (ROOT, os.path.join(ROOT, 'packages', 'tui'),
 import flexablelib_components as C  # noqa: E402
 from flexablelib import KeyHints  # noqa: E402
 from flexablelib import _frames  # noqa: E402
-from flexablelib_tui import App, Component  # noqa: E402
+from flexablelib_tui import App, Component, parse_keys  # noqa: E402
 
 TODAY = dt.date(2026, 11, 11)
 
@@ -70,7 +75,7 @@ STATES = {'pagado': 'green', 'pendiente': 'yellow', 'enviado': 'cyan',
 class Admin(object):
     """Builds the screens and wires the actions."""
 
-    def __init__(self):
+    def __init__(self, **app_options):
         self.orders = C.DataTable(
             [{'key': 'folio', 'title': 'Folio', 'align': 'r', 'format': str},
              {'key': 'cliente', 'title': 'Cliente'},
@@ -92,13 +97,15 @@ class Admin(object):
         self.shell = C.AppShell(sidebar=self.sidebar, topbar=self.topbar,
                                 pages=self.pages())
         self.app = App(
+            mouse=True, title='Tienda · administración', **app_options,
             body=self.shell,
             footer=KeyHints([('Tab', 'Foco'), ('Ctrl-B', 'Menú'),
                              ('Ctrl-K', 'Comandos'), ('Ctrl-N', 'Nuevo'),
                              ('F1', 'Ayuda'), ('Ctrl-Q', 'Salir')]),
-            bindings={'ctrl+q': lambda: self.app.exit(),
-                      'ctrl+k': self.palette, 'ctrl+n': self.new_customer,
-                      'f1': self.help})
+            bindings={'ctrl+q': (lambda: self.app.exit(), 'Salir'),
+                      'ctrl+k': (self.palette, 'Paleta de comandos'),
+                      'ctrl+n': (self.new_customer, 'Nuevo cliente'),
+                      'f1': (self.help, 'Ayuda')})
 
     # -- pages --------------------------------------------------------------
 
@@ -234,10 +241,24 @@ def main(argv=None):
     parser.add_argument('--keys', default='',
                         help='comma-separated keys fed before the frame')
     parser.add_argument('--no-color', action='store_true')
+    parser.add_argument('--theme', help='high-contrast, deuteranopia, '
+                        'protanopia, tritanopia, monochrome ...')
+    parser.add_argument('--screen-reader', action='store_true',
+                        help='linear text with roles; announcements')
+    parser.add_argument('--announce', metavar='TARGET',
+                        help='stdout, stderr or a file for announcements')
+    parser.add_argument('--ascii', action='store_true')
+    parser.add_argument('--focus-marker', action='store_true')
+    parser.add_argument('--reduced-motion', action='store_true')
     args = parser.parse_args(argv)
     if args.no_color:
         Component.use_colors = False
-    admin = Admin()
+    options = dict((k, v) for k, v in (('theme', args.theme),
+                                       ('announce', args.announce)) if v)
+    for name in ('screen_reader', 'ascii', 'focus_marker', 'reduced_motion'):
+        if getattr(args, name):
+            options[name] = True
+    admin = Admin(**options)
     if not args.frame:
         admin.app.run()
         return 0
@@ -248,6 +269,13 @@ def main(argv=None):
     keys = [k.strip() for k in args.keys.split(',') if k.strip()]
     for key in keys:
         admin.app.render(width, height)
+        if key.startswith('click:'):
+            # click:X:Y -- a mouse click at that cell (0-based).
+            x, y = (int(n) + 1 for n in key.split(':')[1:3])
+            for seq in ('\x1b[<0;{0};{1}M', '\x1b[<0;{0};{1}m'):
+                for parsed in parse_keys(seq.format(x, y)):
+                    admin.app.dispatch(parsed)
+            continue
         admin.app.dispatch(key)
     sys.stdout.write(admin.app.render(width, height) + '\n')
     sys.stderr.write('frames backend: {0}\n'.format(_frames.BACKEND))

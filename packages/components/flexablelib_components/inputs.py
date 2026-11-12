@@ -17,7 +17,9 @@ import time
 
 from flexablelib import _frames as _fx
 
-from .base import Input
+from flexablelib_tui import Key
+
+from .base import Input, _Themed
 
 __all__ = ['TextInput', 'PasswordInput', 'NumberInput', 'ExpressionInput',
            'MoneyInput', 'MaskedInput', 'MASKS', 'TextArea', 'JsonInput',
@@ -199,6 +201,23 @@ class TextInput(Input):
         self.refresh()
         return True
 
+    def on_mouse(self, event):
+        if event.action != 'press' or event.button != 0:
+            return False
+        if event.y != (1 if self.label else 0):
+            return True
+        col = max(0, event.x - 2) + self.scroll_x
+        acc = pos = 0
+        for char in self.shown_text():
+            w = _fx.visible_width(char)
+            if acc + w > col:
+                break
+            acc += w
+            pos += 1
+        self.cursor_pos = pos
+        self.refresh()
+        return True
+
     # drawing
     def shown_text(self):
         if self.mask_char:
@@ -272,12 +291,26 @@ class PasswordInput(TextInput):
     def suffix(self):
         return 'ctrl+r' if self.focused else ''
 
+    role = 'password'
+
+    def a11y_value(self):
+        if self.revealed:
+            return self.text
+        n = len(self.text)
+        return '' if not n else '{0} {1}'.format(
+            n, 'carácter' if n == 1 else 'caracteres')
+
 
 class NumberInput(TextInput):
     """
     A number. Up/Down step it by ``step`` within ``minimum`` / ``maximum``;
     ``decimals`` fixes the decimals shown (``0`` gives an int).
     """
+
+    role = 'spinbutton'
+
+    def a11y_value(self):
+        return self.text
 
     def __init__(self, label=None, value=None, minimum=None, maximum=None,
                  step=1, decimals=None, **kwargs):
@@ -870,7 +903,26 @@ class ScanInput(TextInput):
 # Choices
 
 class Checkbox(Input):
-    """``[x] label``: Space or Enter toggles."""
+    """``[x] label``: Space or Enter toggles (or a click)."""
+
+    role = 'checkbox'
+
+    def a11y_state(self):
+        state = ['checked' if self._value else 'unchecked']
+        if self.required:
+            state.append('required')
+        if self.error:
+            state.append('invalid')
+        return state
+
+    def a11y_value(self):
+        return ''
+
+    def on_mouse(self, event):
+        if event.action == 'press' and event.button == 0 and event.y == 0:
+            self.set_value(not self._value)
+            return True
+        return False
 
     def __init__(self, label=None, value=False, **kwargs):
         super(Checkbox, self).__init__(label=label, value=value, **kwargs)
@@ -905,6 +957,14 @@ class Checkbox(Input):
 class Switch(Checkbox):
     """An on/off switch; ``labels`` names the two states."""
 
+    role = 'switch'
+
+    def a11y_state(self):
+        return ['on' if self._value else 'off']
+
+    def a11y_value(self):
+        return self.labels[1] if self._value else self.labels[0]
+
     def __init__(self, label=None, value=False, labels=('No', 'Sí'),
                  **kwargs):
         self.labels = labels
@@ -938,6 +998,24 @@ class RadioGroup(Input):
         values = [v for v, _ in self.options]
         if self._value in values:
             self.index = values.index(self._value)
+
+    role = 'radiogroup'
+
+    def a11y_value(self):
+        for value, label in self.options:
+            if value == self._value:
+                return '{0} ({1} de {2})'.format(
+                    label, self.options.index((value, label)) + 1,
+                    len(self.options))
+        return ''
+
+    def a11y_state(self):
+        return Input.a11y_state(self)
+
+    def _pick(self, i):
+        self.index = i
+        self.set_value(self.options[i][0])
+        return True
 
     def coerce(self, value):
         return value
@@ -980,6 +1058,12 @@ class RadioGroup(Input):
                 if not self._active():
                     text = '[{0}]'.format(label) if chosen else \
                         ' {0} '.format(label)
+                elif chosen and self._marked():
+                    text = '[{0}]'.format(label)
+                x0 = 2 + sum(_fx.visible_width(p) for p in
+                             (_fx.strip_ansi(q) for q in parts))
+                self.hot(0, lambda i=i: self._pick(i), x0,
+                         x0 + _fx.visible_width(text))
                 parts.append(self.paint(text, spec))
             return [self.marker() + ' ' + ''.join(parts)]
         out = []
@@ -988,6 +1072,7 @@ class RadioGroup(Input):
             if self._active():
                 dot = '◉' if value == self._value else '○'
             here = self.focused and i == self.index
+            self.hot(len(out), lambda i=i: self._pick(i))
             out.append((self.marker() if here else ' ') + ' ' +
                        self.paint(dot + ' ' + label,
                                   self.theme.accent if here else None))
@@ -996,6 +1081,27 @@ class RadioGroup(Input):
 
 class CheckboxGroup(RadioGroup):
     """Several of ``options``: Up/Down move, Space toggles. Value: a list."""
+
+    role = 'group'
+
+    def a11y_value(self):
+        chosen = [label for value, label in self.options
+                  if value in self._value]
+        return '{0} de {1} marcadas{2}'.format(
+            len(chosen), len(self.options),
+            (': ' + ', '.join(chosen)) if chosen else '')
+
+    def _pick(self, i):
+        self.index = i
+        value = self.options[i][0]
+        chosen = list(self._value)
+        if value in chosen:
+            chosen.remove(value)
+        else:
+            chosen.append(value)
+        order = [v for v, _ in self.options]
+        self.set_value(sorted(chosen, key=order.index))
+        return True
 
     def coerce(self, value):
         return list(value or [])
@@ -1029,6 +1135,7 @@ class CheckboxGroup(RadioGroup):
             box = ('☑' if on else '☐') if self._active() else \
                 ('[x]' if on else '[ ]')
             here = self.focused and i == self.index
+            self.hot(len(out), lambda i=i: self._pick(i))
             out.append((self.marker() if here else ' ') + ' ' +
                        self.paint(box + ' ' + label,
                                   self.theme.accent if here else None))
@@ -1052,11 +1159,40 @@ class Select(Input):
         self.top = 0
         super(Select, self).__init__(label=label, value=value, **kwargs)
 
+    role = 'combobox'
+
     def label_of(self, value):
         for v, label in self.options:
             if v == value:
                 return label
         return None if value is None else str(value)
+
+    def a11y_value(self):
+        if self.open:
+            items = self.matches()
+            if items:
+                i = min(self.index, len(items) - 1)
+                return '{0} ({1} de {2})'.format(items[i][1], i + 1,
+                                                 len(items))
+        return self.label_of(self._value) or ''
+
+    def a11y_state(self):
+        return ['expanded' if self.open else 'collapsed'] + \
+            Input.a11y_state(self)
+
+    def _toggle(self):
+        if self.open:
+            self.open = False
+        else:
+            self.on_key(Key('enter'))
+        return True
+
+    def _choose(self, i):
+        items = self.matches()
+        if i < len(items):
+            self.set_value(items[i][0])
+        self.open = False
+        return True
 
     def matches(self):
         q = self.query.lower()
@@ -1116,6 +1252,7 @@ class Select(Input):
             self.paint(arrow, self.theme.accent if self.focused else
                        self.theme.muted)
         out = [line]
+        self.hot(0, self._toggle)
         if self.open:
             items = self.matches()
             if self.query:
@@ -1129,8 +1266,8 @@ class Select(Input):
                                          self.max_visible)):
                 text = _fx.fit_line(' ' + items[i][1], max(1, width - 2))
                 if i == self.index:
-                    text = self.paint(text, self.theme.selection) if \
-                        self._active() else '>' + text[1:]
+                    text = self.mark_current(text, self.theme.selection)
+                self.hot(len(out), lambda i=i: self._choose(i))
                 out.append('  ' + text)
             if not items:
                 out.append('  ' + self.paint('Sin resultados',
@@ -1209,14 +1346,28 @@ class Autocomplete(TextInput):
         self.highlight = -1
         return super(Autocomplete, self).on_key(key)
 
+    role = 'combobox'
+
+    def _accept_suggestion(self, i):
+        items = self.suggestions()
+        if i < len(items):
+            self._edit(items[i][1], len(items[i][1]))
+        self.highlight = -1
+        return True
+
+    def on_mouse(self, event):
+        if _Themed.on_mouse(self, event):
+            return True
+        return TextInput.on_mouse(self, event)
+
     def control(self, width, height):
         out = super(Autocomplete, self).control(width, height)
         if self.focused:
             for i, (_, label) in enumerate(self.suggestions()):
+                self.hot(len(out), lambda i=i: self._accept_suggestion(i))
                 text = _fx.fit_line(' ' + label, max(1, width - 2))
                 if i == self.highlight:
-                    text = self.paint(text, self.theme.selection) if \
-                        self._active() else '>' + text[1:]
+                    text = self.mark_current(text, self.theme.selection)
                 else:
                     text = self.paint(text, self.theme.muted)
                 out.append('  ' + text)
@@ -1305,8 +1456,17 @@ class IconPicker(Input):
         self.index = 0
         super(IconPicker, self).__init__(label=label, value=value, **kwargs)
 
+    role = 'listbox'
+
     def matches(self):
         return [i for i in self.icons if self.query in i[0]]
+
+    def _icon(self, i):
+        items = self.matches()
+        if self.index == i and i < len(items):
+            self.set_value(items[i][0])
+        self.index = i
+        return True
 
     def symbol(self):
         for name, sym in self.icons:
@@ -1353,7 +1513,10 @@ class IconPicker(Input):
                 cell = ' ' + sym + ' '
                 if i == self.index:
                     cell = self.paint(cell, self.theme.selection) if \
-                        self._active() else '[' + sym + ']'
+                        self._active() and not self._marked() else \
+                        self.paint('[' + sym + ']', self.theme.selection)
+                self.hot(len(out), lambda i=i: self._icon(i), 2 + 4 * c,
+                         6 + 4 * c)
                 cells.append(cell)
             if cells:
                 out.append('  ' + ''.join(cells))
@@ -1446,6 +1609,28 @@ class FileInput(Input):
             return list(value or [])
         return value
 
+    role = 'combobox'
+
+    def a11y_state(self):
+        return ['expanded' if self.open else 'collapsed'] + \
+            Input.a11y_state(self)
+
+    def a11y_value(self):
+        if self.open:
+            items = self.entries()
+            name, is_dir = items[min(self.index, len(items) - 1)]
+            return name + (' (carpeta)' if is_dir else '')
+        return Input.a11y_value(self) if not self.multiple else \
+            ', '.join(os.path.basename(p) for p in self._value)
+
+    def _entry(self, i):
+        if not self.open:
+            return self.on_key(Key('enter'))
+        if self.index == i:
+            return self.on_key(Key('enter'))
+        self.index = i
+        return True
+
     def entries(self):
         try:
             names = sorted(os.listdir(self.directory), key=str.lower)
@@ -1518,8 +1703,9 @@ class FileInput(Input):
             shown = self._value or ''
         body = shown or self.paint('Elige un archivo…', self.theme.muted)
         out = [self.marker() + ' ' + _fx.truncate(body, max(1, width - 4),
-                                                 '…') ]
+                                                 '…')]
         if not self.open:
+            self.hot(0, lambda: self.on_key(Key('enter')))
             return out
         out.append('  ' + self.paint(_fx.truncate(self.directory,
                                                   max(1, width - 2), '…'),
@@ -1537,7 +1723,7 @@ class FileInput(Input):
             text = _fx.fit_line(mark + name + ('/' if is_dir and name != '..'
                                                else ''), max(1, width - 2))
             if i == self.index:
-                text = self.paint(text, self.theme.selection) if \
-                    self._active() else '>' + text[1:]
+                text = self.mark_current(text, self.theme.selection)
+            self.hot(len(out), lambda i=i: self._entry(i))
             out.append('  ' + text)
         return out

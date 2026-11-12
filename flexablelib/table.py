@@ -165,6 +165,9 @@ class Table(object):
         # type detection keep the original Python values.
         self.__float_format = None
         self.__int_format = None
+        self.__id_columns = None
+        self.__id_names = None
+        self.__id_cache = {}
         self.__custom_format = None
         # Per-column width floors and ceilings (table.max_width is the
         # whole-table budget and is unrelated).
@@ -766,8 +769,38 @@ class Table(object):
     def int_format(self):
         """
         How integer cells are printed. Same forms as :attr:`float_format`.
+        Columns named in :attr:`id_columns` are left out.
         """
         return self.__int_format
+
+    @property
+    def id_columns(self):
+        """
+        Integer columns that hold identifiers (folios, IDs, codes, years):
+        :attr:`int_format` -- thousands separators included -- does not
+        apply to them, so folio ``1281`` never prints as ``1,281``.
+
+        ``None`` (default, as before 3.4) applies ``int_format`` everywhere;
+        ``'auto'`` picks columns by name (:func:`flexablelib.is_id_column`:
+        ``Folio``, ``ID``, ``Código``, ``Clave``, ``SKU``, ``No.``, ``Año``
+        ...); a list names them by header or position. ``leading_zeros`` and
+        ``custom_format`` still apply.
+        """
+        return self.__id_columns
+
+    @property
+    def id_names(self):
+        """
+        The words that make a column an id column when :attr:`id_columns`
+        is ``'auto'``: ``None`` uses :data:`flexablelib.ID_COLUMN_NAMES`;
+        a list replaces it (``['folio', 'pedido']``).
+        """
+        return self.__id_names
+
+    @id_names.setter
+    def id_names(self, value):
+        self.__id_names = None if value is None else tuple(value)
+        self.__id_cache = {}
 
     @property
     def custom_format(self):
@@ -1244,6 +1277,36 @@ class Table(object):
     @int_format.setter
     def int_format(self, value):
         self.__int_format = value
+
+    @id_columns.setter
+    def id_columns(self, value):
+        if value is True:
+            value = 'auto'
+        if value is False:
+            value = None
+        if value is not None and value != 'auto':
+            if isinstance(value, (str, int)):
+                value = [value]
+            value = tuple(value)
+        self.__id_columns = value
+        self.__id_cache = {}
+
+    def is_id_column(self, header, column_i=None):
+        """Whether ``header`` (or position ``column_i``) is an id column."""
+        setting = self.__id_columns
+        if setting is None:
+            return False
+        key = (header, column_i)
+        cached = self.__id_cache.get(key)
+        if cached is None:
+            if setting == 'auto':
+                from .identifiers import is_id_column
+                cached = is_id_column(header, self.__id_names)
+            else:
+                cached = header in setting or (
+                    column_i is not None and column_i in setting)
+            self.__id_cache[key] = cached
+        return cached
 
     @custom_format.setter
     def custom_format(self, value):
@@ -3590,7 +3653,9 @@ class Table(object):
             # bool is a subclass of int; never zero-pad True/False.
             formatted = value
         elif isinstance(value, int):
-            if self.__int_format is not None:
+            if self.__int_format is not None and not (
+                    self.__id_columns is not None and
+                    self.is_id_column(header, column_i)):
                 formatted = self.__apply_format_spec(value, self.__int_format)
             elif self.__leading_zeros:
                 digits = self.__leading_zeros
@@ -5642,8 +5707,9 @@ class Table(object):
         'header_align', 'max_width', 'max_table_width', 'table_align',
         'hide_columns', 'index_title', 'roman_index', 'number_columns',
         'strip_cells', 'hrules', 'vrules', 'index_start', 'index_step',
-        'leading_zeros', 'float_format', 'int_format', 'custom_format',
-        'column_min_width', 'column_max_width', 'column_colors',
+        'leading_zeros', 'float_format', 'int_format', 'id_columns',
+        'id_names',
+        'custom_format', 'column_min_width', 'column_max_width', 'column_colors',
         'expand_to_window', 'justify', 'suppress_empty', 'show_margin',
         'show_empty_rows', 'show_empty_columns', 'parse_str_numbers',
         'too_narrow_message', 'subtitle', 'title_position',

@@ -19,6 +19,7 @@
 #include <string.h>
 
 #include "_width_tables.h"
+#include "_ascii_table.h"
 
 #define ESC 0x1B
 #define BEL 0x07
@@ -682,6 +683,226 @@ fail:
     return NULL;
 }
 
+/* ------------------------------------------------------------------------
+ * ascii_fold(text) -> str
+ *
+ * Every symbol of flexablelib._frames.ASCII_FOLD replaced by its one-column
+ * ASCII stand-in; braille cells become ' ', '.', ':' or '#' by dot count.
+ */
+static int
+fold_cp(Py_UCS4 cp)
+{
+    size_t low = 0, high = ASCII_FOLD_COUNT;
+    if (cp < 0x80) return 0;
+    if (cp >= 0x2800 && cp <= 0x28FF) {
+        unsigned bits = (unsigned)(cp - 0x2800);
+        int dots = 0;
+        while (bits) { dots += (int)(bits & 1u); bits >>= 1; }
+        return dots == 0 ? ' ' : dots <= 2 ? '.' : dots <= 5 ? ':' : '#';
+    }
+    while (low < high) {
+        size_t mid = low + (high - low) / 2;
+        if (cp < ascii_fold_table[mid].cp) high = mid;
+        else if (cp > ascii_fold_table[mid].cp) low = mid + 1;
+        else return (unsigned char)ascii_fold_table[mid].ch;
+    }
+    return 0;
+}
+
+static PyObject *
+py_ascii_fold(PyObject *m, PyObject *text)
+{
+    int kind, okind;
+    const void *data;
+    void *odata;
+    Py_ssize_t length, i;
+    Py_UCS4 maxchar = 0;
+    int changed = 0;
+    PyObject *out;
+    (void)m;
+    if (unpack(text, &kind, &data, &length) < 0) return NULL;
+    if (PyUnicode_IS_ASCII(text)) return Py_NewRef(text);
+    for (i = 0; i < length; i++) {
+        Py_UCS4 cp = PyUnicode_READ(kind, data, i);
+        int c = fold_cp(cp);
+        if (c) { changed = 1; cp = (Py_UCS4)c; }
+        if (cp > maxchar) maxchar = cp;
+    }
+    if (!changed) return Py_NewRef(text);
+    out = PyUnicode_New(length, maxchar);
+    if (!out) return NULL;
+    okind = PyUnicode_KIND(out);
+    odata = PyUnicode_DATA(out);
+    for (i = 0; i < length; i++) {
+        Py_UCS4 cp = PyUnicode_READ(kind, data, i);
+        int c = fold_cp(cp);
+        PyUnicode_WRITE(okind, odata, i, c ? (Py_UCS4)c : cp);
+    }
+    return out;
+}
+
+/* ------------------------------------------------------------------------
+ * extract_marks(lines) -> (clean_lines, regions)
+ *
+ * Removes the zero-width hit-region marks (ESC ] 8970 ; id BEL opens,
+ * ESC ] 8970 ; BEL closes) and reports (id, row, x0, x1, depth) per span.
+ */
+static Py_ssize_t
+measure_range(int kind, const void *data, Py_ssize_t start, Py_ssize_t end)
+{
+    Py_ssize_t total = 0, pos = start;
+    int prev = 0;
+    while (pos < end) {
+        Py_UCS4 cp = PyUnicode_READ(kind, data, pos);
+        int w;
+        if (cp == ESC) {
+            Py_ssize_t skip = seq_len(kind, data, end, pos);
+            if (skip > 0) { pos += skip; continue; }
+        }
+        if (cp == VS16) {
+            if (prev == 1) { total += 1; prev = 2; }
+            pos++;
+            continue;
+        }
+        w = cp_width(cp);
+        total += w;
+        prev = w;
+        pos++;
+    }
+    return total;
+}
+
+static int
+is_mark(int kind, const void *data, Py_ssize_t length, Py_ssize_t pos)
+{
+    static const char tag[] = "\x1b]8970;";
+    Py_ssize_t k;
+    if (pos + 7 > length) return 0;
+    for (k = 0; k < 7; k++)
+        if (PyUnicode_READ(kind, data, pos + k) != (Py_UCS4)(unsigned char)tag[k])
+            return 0;
+    return 1;
+}
+
+#define MARK_DEPTH 64
+
+static int
+add_region(PyObject *regions, long ident, Py_ssize_t row, Py_ssize_t x0,
+           Py_ssize_t x1, Py_ssize_t depth)
+{
+    PyObject *t = Py_BuildValue("(lnnnn)", ident, row, x0, x1, depth);
+    int rc;
+    if (!t) return -1;
+    rc = PyList_Append(regions, t);
+    Py_DECREF(t);
+    return rc;
+}
+
+static PyObject *
+py_extract_marks(PyObject *m, PyObject *arg)
+{
+    PyObject *seq, *out = NULL, *regions = NULL, *result = NULL;
+    Py_ssize_t n, row;
+    long ids[MARK_DEPTH];
+    Py_ssize_t starts[MARK_DEPTH];
+    (void)m;
+    seq = PySequence_Fast(arg, "lines must be a sequence of str");
+    if (!seq) return NULL;
+    n = PySequence_Fast_GET_SIZE(seq);
+    out = PyList_New(n);
+    regions = PyList_New(0);
+    if (!out || !regions) goto done;
+    for (row = 0; row < n; row++) {
+        PyObject *line = PySequence_Fast_GET_ITEM(seq, row);
+        PyObject *parts = NULL, *joined, *empty;
+        int kind;
+        const void *data;
+        Py_ssize_t length, pos = 0, k, col = 0, depth = 0, overflow = 0;
+        int found = 0;
+        if (unpack(line, &kind, &data, &length) < 0) goto done;
+        for (k = 0; k < length; k++) {
+            if (PyUnicode_READ(kind, data, k) == ESC &&
+                is_mark(kind, data, length, k)) { found = 1; break; }
+        }
+        if (!found) {
+            PyList_SET_ITEM(out, row, Py_NewRef(line));
+            continue;
+        }
+        parts = PyList_New(0);
+        if (!parts) goto done;
+        for (;;) {
+            Py_ssize_t mk = -1, end = -1, q;
+            PyObject *seg;
+            for (k = pos; k < length; k++) {
+                if (PyUnicode_READ(kind, data, k) == ESC &&
+                    is_mark(kind, data, length, k)) { mk = k; break; }
+            }
+            q = mk < 0 ? length : mk;
+            seg = PyUnicode_Substring(line, pos, q);
+            if (!seg || PyList_Append(parts, seg) < 0) {
+                Py_XDECREF(seg); Py_DECREF(parts); goto done;
+            }
+            Py_DECREF(seg);
+            col += measure_range(kind, data, pos, q);
+            if (mk < 0) break;
+            for (k = mk; k < length; k++) {
+                if (PyUnicode_READ(kind, data, k) == BEL) { end = k; break; }
+            }
+            if (end < 0) break;
+            {
+                Py_ssize_t a = mk + 7, len = end - a;
+                int digits = len > 0 && len <= 9;
+                long ident = 0;
+                for (k = a; digits && k < end; k++) {
+                    Py_UCS4 c = PyUnicode_READ(kind, data, k);
+                    if (c < '0' || c > '9') digits = 0;
+                    else ident = ident * 10 + (long)(c - '0');
+                }
+                if (digits) {
+                    if (depth < MARK_DEPTH) {
+                        ids[depth] = ident;
+                        starts[depth] = col;
+                        depth++;
+                    } else {
+                        overflow++;
+                    }
+                } else if (len == 0) {
+                    if (overflow) {
+                        overflow--;
+                    } else if (depth > 0) {
+                        depth--;
+                        if (add_region(regions, ids[depth], row, starts[depth],
+                                       col, depth) < 0) {
+                            Py_DECREF(parts); goto done;
+                        }
+                    }
+                }
+            }
+            pos = end + 1;
+        }
+        while (depth > 0) {
+            depth--;
+            if (add_region(regions, ids[depth], row, starts[depth], col,
+                           depth) < 0) {
+                Py_DECREF(parts); goto done;
+            }
+        }
+        empty = PyUnicode_New(0, 0);
+        if (!empty) { Py_DECREF(parts); goto done; }
+        joined = PyUnicode_Join(empty, parts);
+        Py_DECREF(empty);
+        Py_DECREF(parts);
+        if (!joined) goto done;
+        PyList_SET_ITEM(out, row, joined);
+    }
+    result = PyTuple_Pack(2, out, regions);
+done:
+    Py_XDECREF(out);
+    Py_XDECREF(regions);
+    Py_DECREF(seq);
+    return result;
+}
+
 static PyMethodDef methods[] = {
     {"visible_width", py_visible_width, METH_O, "Visible terminal columns of a string."},
     {"strip_ansi", py_strip_ansi, METH_O, "The string without ANSI escapes."},
@@ -695,6 +916,9 @@ static PyMethodDef methods[] = {
      "border_grid(width, height, horiz, vert, glyphs) -> list of str"},
     {"changed_lines", py_changed_lines, METH_VARARGS, "changed_lines(old, new)"},
     {"render_diff", py_render_diff, METH_VARARGS, "render_diff(old, new) -> str"},
+    {"ascii_fold", py_ascii_fold, METH_O, "ascii_fold(text) -> str"},
+    {"extract_marks", py_extract_marks, METH_O,
+     "extract_marks(lines) -> (clean_lines, regions)"},
     {NULL, NULL, 0, NULL}
 };
 

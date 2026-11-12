@@ -16,7 +16,7 @@ keys to the focused component) and also renders on its own with
 ``render(width)``. See docs/COMPONENTS.md.
 """
 
-__version__ = '3.3.1'
+__version__ = '3.4.0'
 
 from .base import Theme, DEFAULT_THEME, Input, Box, Button, frame
 from .inputs import (TextInput, PasswordInput, NumberInput, ExpressionInput,

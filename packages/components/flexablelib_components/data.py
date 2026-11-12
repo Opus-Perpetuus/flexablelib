@@ -10,6 +10,7 @@ import os
 import re
 
 from flexablelib import _frames as _fx
+from flexablelib.identifiers import is_id_column
 
 from .base import Button, Input, _Themed, frame, join_columns
 from .inputs import TextInput, PasswordInput, Checkbox
@@ -48,7 +49,16 @@ class DataTable(_Themed):
 
     ``columns``: names, or dicts with ``key``, ``title``, ``align``
     (``'l'``/``'r'``/``'c'``), ``width``, ``format(value)`` and
-    ``color(value) -> spec``. ``rows``: dicts or sequences.
+    ``color(value) -> spec`` and ``type``. ``rows``: dicts or sequences.
+
+    Integers get thousands separators (``15,000``) except in identifier
+    columns -- folios, IDs, codes, SKUs, years -- which print as typed
+    (``1281``): a column with ``'type': 'id'`` (or ``'folio'``, ``'code'``),
+    or, with ``id_columns='auto'`` (the default), one whose name says so
+    (:func:`flexablelib.is_id_column`; ``id_names`` replaces the word list).
+    ``'type': 'number'`` keeps the separators whatever the name;
+    ``id_columns=False`` restores the 3.3 behaviour (separators everywhere)
+    and a list names the id columns by key, title or position.
 
     Keys: Up/Down/PgUp/PgDn/Home/End move; ``1``-``9`` sort by that column
     (again: reverse); ``/`` types a quick filter (Enter/Escape end it,
@@ -61,12 +71,67 @@ class DataTable(_Themed):
 
     focusable = True
     expand = True
+    role = 'grid'
+
+    def a11y_value(self):
+        view = self.view()
+        if not view:
+            return self.empty
+        row = self.current
+        n = min(self.cursor_row, len(view) - 1)
+        cells = ', '.join('{0} {1}'.format(c['title'], self.text(row, ci))
+                          for ci, c in enumerate(self.columns))
+        text = 'fila {0} de {1}: {2}'.format(n + 1, len(view), cells)
+        if self.sort_key is not None:
+            text += '; ordenada por {0} {1}'.format(
+                self.columns[self.sort_key]['title'],
+                'descendente' if self.sort_desc else 'ascendente')
+        return text
+
+    def a11y_state(self):
+        view = self.view()
+        if self.selectable and view and \
+                view[min(self.cursor_row, len(view) - 1)] in self.selected:
+            return ['selected']
+        return []
+
+    def _click_row(self, n, x):
+        view = self.view()
+        if n >= len(view):
+            return True
+        if self.selectable and x < 2:
+            i = view[n]
+            self.selected.symmetric_difference_update([i])
+            if self.on_select is not None:
+                self.on_select(self.selected_rows())
+            self.cursor_row = n
+            return True
+        if n == self.cursor_row and self.on_activate is not None:
+            self.on_activate(self.current)
+        self.cursor_row = n
+        return True
+
+    def on_mouse(self, event):
+        if event.action == 'scroll' and event.button in (64, 65):
+            self._move(-3 if event.button == 64 else 3)
+            self.refresh()
+            return True
+        if event.action == 'press' and event.button == 0:
+            for row, x0, x1, action in self._hot:
+                if row == event.y and x0 <= event.x < (x1 or 1 << 30):
+                    action(event.x) if getattr(action, 'wants_x', False) \
+                        else action()
+                    self.refresh()
+                    return True
+        return False
 
     def __init__(self, columns, rows=(), height=None, selectable=False,
                  on_activate=None, on_select=None, zebra=True,
                  page_size=None, status=True, empty='Sin registros',
-                 **kwargs):
+                 id_columns='auto', id_names=None, **kwargs):
         super(DataTable, self).__init__(**kwargs)
+        self.id_columns = id_columns
+        self.id_names = id_names
         self.columns = [self._column(c, i) for i, c in enumerate(columns)]
         self.rows = list(rows)
         self.height = height
@@ -118,9 +183,40 @@ class DataTable(_Themed):
         k = column['key'] if isinstance(column['key'], int) else index
         return row[k] if k < len(row) else None
 
+    _ID_TYPES = ('id', 'folio', 'code', 'codigo', 'código', 'clave', 'key')
+    _NUMBER_TYPES = ('number', 'numero', 'número', 'money', 'quantity',
+                     'int', 'float', 'amount')
+
+    def is_id_column(self, ci):
+        """Whether column ``ci`` holds identifiers (no separators)."""
+        column = self.columns[ci]
+        kind = str(column.get('type', '')).lower()
+        if kind in self._ID_TYPES:
+            return True
+        if kind in self._NUMBER_TYPES:
+            return False
+        setting = self.id_columns
+        if not setting:
+            return False
+        if setting == 'auto' or setting is True:
+            cached = column.get('_id')
+            if cached is None:
+                cached = column['_id'] = is_id_column(
+                    column.get('title', column['key']), self.id_names) or \
+                    (isinstance(column['key'], str) and
+                     is_id_column(column['key'], self.id_names))
+            return cached
+        return column['key'] in setting or column.get('title') in setting \
+            or ci in setting
+
     def text(self, row, ci):
         column = self.columns[ci]
-        return _cell_text(self._get(row, column, ci), column.get('format'))
+        value = self._get(row, column, ci)
+        fmt = column.get('format')
+        if fmt is None and isinstance(value, int) and \
+                not isinstance(value, bool) and self.is_id_column(ci):
+            return str(value)
+        return _cell_text(value, fmt)
 
     def invalidate(self):
         self._view = None
@@ -277,7 +373,10 @@ class DataTable(_Themed):
         order = sorted(widths)
         mark_w = 2 if self.selectable else 0
         head = ' ' * mark_w
+        x = mark_w
         for ci in order:
+            self.hot(0, lambda ci=ci: self.sort_by(ci), x, x + widths[ci] + 2)
+            x += widths[ci] + 2
             col = self.columns[ci]
             title = col['title']
             if ci == self.sort_key:
@@ -311,6 +410,9 @@ class DataTable(_Themed):
                                   self.theme.muted))
         for n, i in enumerate(shown):
             row = self.rows[i]
+            pick = (lambda x, n=n: self._click_row(self.top + n, x))
+            pick.wants_x = True
+            self.hot(len(out), pick)
             line = ''
             if mark_w:
                 on = i in self.selected
@@ -327,10 +429,10 @@ class DataTable(_Themed):
             line = _fx.fit_line(line, width)
             here = self.top + n == self.cursor_row
             if here and self.focused:
-                line = self.paint(_fx.strip_ansi(line), self.theme.selection) \
-                    if self._active() else '>' + line[1:]
+                line = self.mark_current(_fx.strip_ansi(line),
+                                      self.theme.selection)
             elif here:
-                line = self.paint(line, 'bold')
+                line = self.paint(line, 'underline')
             elif self.zebra and n % 2 and self._active():
                 line = self.paint(line, 'on #1c1c1c')
             out.append(line)
@@ -401,6 +503,8 @@ class FilterBar(TextInput):
     is the row filter; ``table`` (a :class:`DataTable`) is refreshed on
     every change.
     """
+
+    role = 'searchbox'
 
     def __init__(self, fields=None, table=None, label=None, **kwargs):
         self.fields = list(fields) if fields else None
@@ -510,7 +614,7 @@ class EditableTable(DataTable):
             value = self._get(self.current, self.columns[self.cursor_col],
                               self.cursor_col)
             self.editor = TextInput(value='' if value is None else str(value),
-                                    theme=self.theme,
+                                    theme=self._theme,
                                     use_colors=self.use_colors)
             self.editor.focused = True
             self.refresh()
@@ -529,7 +633,31 @@ class EditableTable(DataTable):
             return True
         return super(EditableTable, self).on_key(key)
 
+    def _click_row(self, n, x):
+        widths = self._widths(self._last_width)
+        left = 2 if self.selectable else 0
+        for ci in sorted(widths):
+            if left <= x < left + widths[ci] + 2:
+                self.cursor_col = ci
+                break
+            left += widths[ci] + 2
+        if self.editor is not None:
+            return True
+        return DataTable._click_row(self, n, x)
+
+    _last_width = 80
+
+    def a11y_value(self):
+        text = DataTable.a11y_value(self)
+        if self.view() and 0 <= self.cursor_col < len(self.columns):
+            text += '; celda {0}'.format(
+                self.columns[self.cursor_col]['title'])
+            if self.editor is not None:
+                text += ' (editando: {0})'.format(self.editor.text)
+        return text
+
     def draw(self, width, height):
+        self._last_width = width
         lines = super(EditableTable, self).draw(width, height)
         view = self.view()
         if not view or not self.focused:
@@ -571,6 +699,23 @@ class CatalogGrid(_Themed):
 
     focusable = True
     expand = True
+    role = 'listbox'
+
+    def a11y_value(self):
+        if not self.items:
+            return 'Sin elementos'
+        item = self.items[min(self.index, len(self.items) - 1)]
+        text = '{0} ({1} de {2})'.format(item.get('title', ''),
+                                         self.index + 1, len(self.items))
+        if item.get('price') is not None:
+            text += ', precio {0}'.format(item['price'])
+        return text
+
+    def _click(self, i):
+        if i == self.index and self.on_select is not None:
+            self.on_select(self.items[i])
+        self.index = i
+        return True
 
     def __init__(self, items, min_width=24, on_select=None, card_height=6,
                  **kwargs):
@@ -617,6 +762,8 @@ class CatalogGrid(_Themed):
                 self.paint(' ' + str(badge) + ' ', 'black on ' +
                            self.theme.warning) if self._active() else \
                 head + ' [' + str(badge) + ']'
+        if selected and self._marked():
+            head = ('▸ ' if self._active() else '> ') + head
         lines.append(head)
         if item.get('subtitle'):
             lines.append(self.paint(_fx.truncate(str(item['subtitle']), inner,
@@ -633,8 +780,7 @@ class CatalogGrid(_Themed):
         lines = lines[:rows] + [''] * (rows - len(lines))
         color = self.theme.accent if selected else self.theme.border
         return frame([' ' + l for l in lines], width, None, color,
-                     self.paint, style='heavy' if selected and
-                     not self._active() else 'rounded')
+                     self.paint, style='heavy' if selected else 'rounded')
 
     def draw(self, width, height):
         cols = max(1, (width + 1) // (self.min_width + 1))
@@ -658,6 +804,9 @@ class CatalogGrid(_Themed):
                     break
                 blocks.append(self._card(self.items[i], card_w,
                                          self.focused and i == self.index))
+                for k in range(self.card_height):
+                    self.hot(len(out) + k, lambda i=i: self._click(i),
+                             c * (card_w + 1), c * (card_w + 1) + card_w)
             out.extend(join_columns(blocks, [card_w] * len(blocks)))
         if not self.items:
             out.append(self.paint('Sin elementos', self.theme.muted))
@@ -666,6 +815,15 @@ class CatalogGrid(_Themed):
 
 class ValidationSummary(_Themed):
     """The list of errors of a form: ``{field: message}``."""
+
+    role = 'alert'
+
+    def a11y_name(self):
+        return self.a11y_label or self.title
+
+    def a11y_value(self):
+        return '; '.join('{0}: {1}'.format(f, m)
+                         for f, m in self.errors.items())
 
     def __init__(self, errors=None, title='Revisa estos campos', **kwargs):
         super(ValidationSummary, self).__init__(**kwargs)
@@ -692,6 +850,19 @@ class Form(_Themed):
     ``{name: value}`` dict; ``errors`` the last validation.
     """
 
+    role = 'form'
+
+    def a11y_name(self):
+        return self.a11y_label or self.title or ''
+
+    def a11y_value(self):
+        if self.errors:
+            return '{0} errores'.format(len(self.errors))
+        return ''
+
+    def a11y_state(self):
+        return ['invalid'] if self.errors else []
+
     def __init__(self, fields, on_submit=None, on_cancel=None,
                  submit_label='Guardar', cancel_label='Cancelar', columns=1,
                  title=None, summary=True, **kwargs):
@@ -711,10 +882,10 @@ class Form(_Themed):
         self.submitted = None
         colors = kwargs.get('use_colors')
         self.submit_button = Button(submit_label, self.submit, kind='primary',
-                                    shortcut=None, theme=self.theme,
+                                    shortcut=None, theme=self._theme,
                                     use_colors=colors)
         self.cancel_button = Button(cancel_label, self.cancel,
-                                    theme=self.theme, use_colors=colors) \
+                                    theme=self._theme, use_colors=colors) \
             if on_cancel is not None or cancel_label else None
         for field in self.fields():
             if isinstance(field, TextInput) and field.on_submit is None:
@@ -783,7 +954,7 @@ class Form(_Themed):
             out.append(self.paint(self.title, 'bold ' + self.theme.accent))
             out.append('')
         if self.summary and self.errors:
-            out.extend(ValidationSummary(self.errors, theme=self.theme,
+            out.extend(ValidationSummary(self.errors, theme=self._theme,
                                          use_colors=self.use_colors)
                        .render(width=width).split('\n'))
         pending = []
@@ -881,6 +1052,11 @@ class FilePreview(_Themed):
     LANGUAGES = {'.py': 'python', '.js': 'javascript', '.ts': 'typescript',
                  '.sql': 'sql', '.sh': 'bash', '.json': 'json'}
 
+    role = 'document'
+
+    def a11y_name(self):
+        return self.a11y_label or os.path.basename(self.path)
+
     def __init__(self, path, max_lines=20, **kwargs):
         super(FilePreview, self).__init__(**kwargs)
         self.path = path
@@ -922,10 +1098,10 @@ class FilePreview(_Themed):
         ext = os.path.splitext(name)[1].lower()
         if ext in ('.md', '.markdown'):
             from .display import MarkdownView
-            body = MarkdownView('\n'.join(lines), theme=self.theme,
+            body = MarkdownView('\n'.join(lines), theme=self._theme,
                                 use_colors=self.use_colors)
         else:
             body = Code('\n'.join(lines), self.LANGUAGES.get(ext),
-                        theme=self.theme, use_colors=self.use_colors)
+                        theme=self._theme, use_colors=self.use_colors)
         out.extend(body.render(width=width).split('\n'))
         return out
