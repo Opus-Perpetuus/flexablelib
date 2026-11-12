@@ -36,11 +36,10 @@ from .text_width import (
     strip_ansi,
     tokenize,
     measured_clusters,
-    truncate_to_width,
-    visible_width,
     wrap_to_width,
 )
 from .utils import get_window_size
+from . import _frames as _fx
 
 __all__ = ['Card', 'Grid', 'GridCell', 'render_width', 'wrap_panel',
            'add_shadow', 'inset_label']
@@ -81,7 +80,7 @@ def render_width(width=None):
 
 
 def _block_width(text):
-    return max((visible_width(line) for line in text.split('\n')), default=0)
+    return max(_fx.widths_of(text.split('\n')), default=0)
 
 
 # +---------------------------------------------------------------------------+
@@ -112,10 +111,10 @@ def wrap_panel(text, panel=True, color=None):
         _panel_name(panel), PANEL_PRESETS['rounded'])
     prefix = parse_spec(color) if color else ''
     lines = text.splitlines()
-    width = max((visible_width(line) for line in lines), default=0)
+    width = max((_fx.visible_width(line) for line in lines), default=0)
     out = [_paint(tl + hz * width + tr, prefix)]
     for line in lines:
-        pad = width - visible_width(line)
+        pad = width - _fx.visible_width(line)
         out.append(_paint(vt, prefix) + line + ' ' * pad + _paint(vt, prefix))
     out.append(_paint(bl + hz * width + br, prefix))
     return '\n'.join(out)
@@ -132,10 +131,10 @@ def add_shadow(text, shadow=True, color=None):
         glyph = shadow[:1] or '░'
     prefix = parse_spec(color) if color else ''
     lines = text.splitlines()
-    width = max((visible_width(line) for line in lines), default=0)
+    width = max((_fx.visible_width(line) for line in lines), default=0)
     out = []
     for i, line in enumerate(lines):
-        body = line + ' ' * (width - visible_width(line))
+        body = line + ' ' * (width - _fx.visible_width(line))
         out.append(body + (' ' if i == 0 else _paint(glyph, prefix)))
     out.append(' ' + _paint(glyph * width, prefix))
     return '\n'.join(out)
@@ -205,7 +204,7 @@ def inset_label(line, label, align='c', glyph=None, label_prefix='',
             return None
         glyph = max(counts, key=counts.get)
     text = ' ' + label + ' '
-    need = visible_width(text)
+    need = _fx.visible_width(text)
     align = _align(align, 'c')
     # Keep at least one rule glyph either side of the label.
     runs = [(s, e) for s, e in _rule_runs(plain, glyph) if e - s >= need + 2]
@@ -273,10 +272,10 @@ class _Frame(object):
         self.body_sides = (self._side(body.left), self._side(body.right))
         self.head_sides = (self._side(head.left), self._side(head.right))
         sides = [s for s in self.body_sides + self.head_sides]
-        self.left_w = max(visible_width(self.body_sides[0]),
-                          visible_width(self.head_sides[0]))
-        self.right_w = max(visible_width(self.body_sides[1]),
-                           visible_width(self.head_sides[1]))
+        self.left_w = max(_fx.visible_width(self.body_sides[0]),
+                          _fx.visible_width(self.head_sides[0]))
+        self.right_w = max(_fx.visible_width(self.body_sides[1]),
+                           _fx.visible_width(self.head_sides[1]))
         self.margin = max(0, int(c.margin or 0))
         del sides
         self.foot_divider = self._foot_divider()
@@ -369,9 +368,7 @@ def _natural_width(child):
 
 def _fit_line(text, width, align='l'):
     """Exactly ``width`` visible columns: pad, or cut what overflows."""
-    if visible_width(text) > width:
-        text = truncate_to_width(text, width, suffix='')
-    return pad_to_width(text, width, align)
+    return _fx.fit_line(text, width, align)
 
 
 class _Painter(object):
@@ -604,7 +601,7 @@ class Card(object):
                 _panel_overhead(self.panel, self.shadow))
 
     def _label_width(self):
-        return max((visible_width(strip_ansi(l)) for l, _ in self.__fields),
+        return max((_fx.visible_width(strip_ansi(l)) for l, _ in self.__fields),
                    default=0)
 
     def _value_text(self, value):
@@ -620,14 +617,14 @@ class Card(object):
         inner = 0
         if self.title:
             extra = 4 if self._title_in_border() else 0
-            inner = max(inner, visible_width(self.title) + extra -
+            inner = max(inner, _fx.visible_width(self.title) + extra -
                         2 * self._padding() * (1 if extra else 0))
         for text in (self.subtitle, self.footer):
             if text:
-                inner = max(inner, max(visible_width(line)
+                inner = max(inner, max(_fx.visible_width(line)
                                        for line in text.split('\n')))
         if self.actions:
-            inner = max(inner, visible_width(self._actions_text()))
+            inner = max(inner, _fx.visible_width(self._actions_text()))
         if self.__fields:
             label_w = self._label_width()
             cols = self.field_columns
@@ -639,7 +636,7 @@ class Card(object):
                               for _, v in self.__fields)
                 inner = max(inner, label_w + gap + value_w)
             else:
-                tile = max(max(visible_width(l), _block_width(
+                tile = max(max(_fx.visible_width(l), _block_width(
                     self._value_text(v))) for l, v in self.__fields)
                 inner = max(inner, cols * tile + (cols - 1) * gap)
         if self.body is not None:
@@ -797,7 +794,7 @@ class Card(object):
         cols = self.field_columns
         if cols == 'auto':
             # As many tiles per row as fit at their natural width.
-            tile = max(max(visible_width(l), _block_width(
+            tile = max(max(_fx.visible_width(l), _block_width(
                 self._value_text(v))) for l, v in fields)
             cols = max(1, (content_w + gap) // (tile + gap))
         cols = min(cols, len(fields))
@@ -864,7 +861,7 @@ class Card(object):
             tiles = []
             for label, value in chunk:
                 if layout == 'inline':
-                    lw = min(visible_width(label), tile_w // 2)
+                    lw = min(_fx.visible_width(label), tile_w // 2)
                     vw = max(1, tile_w - lw - 1)
                     lines = []
                     for raw in self._value_text(value).split('\n'):
@@ -947,8 +944,8 @@ class Card(object):
             if title_in_border:
                 label = self.title
                 room = inner - 4
-                if visible_width(label) > room:
-                    label = truncate_to_width(label, max(1, room), '…')
+                if _fx.visible_width(label) > room:
+                    label = _fx.truncate(label, max(1, room), '…')
                 set_in = inset_label(
                     drawn, label, self.title_align, glyph=top_sep.middle,
                     label_prefix=painter.prefix(self.title_color),
@@ -1255,16 +1252,29 @@ def _pick(track_sets, width):
     return chosen
 
 
+_ACCEPTS_HEIGHT = {}     # class -> bool, for render methods defined on it
+
+
 def _accepts_height(child):
     render = getattr(child, 'render', None)
     if not callable(render):
         return False
+    # Signatures are looked up once per class: inspecting on every frame is
+    # measurable in a live interface.
+    cls = type(child)
+    cacheable = getattr(cls, 'render', None) is getattr(render, '__func__',
+                                                        None)
+    if cacheable and cls in _ACCEPTS_HEIGHT:
+        return _ACCEPTS_HEIGHT[cls]
     try:
         params = inspect.signature(render).parameters
     except (TypeError, ValueError):  # pragma: no cover - C callables
         return False
-    return 'height' in params or any(
+    result = 'height' in params or any(
         p.kind == p.VAR_KEYWORD for p in params.values())
+    if cacheable:
+        _ACCEPTS_HEIGHT[cls] = result
+    return result
 
 
 class GridCell(object):
@@ -1277,12 +1287,23 @@ class GridCell(object):
     the cell's background; ``stretch=True`` renders the child at the slot's
     full height (cards always stretch in an ``equal_height`` grid);
     ``hide_below`` hides the cell when the grid is narrower than that.
+
+    ``row`` / ``column`` (zero-based) pin the cell to a slot; either may be
+    given alone. Pinned cells are placed first, in order, and the rest flow
+    into the free slots. A pinned cell that does not fit the current number
+    of columns (a narrower layout) flows like the others.
     """
 
     def __init__(self, child, span=1, align='l', row_span=1, valign=None,
                  title=None, title_align='l', color=None, stretch=None,
-                 padding=None, hide_below=None):
+                 padding=None, hide_below=None, row=None, column=None):
         self.child = child
+        if row is not None and int(row) < 0:
+            raise ValueError('row must be >= 0, got {0}'.format(row))
+        if column is not None and int(column) < 0:
+            raise ValueError('column must be >= 0, got {0}'.format(column))
+        self.row = None if row is None else int(row)
+        self.column = None if column is None else int(column)
         self.span = max(1, int(span))
         self.row_span = max(1, int(row_span))
         self.align = _align(align)
@@ -1350,7 +1371,8 @@ class Grid(object):
                  equal_height=True, align='l', column_widths=None,
                  row_heights=None, height=None, border=None,
                  border_color=None, title_color='bold', padding=None,
-                 collapse_below=None, valign='top', use_colors=None):
+                 collapse_below=None, valign='top', use_colors=None,
+                 fill_gaps=True):
         self.children = []
         for child in children or []:
             self.add(child)
@@ -1372,6 +1394,7 @@ class Grid(object):
         self.collapse_below = collapse_below
         self.valign = _valign(valign)
         self.use_colors = use_colors
+        self.fill_gaps = bool(fill_gaps)
 
     @property
     def columns(self):
@@ -1556,16 +1579,58 @@ class Grid(object):
 
     def _place(self, n, children=None):
         """
-        Auto-place the children on an ``n``-column grid.
+        Place the children on an ``n``-column grid.
 
-        Returns ``(cell, row, column, row_span, column_span)`` tuples. The
-        cursor only moves forward (CSS "sparse" placement), skipping slots a
-        row-spanning cell above already holds.
+        Returns ``(cell, row, column, row_span, column_span)`` tuples. Cells
+        with ``row`` / ``column`` go first; then the cursor only moves forward
+        (CSS "sparse" placement), skipping slots already held.
         """
         taken = set()
         placed = []
+        children = self.children if children is None else children
+        flowing = []
+
+        def free(row, col, rows, span):
+            return not any((row + dr, col + dc) in taken
+                           for dr in range(rows) for dc in range(span))
+
+        def take(cell, row, col, rows, span):
+            for dr in range(rows):
+                for dc in range(span):
+                    taken.add((row + dr, col + dc))
+            placed.append((cell, row, col, rows, span))
+
+        for cell in children:
+            r, c = getattr(cell, 'row', None), getattr(cell, 'column', None)
+            if r is None and c is None:
+                flowing.append(cell)
+                continue
+            span = min(cell.span, n)
+            rows = cell.row_span
+            if c is not None and c + span > n:
+                flowing.append(cell)      # does not fit this layout
+                continue
+            if r is not None and c is not None:
+                if not free(r, c, rows, span):
+                    raise ValueError(
+                        'cell at row {0}, column {1} overlaps another pinned '
+                        'cell'.format(r, c))
+                take(cell, r, c, rows, span)
+            elif r is not None:
+                col = next((col for col in range(n - span + 1)
+                            if free(r, col, rows, span)), None)
+                if col is None:
+                    flowing.append(cell)
+                else:
+                    take(cell, r, col, rows, span)
+            else:
+                row = 0
+                while not free(row, c, rows, span):
+                    row += 1
+                take(cell, row, c, rows, span)
+
         row, col = 0, 0
-        for cell in (self.children if children is None else children):
+        for cell in flowing:
             span = min(cell.span, n)
             rows = cell.row_span
             while True:
@@ -1577,10 +1642,7 @@ class Grid(object):
                     col += 1
                     continue
                 break
-            for dr in range(rows):
-                for dc in range(span):
-                    taken.add((row + dr, col + dc))
-            placed.append((cell, row, col, rows, span))
+            take(cell, row, col, rows, span)
             col += span
         return placed
 
@@ -1630,6 +1692,27 @@ class Grid(object):
             blocks.append([cell, r, c, rs, cs, inner, text])
 
         n_rows = max(r + rs for _, r, _, rs, _, _, _ in blocks)
+        if bordered and self.fill_gaps and not stacked:
+            # Empty slots get a frame of their own (consecutive ones in a
+            # row share it), so the border is always closed.
+            held = set()
+            for _, r, c, rs, cs, _, _ in blocks:
+                for dr in range(rs):
+                    for dc in range(cs):
+                        held.add((r + dr, c + dc))
+            blank = GridCell('')
+            for r in range(n_rows):
+                c = 0
+                while c < n:
+                    if (r, c) in held:
+                        c += 1
+                        continue
+                    start = c
+                    while c < n and (r, c) not in held:
+                        c += 1
+                    blocks.append([blank, r, start, 1, c - start,
+                                   max(1, span_width(start, c - start) - 2),
+                                   ''])
         row_sep = 1 if bordered else self.row_gap
         heights = [0] * n_rows
         for cell, r, c, rs, cs, inner, text in blocks:
@@ -1780,7 +1863,7 @@ class Grid(object):
 
     def _title_position(self, segment, label, align):
         """Start column of `` label `` inside a plain border ``segment``."""
-        need = visible_width(label) + 2
+        need = _fx.visible_width(label) + 2
         runs = [(s, e) for s, e in _rule_runs(segment, self.__glyphs['h'])
                 if e - s >= need + 2]
         if not runs:
@@ -1807,24 +1890,19 @@ class Grid(object):
         for h in heights:
             ys.append(ys[-1] + h + 1)
         W, H = xs[-1] + 1, ys[-1] + 1
-        horiz, vert = set(), set()     # unit edges starting at (x, y)
+        # Unit border edges starting at each point, then one pass that picks
+        # the glyph where the arms meet (in C with flexablelib[speed]).
+        horiz, vert = bytearray(W * H), bytearray(W * H)
         for cell, r, c, rs, cs, inner, text in blocks:
             x0, x1, y0, y1 = xs[c], xs[c + cs], ys[r], ys[r + rs]
-            for x in range(x0, x1):
-                horiz.add((x, y0))
-                horiz.add((x, y1))
+            horiz[y0 * W + x0:y0 * W + x1] = b'\x01' * (x1 - x0)
+            horiz[y1 * W + x0:y1 * W + x1] = b'\x01' * (x1 - x0)
             for y in range(y0, y1):
-                vert.add((x0, y))
-                vert.add((x1, y))
-        grid = [[' '] * W for _ in range(H)]
-        for y in range(H):
-            for x in range(W):
-                left = (x - 1, y) in horiz
-                right = (x, y) in horiz
-                up = (x, y - 1) in vert
-                down = (x, y) in vert
-                if left or right or up or down:
-                    grid[y][x] = _junction(g, up, down, left, right)
+                vert[y * W + x0] = 1
+                vert[y * W + x1] = 1
+        lines = _fx.border_grid(W, H, bytes(horiz), bytes(vert),
+                                [g[name] for name in _fx.GLYPH_ORDER])
+        grid = [list(line) for line in lines]
         # Titles go over each cell's own stretch of top border, never over a
         # junction, so the cells above still meet the ones below.
         titled = {}     # y -> list of [start, end)
@@ -1837,8 +1915,8 @@ class Grid(object):
             if room < 1:
                 continue
             label = cell.title
-            if visible_width(label) > room:
-                label = truncate_to_width(label, room, '…')
+            if _fx.visible_width(label) > room:
+                label = _fx.truncate(label, room, '…')
             pos = self._title_position(segment, label, cell.title_align)
             if pos is None:
                 continue

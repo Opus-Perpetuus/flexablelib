@@ -6158,11 +6158,35 @@ class Table(object):
                 opts[name] = given
         for layout_only in ('min_width', 'gap', 'columns', 'row_gap'):
             opts.pop(layout_only, None)
-        records = self.to_records(formatted=True)
-        headers = list(records[0].keys()) if records else [
+        view = self._export_view(False)
+        headers = list(view.headers) if view.raw else [
             header for header in self.headers]
         if not headers:
             return []
+        # Merged cells: every covered cell shows the merge's text, and a merge
+        # across columns becomes one field labelled with all its headers.
+        texts = [[None if raw is None else text
+                  for raw, text in zip(raw_row, text_row)]
+                 for raw_row, text_row in zip(view.raw, view.text)]
+        absorbed = [set() for _ in texts]    # columns folded into a merge
+        joined = [dict() for _ in texts]     # first column -> joined label
+        for region in view.merges:
+            r0, c0 = region.first_row, region.first_column
+            if r0 >= len(texts) or c0 >= len(headers):
+                continue
+            value = region.value if region.value is not None else \
+                texts[r0][c0]
+            value = None if value is None else strip_ansi(str(value))
+            last_c = min(region.last_column, len(headers) - 1)
+            for r in range(r0, min(region.last_row, len(texts) - 1) + 1):
+                for c in range(c0, last_c + 1):
+                    texts[r][c] = value
+                    if c > c0:
+                        absorbed[r].add(headers[c])
+                if last_c > c0:
+                    joined[r][headers[c0]] = ' · '.join(
+                        str(h) for h in headers[c0:last_c + 1])
+        records = [dict(zip(headers, row)) for row in texts]
 
         def pick(key):
             if key is None:
@@ -6209,7 +6233,7 @@ class Table(object):
             return missing if value is None else str(value)
 
         cards = []
-        for record in records:
+        for r_i, record in enumerate(records):
             cards.append(Card(
                 title=text(record.get(title_h)) if title_h is not None
                 else None,
@@ -6217,7 +6241,8 @@ class Table(object):
                 is not None else None,
                 footer=text(record.get(footer_h)) if footer_h is not None
                 else None,
-                fields=[(str(h), text(record.get(h))) for h in field_hs],
+                fields=[(joined[r_i].get(h, str(h)), text(record.get(h)))
+                        for h in field_hs if h not in absorbed[r_i]],
                 **base
             ))
         return cards

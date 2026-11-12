@@ -2,6 +2,64 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.3.0] - 2026-11-12
+
+### Added
+- Optional packages, released together with the core and installed as
+  extras (`pip install flexablelib` alone is unchanged and still has no
+  dependencies):
+  - `flexablelib[tui]` → `flexablelib-tui`: `App` with keyboard input on
+    Linux, macOS and Windows (termios / console API, bracketed paste, mouse
+    wheel and clicks), focus over what was drawn in the last frame,
+    Tab/Shift-Tab, key bindings, modal and floating layers (`push`/`pop`),
+    notifications (`notify`), ticks (`interval`), resize handling and a
+    headless mode (`run(keys=..., size=...)`) for tests; `ScrollView`; the
+    3.2.0 widgets, `Screen` and `Live` moved here (still importable from
+    `flexablelib`).
+  - `flexablelib[components]` → `flexablelib-components`: 83 terminal
+    components -- inputs (text, password, number, arithmetic expression,
+    money, masks, text area, JSON, barcode scanner, checkbox, switch, radio,
+    checkbox group, select, autocomplete, colour, icon, coordinates, file),
+    dates (calendar, date, time, date-time, week, month, year, weekday,
+    range with presets, timer), display (badge, tag, status, alert, OSC 8
+    link, breadcrumbs, empty and error states, spinner, skeleton, code with
+    highlighting, Markdown, HTML, detail view, timeline, stepper, comments,
+    attachments, stat, braille line chart), navigation (tabs, menus, context
+    menu, pagination, sidebar, top bar, toolbar, wizard, accordion,
+    carousel, tree, command palette, split, stack, app shell, sort control),
+    data (interactive table with sort/filter/selection/paging, filter bar
+    with a query language, editable table, catalog grid, form with
+    validation, validation summary, login form, file preview) and dialogs
+    (modal, confirm, prompt, loading overlay, popover, help line). See
+    docs/COMPONENTS.md.
+  - `flexablelib[speed]` → `flexablelib-speedups`: C code for interface
+    frames (cut/pad lines, column slices, shared-border junctions, frame
+    diffs). Up to 17× faster frames than pure Python; identical output.
+    See docs/ACCELERATION.md.
+- `flexablelib._frames`: the frame primitives every layout, widget and
+  component uses, C or Python (`use()`, `BACKEND`, `FLEXABLELIB_FRAMES`).
+- `GridCell(row=, column=)`: explicit placement; pinned cells go first and
+  the rest flow around them.
+- Bordered grids close empty slots (`Grid(fill_gaps=True)`, the default);
+  `fill_gaps=False` keeps the 3.2.0 open gaps.
+- `Table.to_cards()` carries merged cells: vertical merges fill every card
+  they cover, horizontal merges show once under the joined labels.
+- `Live` writes only the lines that changed; a resize repaints.
+- `Stack(min_width=...)` wraps horizontal children into balanced rows.
+- `examples/admin.py`: a complete interactive back-office application.
+- `tools/bench_frames.py`: frame benchmarks (`--demo admin`, `--pure`).
+- CI: a job without the optional packages, the C modules tested on Linux,
+  Windows and macOS, a coverage floor, and wheels for `flexablelib-speedups`.
+
+### Changed
+- README demonstrations are images (code and real output) instead of code
+  blocks, which some viewers rendered out of order.
+
+### Compatibility
+- No breaking changes. Without `flexablelib[tui]`, `flexablelib.widgets`,
+  `flexablelib.screen` and the widget names load a frozen 3.2.0 copy and
+  warn once (`DeprecationWarning`).
+
 ## [3.2.0] - 2026-11-11
 
 ### Added

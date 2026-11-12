@@ -19,6 +19,8 @@ import unicodedata
 
 MAX_CODEPOINT = 0x110000
 HEADER_PATH = 'flexablelib/_width_tables.h'
+# The frame extension ships its own copy (it is a separate distribution).
+EXTRA_HEADER_PATHS = ['packages/speedups/flexablelib_speedups/_width_tables.h']
 
 
 def classify(codepoint: int) -> int:
@@ -99,8 +101,9 @@ struct width_range {{
 #endif /* FLEXABLELIB_WIDTH_TABLES_H */
 '''
 
-    with open(HEADER_PATH, 'w') as handle:
-        handle.write(header)
+    for path in [HEADER_PATH] + EXTRA_HEADER_PATHS:
+        with open(path, 'w') as handle:
+            handle.write(header)
 
     print(f'Unicode {unicodedata.unidata_version}: '
           f'{len(zero_ranges)} zero-width ranges, '
