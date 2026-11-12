@@ -88,8 +88,26 @@ def main(path):
         result['terminal'] = [str(k) for k in keys]
         result['terminal_raw'] = [repr(getattr(k, 'raw', '')) for k in keys]
         result['terminal_mouse'] = [list(k.mouse) for k in keys if k.mouse]
-    result['expected_terminal'] = ['ctrl+up', 'f24', 'ctrl+c', 'mouse',
-                                   'mouse']
+    # Windows' VT input mode has no sequences for F13-F24 (conhost drops
+    # them), so those keys only arrive through records mode (part 4).
+    expected = ['ctrl+up', 'f24', 'ctrl+c', 'mouse', 'mouse']
+    if result['terminal_protocol'] == 'windows-vt':
+        expected.remove('f24')
+    result['expected_terminal'] = expected
+
+    # 4. The Terminal class forced to console records.
+    with Terminal(mouse=True, windows='records') as term:
+        result['records_protocol'] = term.protocol
+        term.read_keys(timeout=0.05)
+        writer.write([('key', True, 1, 0x87, '', 0),
+                      ('key', True, 1, 0x26, '', wincon.SHIFT),
+                      ('mouse', 4, 2, 1, 0, 0)])
+        keys = []
+        deadline = time.monotonic() + 5
+        while len(keys) < 3 and time.monotonic() < deadline:
+            keys.extend(term.read_keys(timeout=0.2))
+        result['records_terminal'] = [str(k) for k in keys]
+    result['expected_records_terminal'] = ['f24', 'shift+up', 'mouse']
     return result
 
 
