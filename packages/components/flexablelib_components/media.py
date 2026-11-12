@@ -96,7 +96,9 @@ class Image(_Themed):
         src = self.source
         if isinstance(src, (str, os.PathLike)):
             text = os.fspath(src)
-            return text.rstrip('/').rsplit('/', 1)[-1] or text
+            if '://' in text:
+                return text.rstrip('/').rsplit('/', 1)[-1] or text
+            return os.path.basename(text.rstrip('/\\')) or text
         return getattr(src, 'name', None) or 'imagen'
 
     @property
@@ -314,6 +316,8 @@ class Image(_Themed):
                              'c' if self.align == 'center' else 'l')]
 
     def _text(self, bm, cols, rows, mode, color):
+        if mode == 'sextant' and _fx.visible_width(_img.sextant(1)) != 1:
+            mode = 'quadrant'    # Unicode 13 sextants unknown to this Python
         key = ('text', id(bm), cols, rows, mode, color, self.background)
         hit = self._cache.get(key)
         if hit is not None:
