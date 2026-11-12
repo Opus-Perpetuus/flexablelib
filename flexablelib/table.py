@@ -30,7 +30,7 @@ from .columns import (
     ALIGNMENTS_PER_TYPE as type_alignments
 )
 from .fast import truncate_to_width, visible_width, wrap_to_width
-from .text_width import strip_ansi
+from .text_width import expand_tabs, strip_ansi
 from .table_strings import (
     _get_separators, 
     _get_data_rows, 
@@ -59,6 +59,7 @@ from .options import (
     INVISIBLE_SEPARATOR,
 )
 from .cells import (
+    TAB_SIZE,
     _wrap_rows,
     _zip_wrapped_rows
 )
@@ -423,10 +424,12 @@ class Table(object):
         whole multi-line string at once turned ``'a\\nbb'`` into ``'...'``.
         A cell that already fits is returned unchanged, type included.
         """
-        text = str(piece)
+        text = expand_tabs(str(piece), TAB_SIZE)
         lines = text.split('\n')
         if all(visible_width(line) <= new_width for line in lines):
             return piece
+        # Trim the expanded lines: a tab measures nothing, so trimming the
+        # raw text let it through as fitting when it did not.
         return '\n'.join(cls.__trim_with_sign(line, new_width) for line in lines)
 
     @staticmethod
@@ -2101,6 +2104,20 @@ class Table(object):
         console_columns, _ = get_window_size()
         return console_columns
 
+    def __body_width(self) -> int:
+        """
+        Width left for the table itself once the panel and shadow are drawn.
+
+        The panel adds a column each side and the shadow one more on the
+        right, all outside the frame the columns are sized for; leaving them
+        out made a panelled table two columns wider than ``max_width``.
+        """
+        return max(1, self.__available_width() - self.__chrome_width())
+
+    def __chrome_width(self) -> int:
+        """Columns the panel and shadow add around the table."""
+        return (2 if self.__panel else 0) + (1 if self.__shadow else 0)
+
     def __minimum_table_width(self) -> int:
         """
         Narrowest the table could possibly be rendered.
@@ -2998,7 +3015,7 @@ class Table(object):
             # illegible, if the caller asked to be told -- issue #14.
             if self.__too_narrow_message is not None:
                 available = self.__available_width()
-                needed = self.__minimum_table_width()
+                needed = self.__minimum_table_width() + self.__chrome_width()
                 if needed > available:
                     return self.__too_narrow_message.format(
                         needed=needed, available=available
@@ -3144,7 +3161,7 @@ class Table(object):
         """
         adjust = False
         difference = 0
-        available = self.__available_width()
+        available = self.__body_width()
         if available < table_width:
             difference = (table_width - available) + 1
             adjust = True
@@ -3538,7 +3555,19 @@ class Table(object):
         if not isinstance(fmt, str):
             return value
         if '{' in fmt:
-            return fmt.format(value)
+            try:
+                return fmt.format(value)
+            except (TypeError, ValueError):
+                # A value the template cannot format (text in a number
+                # column, say) prints as it is, as it does with a plain spec;
+                # it used to abort the whole render.
+                return value
+            except (IndexError, KeyError) as error:
+                raise ValueError(
+                    'format {0!r} needs more than the one value it is given '
+                    '(use {{}} or {{0}}, e.g. "{{:,.2f}}"): {1}'.format(
+                        fmt, error)
+                ) from None
         if '%' in fmt and fmt != '%':
             try:
                 return fmt % value
@@ -3790,7 +3819,7 @@ class Table(object):
 
     def __expand_columns_to_window(self, table_width):
         """Distribute spare horizontal space across user columns."""
-        available = self.__available_width()
+        available = self.__body_width()
         spare = available - table_width
         if spare <= 0:
             return False
@@ -4009,9 +4038,15 @@ class Table(object):
             for column_i, header in enumerate(headers):
                 if column_i >= len(row):
                     continue
-                rows[row_i][column_i] = self.__format_display_value(
+                shown = self.__format_display_value(
                     row[column_i], header, column_i
                 )
+                if isinstance(shown, str) and '\t' in shown:
+                    # Expand before anything measures or wraps the cell: a
+                    # tab measures nothing, so a column sized around it came
+                    # out narrower than the spaces it later turned into.
+                    shown = expand_tabs(shown, TAB_SIZE)
+                rows[row_i][column_i] = shown
                 # rows_with_i has the index at 0.
                 with_i_i = column_i + 1
                 if with_i_i < len(rows_with_i[row_i]):
@@ -4609,6 +4644,12 @@ class Table(object):
 
     def __aligned_label(self, text, table_width, spec=None):
         """Place ``text`` left/centre/right over ``table_width`` columns."""
+        text = expand_tabs(str(text), TAB_SIZE)
+        if '\n' in text:
+            # Every line is placed on its own; aligning the block as a whole
+            # left the lines after the first at column 0.
+            return '\n'.join(self.__aligned_label(line, table_width, spec)
+                             for line in text.split('\n'))
         if spec and self.__colors_active:
             text = colorize(text, spec)
         width = visible_width(text)
@@ -4766,12 +4807,15 @@ class Table(object):
         if not self.__caption or self.__caption_position == 'border':
             return None
         table_width = drawn_width or self.__get_string_table_width()
-        caption = self.__caption
-        caption_width = visible_width(caption)
-        if caption_width >= table_width:
-            return caption
-        left = (table_width - caption_width) // 2
-        return (' ' * left) + caption
+        lines = []
+        for caption in expand_tabs(self.__caption, TAB_SIZE).split('\n'):
+            caption_width = visible_width(caption)
+            if caption_width >= table_width:
+                lines.append(caption)
+            else:
+                left = (table_width - caption_width) // 2
+                lines.append((' ' * left) + caption)
+        return '\n'.join(lines)
 
     def __apply_table_align(self, table_string):
         """Pad every line so the table sits left, centre or right."""

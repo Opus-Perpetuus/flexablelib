@@ -175,6 +175,38 @@ def visible_width(text: str) -> int:
     return sum(width for _, width in measured_clusters(strip_ansi(text)))
 
 
+def expand_tabs(text: str, tabsize: int = 8) -> str:
+    """
+    Replace every tab with the spaces that reach the next tab stop.
+
+    Unlike `str.expandtabs`, the column is counted in terminal columns: escape
+    sequences take none and wide characters take two, so `'漢\tx'` puts `x` at
+    column 8 just as a terminal would, and a coloured cell expands the same as
+    a plain one. Each line restarts at column 0.
+    """
+    if '\t' not in text:
+        return text
+    size = max(int(tabsize), 1)
+    out = []
+    column = 0
+    for kind, token in tokenize(text):
+        if kind == 'ansi':
+            out.append(token)
+            continue
+        for cluster, width in measured_clusters(token):
+            if cluster == '\t':
+                step = size - column % size
+                out.append(' ' * step)
+                column += step
+            elif cluster in ('\n', '\r'):
+                out.append(cluster)
+                column = 0
+            else:
+                out.append(cluster)
+                column += width
+    return ''.join(out)
+
+
 def tokenize(text: str) -> Iterator[Tuple[str, str]]:
     """
     Split into ('ansi', sequence) and ('text', run) pairs, in order.
@@ -382,7 +414,10 @@ def wrap_to_width(text: str, width: int) -> List[str]:
     line ends with a sequence still active, that line is closed with a reset and
     the sequence is reopened on the next, so colour survives the break intact.
 
-    Existing newlines are honoured as hard breaks.
+    Existing newlines are honoured as hard breaks, and tabs are expanded to
+    the next 8-column stop first (see `expand_tabs`): a tab measures nothing,
+    so a line holding one used to pass as fitting and then overflow by however
+    far the terminal moved the cursor.
 
     `width` below 1 is treated as 1. A zero or negative width would otherwise
     loop forever on wide characters, which is tabulate #399.
@@ -393,7 +428,7 @@ def wrap_to_width(text: str, width: int) -> List[str]:
         return ['']
 
     lines = []
-    for hard_line in text.split('\n'):
+    for hard_line in expand_tabs(text).split('\n'):
         lines.extend(_wrap_single_line(hard_line, width))
     return lines
 

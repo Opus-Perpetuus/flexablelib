@@ -32,6 +32,7 @@ from .style_compositions import (
     DEPRECATED_STYLE_NAMES,
 )
 from .text_width import (
+    expand_tabs,
     pad_to_width,
     strip_ansi,
     tokenize,
@@ -80,7 +81,7 @@ def render_width(width=None):
 
 
 def _block_width(text):
-    return max(_fx.widths_of(text.split('\n')), default=0)
+    return max(_fx.widths_of(expand_tabs(text).split('\n')), default=0)
 
 
 # +---------------------------------------------------------------------------+
@@ -178,6 +179,19 @@ def _splice(line, start, end, replacement):
     return ''.join(before) + replacement + kept + ''.join(after)
 
 
+def _one_line(text):
+    """
+    A label that must fit on one line: tabs expanded, line breaks as spaces.
+
+    Titles go into a border line, where a newline would break the frame in two
+    and a tab (which measures nothing) would push the corner out of place.
+    """
+    text = expand_tabs(str(text))
+    if '\n' in text or '\r' in text:
+        text = ' '.join(part for part in re.split(r'\r\n|\r|\n', text))
+    return text
+
+
 def inset_label(line, label, align='c', glyph=None, label_prefix='',
                 border_prefix=''):
     """
@@ -191,6 +205,7 @@ def inset_label(line, label, align='c', glyph=None, label_prefix='',
     ``label_prefix`` colours the label; ``border_prefix`` is the SGR the
     border was drawn with, reopened after the label.
     """
+    label = _one_line(label)
     plain = strip_ansi(line)
     if not plain.strip():
         return None
@@ -601,7 +616,7 @@ class Card(object):
                 _panel_overhead(self.panel, self.shadow))
 
     def _label_width(self):
-        return max((_fx.visible_width(strip_ansi(l)) for l, _ in self.__fields),
+        return max((_block_width(strip_ansi(l)) for l, _ in self.__fields),
                    default=0)
 
     def _value_text(self, value):
@@ -617,7 +632,8 @@ class Card(object):
         inner = 0
         if self.title:
             extra = 4 if self._title_in_border() else 0
-            inner = max(inner, _fx.visible_width(self.title) + extra -
+            title = _one_line(self.title) if extra else self.title
+            inner = max(inner, _block_width(expand_tabs(title)) + extra -
                         2 * self._padding() * (1 if extra else 0))
         for text in (self.subtitle, self.footer):
             if text:
@@ -636,7 +652,7 @@ class Card(object):
                               for _, v in self.__fields)
                 inner = max(inner, label_w + gap + value_w)
             else:
-                tile = max(max(_fx.visible_width(l), _block_width(
+                tile = max(max(_block_width(l), _block_width(
                     self._value_text(v))) for l, v in self.__fields)
                 inner = max(inner, cols * tile + (cols - 1) * gap)
         if self.body is not None:
@@ -794,7 +810,7 @@ class Card(object):
         cols = self.field_columns
         if cols == 'auto':
             # As many tiles per row as fit at their natural width.
-            tile = max(max(_fx.visible_width(l), _block_width(
+            tile = max(max(_block_width(l), _block_width(
                 self._value_text(v))) for l, v in fields)
             cols = max(1, (content_w + gap) // (tile + gap))
         cols = min(cols, len(fields))
@@ -942,7 +958,7 @@ class Card(object):
         if top is not None:
             drawn = paint(top)
             if title_in_border:
-                label = self.title
+                label = _one_line(self.title)
                 room = inner - 4
                 if _fx.visible_width(label) > room:
                     label = _fx.truncate(label, max(1, room), '…')
@@ -953,7 +969,8 @@ class Card(object):
                 if set_in is None:
                     # Not even a short label fits: draw it as a first line.
                     sections.insert(0, ('head', [self._content(
-                        painter, self.title, self.title_color, content_w,
+                        painter, _one_line(self.title), self.title_color,
+                        content_w,
                         pad, fill, _align(self.title_align))]))
                 else:
                     drawn = set_in
