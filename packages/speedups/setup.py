@@ -30,7 +30,10 @@ setup(
     packages=['flexablelib_speedups'],
     ext_modules=[Extension('flexablelib_speedups._frames',
                            sources=['flexablelib_speedups/_frames.c'],
-                           depends=['flexablelib_speedups/_width_tables.h'])],
+                           depends=['flexablelib_speedups/_width_tables.h'],
+                           # No compiler: the install still succeeds and
+                           # flexablelib keeps its pure-Python frame code.
+                           optional=True)],
     python_requires='>=3.8',
     classifiers=[
         'Development Status :: 5 - Production/Stable',

@@ -11,7 +11,7 @@ on:
   push:
     tags: ['v*']
   pull_request:
-    paths: ['setup.py', 'flexablelib/_speedups.c', '.github/workflows/wheels.yml', 'MANIFEST.in']
+    paths: ['setup.py', 'flexablelib/_speedups.c', '.github/workflows/wheels.yml', 'MANIFEST.in', 'packages/**']
   # Recovery: run on a tag ref (Actions -> wheels -> Run workflow -> tag) to
   # rebuild and publish that tag; files already on PyPI are skipped.
   workflow_dispatch:
@@ -32,10 +32,12 @@ env:
     python -c "from flexablelib.fast import ACCELERATED; assert ACCELERATED"
 
 jobs:
+  # 28 wheels per extension project: flexablelib (text measurement) and
+  # flexablelib-speedups (frame drawing), built in the same job.
   wheels:
     name: wheels (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -46,12 +48,19 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: pypa/cibuildwheel@v3.4.1
+      - uses: pypa/cibuildwheel@v3.4.1
+        with:
+          package-dir: packages/speedups
+        env:
+          CIBW_TEST_COMMAND: >-
+            python -c "from flexablelib_speedups import _frames; assert _frames.fit_line('abc', 2) == 'ab'"
       - uses: actions/upload-artifact@v6
         with:
           name: wheels-${{ matrix.os }}
           path: wheelhouse/*.whl
           if-no-files-found: error
 
+  # The sdists of all four projects, plus the two pure-Python wheels.
   sdist:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -59,13 +68,19 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with: { python-version: '3.13' }
-      - run: python -m pip install build && python -m build --sdist
+      - run: |
+          python -m pip install build twine
+          python -m build --sdist
+          python -m build --sdist --outdir dist packages/speedups
+          python -m build --outdir dist packages/tui
+          python -m build --outdir dist packages/components
+          python -m twine check dist/*
       - uses: actions/upload-artifact@v6
-        with: { name: sdist, path: dist/*.tar.gz, if-no-files-found: error }
+        with: { name: sdist, path: dist/*, if-no-files-found: error }
 
-  # All or nothing: PyPI gets the full set (7 Pythons x 4 platform tags + the
-  # sdist) or nothing. If a build job fails or is cancelled, "Re-run failed
-  # jobs" finishes the release; skip-existing makes a re-run safe.
+  # All or nothing: PyPI gets the full set or nothing. If a build job fails or
+  # is cancelled, "Re-run failed jobs" finishes the release; skip-existing
+  # makes a re-run safe.
   publish:
     needs: [wheels, sdist]
     if: startsWith(github.ref, 'refs/tags/v') && github.event_name != 'pull_request'
@@ -80,15 +95,35 @@ jobs:
           find dist -type f | sort
           version=$(python -c "import json; print(json.load(open('package.json'))['version'])")
           [ "refs/tags/v$version" = "$GITHUB_REF" ] || { echo "tag $GITHUB_REF does not match package.json $version"; exit 1; }
-          wheels=$(ls dist/*.whl | wc -l); sdists=$(ls dist/*.tar.gz | wc -l)
-          echo "wheels=$wheels sdist=$sdists"
-          [ "$wheels" -eq 28 ] && [ "$sdists" -eq 1 ] || { echo "expected 28 wheels + 1 sdist"; exit 1; }
-          for os in manylinux musllinux win_amd64 macosx; do
-            n=$(ls dist/*.whl | grep -c "$os" || true)
-            [ "$n" -eq 7 ] || { echo "expected 7 $os wheels, got $n"; exit 1; }
+          for project in flexablelib flexablelib_speedups; do
+            wheels=$(ls dist/$project-$version-*.whl | wc -l)
+            [ "$wheels" -eq 28 ] || { echo "expected 28 $project wheels, got $wheels"; exit 1; }
+            for os in manylinux musllinux win_amd64 macosx; do
+              n=$(ls dist/$project-$version-*.whl | grep -c "$os" || true)
+              [ "$n" -eq 7 ] || { echo "expected 7 $os $project wheels, got $n"; exit 1; }
+            done
           done
+          for project in flexablelib_tui flexablelib_components; do
+            [ -f "dist/$project-$version-py3-none-any.whl" ] || { echo "missing $project wheel"; exit 1; }
+          done
+          for project in flexablelib flexablelib_speedups flexablelib_tui flexablelib_components; do
+            [ -f "dist/$project-$version.tar.gz" ] || { echo "missing $project sdist"; exit 1; }
+          done
+          [ "$(ls dist | wc -l)" -eq 62 ] || { echo "expected 62 files"; exit 1; }
+          mkdir core extras
+          mv dist/flexablelib-$version* core/
+          mv dist/* extras/
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           user: __token__
           password: ${{ secrets.PYPI_API_TOKEN }}
+          packages-dir: core/
+          skip-existing: true
+      # The optional projects go up after the core, so a core install never
+      # points at extras that are not there yet.
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          packages-dir: extras/
           skip-existing: true
