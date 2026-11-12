@@ -684,7 +684,7 @@ def render_svg(data, width=None):
     """PNG bytes of an SVG, through cairosvg or ``rsvg-convert``."""
     try:
         import cairosvg
-    except ImportError:
+    except (ImportError, OSError):      # OSError: no cairo library
         cairosvg = None
     if cairosvg is not None:
         try:

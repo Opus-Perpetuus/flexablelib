@@ -42,6 +42,23 @@ from .text_width import (
 from .utils import get_window_size
 from . import _frames as _fx
 
+_strip_all = strip_ansi
+_KEEP_RE = re.compile(r'\x1b\]897[01];[0-9a-f]*\x07')
+
+
+def strip_ansi(text):
+    """Colours and styles out; picture and click-region marks (OSC 8970 /
+    8971, zero width) kept so layouts without colour still show pictures."""
+    if '\x1b]897' not in text:
+        return _strip_all(text)
+    out, pos = [], 0
+    for m in _KEEP_RE.finditer(text):
+        out.append(_strip_all(text[pos:m.start()]))
+        out.append(m.group(0))
+        pos = m.end()
+    out.append(_strip_all(text[pos:]))
+    return ''.join(out)
+
 __all__ = ['Card', 'Grid', 'GridCell', 'render_width', 'wrap_panel',
            'add_shadow', 'inset_label']
 
@@ -687,7 +704,7 @@ class Card(object):
     # -- rendering ---------------------------------------------------------
 
     def __str__(self):
-        return self.render()
+        return _fx.expand_graphics(self.render())
 
     def render(self, width=None, height=None):
         """
@@ -1666,7 +1683,7 @@ class Grid(object):
     # -- rendering -----------------------------------------------------------
 
     def __str__(self):
-        return self.render()
+        return _fx.expand_graphics(self.render())
 
     def render(self, width=None, height=None):
         """

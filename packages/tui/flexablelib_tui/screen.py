@@ -158,6 +158,7 @@ class Live(object):
         self.frames = 0
         self._last = None
         self._started = False
+        self._pictures = False
 
     @property
     def is_terminal(self):
@@ -215,10 +216,13 @@ class Live(object):
         if self.is_terminal:
             codes = (CURSOR_SHOW if self.hide_cursor else '') + \
                 (ALT_SCREEN_OFF if self.screen else '')
+            if self._pictures and self._lines:
+                from . import graphics as _graphics
+                codes = _graphics.cleanup(self._lines, []) + codes
             if codes:
                 self._write(codes)
             if self.screen and not self.transient and self._last:
-                self._write(self._last + '\n')
+                self._write(_fx.expand_graphics(self._last) + '\n')
 
     def update(self, renderable=None):
         """Swap in ``renderable`` (if given) and redraw; returns the frame."""
@@ -231,17 +235,28 @@ class Live(object):
             lines = frame.split('\n')
             size = get_window_size() if self.width is None or \
                 self.height is None else None
+            pictures = _fx.GRAPHICS_MARK in frame or (
+                self._lines is not None and self._pictures)
             if self.diff and self._lines is not None and size == self._size:
-                out = _fx.render_diff(self._lines, lines)
+                if pictures:
+                    from . import graphics as _graphics
+                    out = _graphics.render_diff(self._lines, lines)
+                else:
+                    out = _fx.render_diff(self._lines, lines)
                 if out:
                     self._write(out)
             else:
                 body = (CLEAR_LINE + '\n').join(lines)
+                if pictures:
+                    from . import graphics as _graphics
+                    body = _graphics.cleanup(self._lines, lines) + \
+                        _graphics.expand(body)
                 self._write(HOME + body + CLEAR_LINE + CLEAR_BELOW)
+            self._pictures = _fx.GRAPHICS_MARK in frame
             self._lines = lines
             self._size = size
         else:
-            self._write(frame + '\n')
+            self._write(_fx.expand_graphics(frame) + '\n')
         self._last = frame
         self.frames += 1
         return frame

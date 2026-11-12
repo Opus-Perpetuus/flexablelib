@@ -1224,7 +1224,8 @@ class TestCatalogAndForms:
     def test_file_preview(self, tmp_path):
         binary = tmp_path / 'img.png'
         binary.write_bytes(b'\x89PNG\x00\x00')
-        assert 'binario' in text(C.FilePreview(str(binary)))
+        assert 'binario' in text(C.FilePreview(str(binary), images=False))
+        assert 'no se puede mostrar' in text(C.FilePreview(str(binary)))
         latin = tmp_path / 'l.txt'
         latin.write_bytes('ñ'.encode('latin-1'))
         assert 'ñ' in text(C.FilePreview(str(latin)))
