@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.5.4] - 2026-11-13
+
+### Fixed
+- **Kitty keyboard reports with out-of-range code points** (`CSI 97;1;99999999u`,
+  a shifted key above U+10FFFF) no longer raise `ValueError` from
+  `KeyParser.feed()`: the invalid text or shifted code is ignored and the
+  key is reported as usual.
+- **Escape followed by a bracketed paste** in the same read: the paste text
+  no longer starts with `\x1b[200~`.
+- **Input split across reads** parses like the whole input: `ESC ESC` waits
+  for the next byte, so `ESC ESC [A` read in pieces is still `alt+up`
+  (a lone double Escape still gives two `escape` keys after the pause).
+- **`MoneyInput` clicks** put the cursor under the clicked character (the
+  currency symbol was counted as text, so the cursor landed one place to
+  the right); clicking an empty field and then pressing `ctrl+left` no
+  longer raises `IndexError`.
+- **`TextInput`** (and every input built on it) keeps a `cursor_pos` set
+  out of range from outside within the text instead of raising on word
+  moves.
+- **`CoordinatesInput`** renders at widths 1 and 2 (latitude above
+  longitude) instead of raising `ValueError`.
+- **An empty `Table` with `show_index=True`** renders like without the index
+  instead of raising `TypeError`.
+
+### Changed
+- `Key` and `MouseEvent` keep all their fields through `copy`, `deepcopy`
+  and `pickle` (a `MouseEvent` could not be copied at all).
+
 ## [3.5.3] - 2026-11-12
 
 ### Fixed
