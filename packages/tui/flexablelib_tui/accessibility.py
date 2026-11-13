@@ -44,6 +44,7 @@ reader:
 import contextlib
 import math
 import os
+import re
 import sys
 
 from flexablelib import _frames as _fx
@@ -340,6 +341,11 @@ _ANSI_RGB = {
     'bright_blue': (92, 92, 255), 'bright_magenta': (255, 0, 255),
     'bright_cyan': (0, 255, 255), 'bright_white': (255, 255, 255),
 }
+_HEX_RE = re.compile(r'^#?([0-9a-f]{6})$|^#([0-9a-f]{3})$')
+_DIGITS_RE = re.compile(r'^[0-9]{1,3}$')
+_GREY_RE = re.compile(r'^gr[ae]y([0-9]{1,3})$')
+# The greys of the xterm 256 palette: black, the 24-step ramp, white.
+_GREY_LEVELS = [0] + [8 + 10 * i for i in range(24)] + [255]
 _ATTRS = ('bold', 'dim', 'italic', 'underline', 'blink', 'reverse',
           'hidden', 'strike', 'strikethrough', 'normal', 'faint')
 
@@ -359,33 +365,39 @@ def _xterm_rgb(index):
 
 
 def parse_color(token):
-    """``(r, g, b)`` for ``'#rrggbb'``, ``'#rgb'``, a colour name,
-    ``'color:N'`` / ``N`` (256 palette) or ``'greyNN'``; ``None`` if not."""
+    """``(r, g, b)`` for ``'#rrggbb'``, ``'#rgb'``, ``'rrggbb'``, a colour
+    name, ``'color:N'`` / ``'colour:N'`` / ``N`` (256 palette) or
+    ``'greyNN'`` (the xterm grey a terminal shows for it); ``None`` if not.
+
+    Every colour :func:`flexablelib.colors.parse_spec` draws is understood,
+    so contrast checks see the colour that is really on screen."""
     if token is None:
         return None
     if isinstance(token, tuple):
         return token
     token = str(token).strip().lower()
-    if token.startswith('#'):
-        digits = token[1:]
+    hex_match = _HEX_RE.match(token)
+    if hex_match:
+        digits = hex_match.group(1) or hex_match.group(2)
         if len(digits) == 3:
             digits = ''.join(c * 2 for c in digits)
-        if len(digits) == 6:
-            try:
-                return tuple(int(digits[k:k + 2], 16) for k in (0, 2, 4))
-            except ValueError:
-                return None
+        return tuple(int(digits[k:k + 2], 16) for k in (0, 2, 4))
+    if token.startswith('#'):
         return None
     if token in _ANSI_RGB:
         return _ANSI_RGB[token]
-    if token.startswith('color:'):
-        token = token[6:]
-    if token.isdigit() and int(token) < 256:
+    for prefix in ('color:', 'colour:'):
+        if token.startswith(prefix):
+            token = token[len(prefix):]
+            break
+    if _DIGITS_RE.match(token) and int(token) < 256:
         return _xterm_rgb(int(token))
-    for prefix in ('grey', 'gray'):
-        if token.startswith(prefix) and token[len(prefix):].isdigit():
-            level = int(round(int(token[len(prefix):]) * 2.55))
-            return (level, level, level)
+    grey = _GREY_RE.match(token)
+    if grey and int(grey.group(1)) <= 100:
+        # parse_spec draws the nearest xterm grey, not the exact level.
+        target = int(grey.group(1)) * 255 / 100.0
+        level = min(_GREY_LEVELS, key=lambda value: abs(value - target))
+        return (level, level, level)
     return None
 
 
