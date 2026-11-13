@@ -3146,8 +3146,10 @@ class Table(object):
                     self.__semi_processed_columns_with_i
                 )
 
+        # A table with no columns has nothing to number: the index column
+        # alone would have no cells, so it is drawn as without the index.
         return self.__form_string(
-            table_with_i=self.__show_index
+            table_with_i=self.__show_index and len(self.__columns) != 0
         )
 
     def __get_string_table_width(self) -> int:
