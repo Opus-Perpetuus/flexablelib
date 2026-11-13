@@ -145,7 +145,7 @@ class TextInput(Input):
         self.refresh()
 
     def _word_left(self):
-        i = self.cursor_pos
+        i = max(0, min(self.cursor_pos, len(self.text)))
         while i > 0 and not _WORD.match(self.text[i - 1]):
             i -= 1
         while i > 0 and _WORD.match(self.text[i - 1]):
@@ -153,7 +153,8 @@ class TextInput(Input):
         return i
 
     def _word_right(self):
-        i, n = self.cursor_pos, len(self.text)
+        n = len(self.text)
+        i = max(0, min(self.cursor_pos, n))
         while i < n and not _WORD.match(self.text[i]):
             i += 1
         while i < n and _WORD.match(self.text[i]):
@@ -162,7 +163,9 @@ class TextInput(Input):
 
     def on_key(self, key):
         k = str(key)
-        pos, text = self.cursor_pos, self.text
+        text = self.text
+        # cursor_pos is public: keep a value set from outside in range.
+        pos = self.cursor_pos = max(0, min(self.cursor_pos, len(text)))
         if k == 'paste':
             return self.insert(key.char.replace('\r', '').replace('\n', ' '))
         if key.is_printable or k == 'space':
@@ -214,9 +217,14 @@ class TextInput(Input):
                 break
             acc += w
             pos += 1
-        self.cursor_pos = pos
+        self.cursor_pos = max(0, min(self._text_index(pos), len(self.text)))
         self.refresh()
         return True
+
+    def _text_index(self, shown_index):
+        """The ``text`` index under character ``shown_index`` of
+        ``shown_text()`` (they differ when a prefix is drawn)."""
+        return shown_index
 
     # drawing
     def shown_text(self):
@@ -468,6 +476,9 @@ class MoneyInput(NumberInput):
         if value is None:
             return ''
         return '{0}{1:,.{2}f}'.format(self.symbol, value, self.decimals or 0)
+
+    def _text_index(self, shown_index):
+        return shown_index - (len(self.symbol) if self.focused else 0)
 
     def _viewport(self, shown, avail):
         # The symbol is not part of the editable text: shift the cursor.
@@ -1576,6 +1587,10 @@ class CoordinatesInput(Input):
         return self.error
 
     def control(self, width, height):
+        if width < 3:
+            # No room for two columns: latitude above longitude.
+            return (self.latitude.render(width=width).split('\n') +
+                    self.longitude.render(width=width).split('\n'))
         half = max(1, (width - 1) // 2)
         left = self.latitude.render(width=half).split('\n')
         right = self.longitude.render(width=width - half - 1).split('\n')
