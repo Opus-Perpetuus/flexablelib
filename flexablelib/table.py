@@ -4046,6 +4046,12 @@ class Table(object):
         # One level of copying is enough: the pipeline replaces whole cells,
         # it never mutates one in place.
         rows_with_i = [list(row) for row in self.__rows_with_i]
+        # Measured once: the property walks every row, and asking it per row
+        # made hiding empty rows quadratic in the row count.
+        empty_rows = (
+            frozenset() if self.__show_empty_rows
+            else frozenset(self.__empty_row_indexes)
+        )
         for row_i, row in enumerate(rows_with_i):
             if self.__show_empty_rows:
                 rows_with_i[row_i][0] = row[0](
@@ -4056,7 +4062,7 @@ class Table(object):
                 rows_with_i[row_i][0] = row[0](
                     self.__i_start,
                     self.__i_step,
-                    row_i not in self.__empty_row_indexes
+                    row_i not in empty_rows
                 )
             # For adding the missing value where the ValuePlacer
             # is used (in the rows with index).
@@ -4085,12 +4091,15 @@ class Table(object):
             rows = [rows[i] for i in order]
             rows_with_i = [rows_with_i[i] for i in order]
             # Index was consumed in stored order; renumber visible rows so
-            # the column stays contiguous after a filter.
+            # the column stays contiguous after a filter. Empty rows that
+            # show_empty_rows=False hides take no number, as without a
+            # filter -- counting them left gaps (0, 2, 4).
             self.__index_counter.reset_count()
             for row_i, row in enumerate(rows_with_i):
                 rows_with_i[row_i][0] = self.__index_counter(
                     self.__i_start,
                     self.__i_step,
+                    self.__show_empty_rows or order[row_i] not in empty_stored,
                 )
 
         if self.__roman_index and rows_with_i:
@@ -5599,6 +5608,8 @@ class Table(object):
                 total = work.__real_row_count + len(rows)
             except TypeError:
                 total = None
+            if total and isinstance(rows, (list, tuple)):
+                total = self.__stream_shown_rows(rows, total)
             if total:
                 labels = [work.index_start + work.index_step * k
                           for k in (0, total - 1)]
@@ -5647,6 +5658,31 @@ class Table(object):
         if append and streamed:
             for row in streamed:
                 self.add_row(row)
+
+    def __stream_shown_rows(self, rows, total):
+        """
+        How many of the existing and streamed ``rows`` ``compose()`` would
+        show: ``row_filter`` and hidden empty rows leave out lines, and the
+        index column is sized for the labels that are really drawn. Reserving
+        a label for every row made the index column wider than in
+        ``compose()`` (``9`` rows shown but ``10`` reserved, say).
+        """
+        try:
+            probe = self.__display_clone(include_rows=True)
+            for row in rows:
+                probe.add_row(list(row))
+            headers = list(probe.headers)
+            stored = [probe.__stored_row(row_i, headers)
+                      for row_i in range(probe.__real_row_count)]
+            order = probe.__display_row_order(stored)
+            hidden = (set() if probe.__show_empty_rows
+                      else set(probe.__empty_row_indexes))
+            shown = len([row_i for row_i in order if row_i not in hidden])
+        except Exception:
+            # A row the stream itself will reject: keep the plain count and
+            # let add_row() report it where it always has.
+            return total
+        return max(1, shown)
 
     def __stream_closing_lines(self, widths):
         """
