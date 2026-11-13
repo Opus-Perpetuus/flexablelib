@@ -63,7 +63,7 @@ COLOURS = {
 
 _HEX_RE = re.compile(r'^#?([0-9a-fA-F]{6})$')
 # Rich / X11-style percentage greys: 'grey23', 'gray70', 'grey100'.
-_GREY_RE = re.compile(r'^gr[ae]y(\d{1,3})$')
+_GREY_RE = re.compile(r'^gr[ae]y([0-9]{1,3})$')
 
 # The xterm 256-colour grey levels: black (16), the 24-step ramp
 # (232..255, level 8 + 10*i) and white (231).
@@ -76,7 +76,9 @@ def _grey_index(percent: int) -> int:
         raise ColourError(f'grey percentage out of range: {percent}')
     target = percent * 255 / 100
     return min(_GREY_LEVELS, key=lambda level: abs(level[0] - target))[1]
-_INDEX_RE = re.compile(r'^(?:color|colour):(\d{1,3})$')
+# ASCII digits only: '²'.isdigit() is True but int('²') fails.
+_DIGITS_RE = re.compile(r'^[0-9]+$')
+_INDEX_RE = re.compile(r'^(?:color|colour):([0-9]{1,3})$')
 
 
 class ColourError(ValueError):
@@ -110,7 +112,7 @@ def _colour_codes(token: str, background: bool = False) -> list:
             raise ColourError(f'256-colour index out of range: {index}')
         return [48 if background else 38, 5, index]
 
-    if token.isdigit():
+    if _DIGITS_RE.match(token):
         index = int(token)
         if not 0 <= index <= 255:
             raise ColourError(f'256-colour index out of range: {index}')
@@ -320,7 +322,7 @@ def _token_hex(token: str, named: dict) -> Optional[str]:
     index_match = _INDEX_RE.match(token)
     if index_match:
         return _xterm_hex(int(index_match.group(1)))
-    if token.isdigit():
+    if _DIGITS_RE.match(token):
         return _xterm_hex(int(token))
     return None
 
