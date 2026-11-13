@@ -95,6 +95,11 @@ class Key(str):
         return Key(name, self.char, self.mouse, self.event, self.data,
                    self.raw)
 
+    def __reduce__(self):
+        # copy, deepcopy and pickle keep char, mouse, event, data and raw.
+        return (Key, (str(self), self.char, self.mouse, self.event,
+                      self.data, self.raw))
+
     def __repr__(self):
         return 'Key({0!r})'.format(str(self))
 
@@ -127,6 +132,10 @@ class MouseEvent(tuple):
         """The same event with coordinates shifted by ``-dx, -dy``."""
         return MouseEvent(self[0], self[1] - dx, self[2] - dy, self[3],
                           self.action, self.mods)
+
+    def __reduce__(self):
+        return (MouseEvent, (self[0], self[1], self[2], self[3], self.action,
+                             self.mods))
 
     def __repr__(self):
         return 'MouseEvent({0}, {1}, {2}, {3}, {4!r})'.format(
@@ -354,7 +363,7 @@ def _char_key(code, mods, shifted=None, text=None):
         ch = chr(code)
     except (ValueError, OverflowError):
         return None
-    if 'shift' in mods and shifted:
+    if 'shift' in mods and shifted and shifted < 0x110000:
         ch = chr(shifted)
         mods.remove('shift')
     if code < 32:
@@ -532,10 +541,18 @@ class KeyParser(object):
         if nxt == ESC:
             # ESC + a sequence is that key with Alt (meta sends escape);
             # otherwise an Escape press followed by whatever comes next.
-            if i + 2 < n and buf[i + 2] in '[O':
+            if i + 2 >= n:
+                return 0, None             # which one is decided by more input
+            if buf[i + 2] in '[O':
+                in_paste = self._paste is not None
                 consumed, key = self._escape(buf, i + 1)
                 if consumed == 0:
                     return 0, None
+                if self._paste is not None and not in_paste:
+                    # Escape, then a bracketed paste: the paste starts at
+                    # the second ESC, parsed again on the next step.
+                    self._paste = None
+                    return 1, Key('escape')
                 if (key is not None and str(key) not in
                         ('paste', 'response', 'focusin', 'focusout')
                         and key.mouse is None and self._paste is None):
@@ -686,7 +703,8 @@ class KeyParser(object):
         mods = _mods(_first(fields, 1, 1), kitty=True)
         text = None
         if len(fields) > 2:
-            text = ''.join(chr(c) for c in fields[2] if c)
+            text = ''.join(chr(c) for c in fields[2]
+                           if c and c < 0x110000) or None
         key = _char_key(code, mods, shifted, text)
         if key is None:
             return None
