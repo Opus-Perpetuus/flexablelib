@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.5.3] - 2026-11-12
+
+### Fixed
+- **Index labels with a `row_filter` (or `sort_by`) and hidden empty rows**
+  (`show_empty_rows=False`): the visible rows are numbered 0, 1, 2 as
+  without a filter, instead of 0, 2, 4 (the hidden empty rows used to take
+  a number). `to_records`, `to_csv`, `paginate` and `stream` agree.
+- **`stream()` index column** is as wide as in `compose()` when rows are
+  hidden by `row_filter` or `show_empty_rows=False`: it was sized for every
+  row, so the streamed table came out one column wider.
+- **Contrast checks** (`parse_color`, `contrast_ratio`, `Theme.contrast()`)
+  understand every colour the core draws: `colour:N`, hex without `#`
+  (`ff8800`), and `greyNN` as the xterm grey really shown. A theme using
+  `colour:N` reported no ratio, or 1:1 for `black on colour:226`.
+- **Colour tokens with non-ASCII digits** (`'²'`, `'٣'`) raise
+  `ColourError` like any unknown colour, instead of a bare `ValueError` or
+  being read as a palette index.
+
+### Changed
+- Hiding empty rows no longer re-scans every row once per row while
+  numbering the index (quadratic in the row count).
+
 ## [3.5.2] - 2026-11-12
 
 ### Fixed
