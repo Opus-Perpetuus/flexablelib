@@ -133,7 +133,7 @@ change). Details: [IMAGES.md](IMAGES.md).
 | `MaskedInput` | Text with a fixed pattern: `#` a digit, `A` a letter, `X` either, `*` anything; other characters are literals filled in automatically. `mask` may be a name from `MASKS` (`'phone'`, `'rfc'` ...). `value` is the formatted text (`raw=True`: only what was typed). |
 | `TextArea` | Several lines of text, wrapped to the width. Enter starts a new line; `submit_key` (`'ctrl+s'`) submits. `rows` is the visible height. |
 | `JsonInput` | JSON text; the value is the parsed object. Ctrl-F reformats. |
-| `ScanInput` | Codes from a keyboard-wedge barcode/QR reader (or typed): each Enter accepts one code -- cleaned with `strip_prefix` / `strip_suffix` / `transform`, checked against `pattern` and `min_length` / `max_length`, repeated reads within `duplicate_ms` dropped, `unique=True` refusing codes already read -- then calls `on_scan(code)` and clears for the next one. `scans` keeps them. |
+| `ScanInput` | Codes from a keyboard-wedge barcode/QR reader (or typed): each Enter accepts one code -- cleaned with `strip_prefix` / `strip_suffix` / `transform`, checked against `pattern` and `min_length` / `max_length`, repeated reads within `duplicate_ms` dropped, `unique=True` refusing codes already read -- then calls `on_scan(code)`. `scans` keeps them, `last_code` the latest. Since 3.6.0 the code read stays in the field (`keep_value=True`, the default), so `value` and a `Form` still have it: the next read replaces it as soon as it starts typing, and Enter on it does not read it twice. `keep_value=False` clears the field after every read, as before. |
 | `Checkbox` | `[x] label`: Space or Enter toggles. |
 | `Switch` | An on/off switch; `labels` names the two states. |
 | `RadioGroup` | One of `options`. `layout='vertical'` lists them (Up/Down), `'buttons'` draws a segmented row (Left/Right). Moving selects. |
@@ -144,6 +144,7 @@ change). Details: [IMAGES.md](IMAGES.md).
 | `IconPicker` | An icon from a grid (`icons`: `(name, symbol)` pairs). Typing filters by name; arrows move; Enter picks. `value` is the name. |
 | `CoordinatesInput` | Latitude and longitude, side by side. Value: `{'latitude': ..., 'longitude': ...}`. |
 | `FileInput` | A path, typed or picked from a browser (Enter opens it): Up/Down move, Enter opens a folder or picks a file, Backspace goes up, Escape closes. `extensions` limits the files listed; `multiple=True` picks several with Space. `value` is the path (a list with `multiple`). |
+| `SignatureInput` | A signature pad of `columns` x `rows` cells (3.6.0): press and drag with the mouse, or with the keyboard -- arrows move the pen, Space puts it down / lifts it, `x` or Delete erase, Backspace undoes the last stroke, `c` clears. `value` is the list of strokes (lists of `(x, y)` cells; `[]` when empty, so `required=True` asks for a signature). `to_text()` gives the drawing as text, `to_bitmap(scale)` / `to_png(scale)` as an image. The pen shows as `+` in reverse, not only a colour. |
 
 ### dates
 
@@ -159,6 +160,7 @@ change). Details: [IMAGES.md](IMAGES.md).
 | `WeekdayInput` | A day of the week (0 = Monday ... 6 = Sunday) as a row of buttons. |
 | `DateRangeInput` | A span of dates: in the picker, Enter marks the start then the end, or pick a preset on the left (Up/Down there, Right to the calendar). The value is `(start, end)`. |
 | `Timer` | Elapsed time since `start` (until `end`, or now): `01:23:45`. `interactive=True` makes it a stopwatch: Space starts and stops, `r` resets. `clock` returns seconds (`time.monotonic` by default) and is only used by the stopwatch; `start` / `end` may be datetimes. |
+| `Stopwatch` | A stopwatch input for forms (3.6.0): Space or Enter start and stop, `l` records a lap, `r` resets; `start()`, `stop()`, `toggle()`, `lap()`, `reset()` from code. `value` is the elapsed `datetime.timedelta` (setting a `timedelta` or seconds stops it there); `laps` the split times (`max_laps` keeps the latest); `on_lap(split)`, and `on_change(value)` on stop and reset. `precision` decimals of the seconds (0-3). |
 
 ### display
 
@@ -204,6 +206,7 @@ change). Details: [IMAGES.md](IMAGES.md).
 | `CommandPalette` | A search box over commands -- `(label, action)` pairs or dicts with `label`, `action`, `hint`, `keywords` -- matched by fuzzy subsequence, best first. Up/Down choose, Enter runs, Escape closes. Open it with `open(app)` (bind it to `ctrl+k` or `/`). |
 | `Split` | Two panes side by side (`direction='horizontal'`) or stacked (`'vertical'`), divided at `ratio`; Ctrl-Left/Right (Ctrl-Up/Down) move the divider. |
 | `Stack` | Children one below the other (`direction='vertical'`) or side by side (`'horizontal'`, equal widths unless `widths` given), with `gap`. A horizontal stack with `min_width` wraps onto more rows when its children would get narrower than that (four cards become 2 x 2, then a column). |
+| `VStack` | Children one below the other that share the height the stack gets (3.6.0): `weights` split the rows left over (0, the default, keeps a child's own height), `min_heights` / `max_heights` bound each child, `gap` separates them and `height` fixes the stack's height. When they need more rows than there are, it scrolls and follows the focus: when a component inside takes the focus, the child holding it comes into view (Tab reaches the ones out of view). Wheel and PgUp/PgDn scroll; `scrollbar` shows a bar while it scrolls. |
 | `AppShell` | The frame of an application: `sidebar` on the left, `topbar` above the content, `content` the current page. `pages` maps sidebar labels to content, so choosing an item in the sidebar shows its page. The sidebar hides itself below `sidebar_below` columns (Ctrl-B shows it). |
 | `SortControl` | Choose the sort field and direction: Left/Right pick the field, Space or Enter flips ascending/descending. `on_change(field, descending)`. |
 
@@ -211,12 +214,12 @@ change). Details: [IMAGES.md](IMAGES.md).
 
 | Component | What it is |
 | --- | --- |
-| `DataTable` | An interactive table. |
+| `DataTable` | An interactive table. Focused while empty, its `empty` text shows a `▸` (`>`) marker in reverse video. |
 | `FilterBar` | Filters typed as a query -- `estado:pagado total>1000 mérida` (`:` contains, `=` / `!=` equal, `>` `<` `>=` `<=` compare, a bare word searches every field) -- shown as chips below. `predicate` is the row filter; `table` (a :class:`DataTable`) is refreshed on every change. |
-| `EditableTable` | A :class:`DataTable` whose cells are edited in place: Left/Right choose the cell, Enter edits it (Enter saves, Escape cancels), Ctrl-N adds a row, Ctrl-D deletes the current one. Column `type` `'number'` keeps numbers. `on_edit(row, key, value)` runs after a change. |
-| `CatalogGrid` | Items as cards in a grid that reflows with the width: dicts with `title`, `subtitle`, `price`, `badge` and `fields`. Arrows move, Enter calls `on_select(item)`. |
-| `Form` | Fields with labels, help and validation, laid out in `columns`, with submit / cancel buttons. `fields`: inputs, section titles (strings) or tuples of inputs for one row. Enter in a one-line field moves to the next; Ctrl-S (or the submit button) validates and calls `on_submit(values)`; Escape calls `on_cancel()`. `values()` is the `{name: value}` dict; `errors` the last validation. |
-| `ValidationSummary` | The list of errors of a form: `{field: message}`. |
+| `EditableTable` | A :class:`DataTable` whose cells are edited in place: Left/Right choose the cell, Enter edits it (Enter saves, Escape cancels), Ctrl-N adds a row, Ctrl-D deletes the current one. Column `type` `'number'` keeps numbers. `on_edit(row, key, value)` runs after a change. With a `name` it is a field of the `Form` around it: `value` (a copy of the rows) goes into `Form.values()`. |
+| `CatalogGrid` | Items as cards in a grid that reflows with the width: dicts with `title`, `subtitle`, `price`, `badge`, `fields` and (3.6.0) `image` -- a path, URL, bytes or bitmap, with `image_alt` (the title by default). Arrows move, Enter or a click on the current card selects it: `selected` / `value` is the item and `on_select(item)` runs. Pictures take `image_height` rows (6 when any item has one), drawn with `image_method`; `image_headers` go with URL downloads. The current card has a heavy border and a `▸` marker. |
+| `Form` | Fields with labels, help and validation, laid out in `columns`, with submit / cancel buttons. `fields`: inputs, section titles (strings) or tuples of inputs for one row. Enter in a one-line field moves to the next; Ctrl-S (or the submit button) validates and calls `on_submit(values)`; Escape calls `on_cancel()`. `values()` is the `{name: value}` dict -- since 3.6.0 every named input also inside containers (`Stack`, `VStack`, `Tabs` including hidden tabs, `Wizard` steps, `Accordion` sections, grids, cards) and the rows of a named `EditableTable`; `fields()` lists the inputs the same way. `errors` the last validation. |
+| `ValidationSummary` | The list of errors of a form: a `{field: message}` dict or (3.6.0) a list -- of messages, `(field, message)` pairs, dicts with `field` / `message` (or `name` / `error`) or exceptions. With `fields` (a `Form` or a list of inputs) or `on_select` it takes the focus: Up/Down choose an error, Enter or a click moves the focus to its field (by `name`, then `label`) and calls `on_select(field, input)`. `entries` are the `(field, message)` pairs, `messages` the texts. |
 | `LoginForm` | User and password, a "remember me" box and an Enter button. `on_login(user, password, remember)` returns True, or an error message shown above the fields. |
 | `FilePreview` | A file's name, size, date and -- for text -- its first lines, with code highlighting by extension. Images (and the first page of PDFs and SVGs when a renderer is installed) are drawn with `Image` in `max_lines` rows; `images=False` shows details only. Other binaries show their details only. |
 
@@ -224,8 +227,8 @@ change). Details: [IMAGES.md](IMAGES.md).
 
 | Component | What it is |
 | --- | --- |
-| `Image` | A picture from a path, URL, bytes, file object or Pillow image: kitty, iTerm2, sixel, Unicode blocks (`half`, `quadrant`, `sextant`, `braille`) or ASCII, whichever the terminal supports (`method=` or `FLEXABLELIB_IMAGE` forces one); otherwise a link to open it in the browser, or a warning when there is no browser. `alt` is the text alternative; `width`, `height`, `fit` (`contain`, `cover`, `fill`, `none`), `align`, `background`, `upscale`, `animate`, `caption`, `focusable` / `on_open` (Enter, `o`, click: open in the browser). See [IMAGES.md](IMAGES.md). |
-| `ImageViewer` | Several pictures, one at a time: Left/Right change, `f` cycles the fit, Enter opens the current one. Items are sources or `(source, alt)`. |
+| `Image` | A picture from a path, URL, bytes, file object or Pillow image: kitty, iTerm2, sixel, Unicode blocks (`half`, `quadrant`, `sextant`, `braille`) or ASCII, whichever the terminal supports (`method=` or `FLEXABLELIB_IMAGE` forces one); otherwise a link to open it in the browser, or a warning when there is no browser. `alt` is the text alternative; `width`, `height`, `fit` (`contain`, `cover`, `fill`, `none`), `align`, `background`, `upscale`, `animate`, `caption`, `focusable` / `on_open` (Enter, `o`, click: open in the browser), `headers` (3.6.0: sent with a URL download, e.g. `{'Authorization': 'Bearer …'}`; never sent on to redirects nor shown in errors). Focused and drawn as text (alt, warning), it shows a `▸` / `>` marker in reverse video. See [IMAGES.md](IMAGES.md). |
+| `ImageViewer` | Several pictures, one at a time: Left/Right change, `f` cycles the fit, Enter opens the current one. Items are sources or `(source, alt)`; `headers` go with URL downloads. When focused the info line has a `▸` (`>`) marker in reverse video, not only a colour. |
 
 ### overlays
 
