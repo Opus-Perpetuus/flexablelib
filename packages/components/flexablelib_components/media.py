@@ -55,7 +55,10 @@ class Image(_Themed):
     Unicode mode used when no pixel protocol is available (``'half'``).
     ``caption=True`` adds the alt text (or file name) below as a link.
     Enter, ``o`` or a click open the image in the browser when there is
-    one; ``on_open(image)`` replaces that.
+    one; ``on_open(image)`` replaces that. ``headers`` (a dict) go with the
+    download of an ``http(s)://`` source -- ``{'Authorization': 'Bearer
+    <token>'}`` for images behind a session token; they are not sent on to
+    redirects and never shown or logged.
     """
 
     role = 'img'
@@ -64,8 +67,10 @@ class Image(_Themed):
     def __init__(self, source, alt=None, width=None, height=None,
                  fit='contain', method=None, blocks=None, align='center',
                  background=None, upscale=True, animate=False, caption=False,
-                 cell_size=None, focusable=False, on_open=None, **kwargs):
+                 cell_size=None, focusable=False, on_open=None, headers=None,
+                 **kwargs):
         super(Image, self).__init__(**kwargs)
+        self.headers = dict(headers) if headers else None
         if fit not in FITS:
             raise ValueError('fit must be one of {0}'.format(FITS))
         self.source = source
@@ -116,10 +121,11 @@ class Image(_Themed):
     def _load(self):
         if self._frames is None:
             try:
+                kw = {'headers': self.headers} if self.headers else {}
                 if self.animate and not _a11y.settings.reduced_motion:
-                    frames = _img.load_frames(self.source)
+                    frames = _img.load_frames(self.source, **kw)
                 else:
-                    frames = [_img.load(self.source)]
+                    frames = [_img.load(self.source, **kw)]
                 self._frames = frames
                 self.error = None
             except _img.ImageError as error:
@@ -236,8 +242,21 @@ class Image(_Themed):
         elif not url:
             why += '; sin archivo ni URL que abrir'
         text = '{0} {1}: {2}'.format(symbol, name, why)
+        if self.focused:
+            return self._focus_mark(_wrap(text, max(1, width - 2)))
         return [self.paint(line, self.theme.warning)
                 for line in _wrap(text, width)]
+
+    def _focus_mark(self, lines):
+        """Focus on an image shown as text: a marker on its first line and
+        reverse video, so it does not depend on colour."""
+        if not (self.focused and lines):
+            return lines
+        mark = '> ' if _a11y.settings.ascii or not self._active() else '▸ '
+        first = mark + lines[0]
+        lines = [self.paint(first, 'reverse') if self._active() else first] \
+            + lines[1:]
+        return lines
 
     def _alt_lines(self, width):
         self.used_method = 'alt'
@@ -246,7 +265,8 @@ class Image(_Themed):
             text += ' ({0})'.format(self.name)
         if self.bitmap() is None:
             text += ' -- no se puede mostrar: {0}'.format(self.error)
-        return _wrap(text, width)
+        lines = _wrap(text, max(1, width - 2) if self.focused else width)
+        return self._focus_mark(lines)
 
     def _color(self, info):
         if not self._active():
@@ -276,6 +296,9 @@ class Image(_Themed):
             return self._alt_lines(avail)
         if method == 'none':
             self.used_method = 'none'
+            if self.focused:
+                return self._focus_mark(['[{0}]'.format(self.alt or
+                                                        self.name)])
             return [self.paint('[{0}]'.format(self.alt or self.name),
                                self.theme.muted)][:1]
         if method == 'link':
@@ -433,7 +456,7 @@ class ImageViewer(_Themed):
     Several images, one at a time: Left/Right (or PgUp/PgDn) change image,
     ``f`` cycles the fit (contain, cover, none), Enter or ``o`` opens the
     current one in the browser. ``images`` are sources or ``(source, alt)``
-    pairs.
+    pairs. ``headers`` go with every URL download (see :class:`Image`).
     """
 
     role = 'img'
@@ -441,12 +464,13 @@ class ImageViewer(_Themed):
     needs_graphics = True
 
     def __init__(self, images, index=0, fit='contain', method=None,
-                 **kwargs):
+                 headers=None, **kwargs):
         super(ImageViewer, self).__init__(**kwargs)
         self.items = []
         for item in images:
             src, alt = item if isinstance(item, tuple) else (item, None)
-            self.items.append(Image(src, alt=alt, fit=fit, method=method))
+            self.items.append(Image(src, alt=alt, fit=fit, method=method,
+                                    headers=headers))
         self.index = max(0, min(index, len(self.items) - 1))
 
     @property
@@ -480,9 +504,13 @@ class ImageViewer(_Themed):
         info = '{0}{1} · {2}/{3} · {4}{5}'.format(
             arrows[0], cur.alt or cur.name, self.index + 1, len(self.items),
             cur.fit, arrows[1])
-        spec = self.theme.accent if self.focused else self.theme.muted
-        if self.focused and self._marked():
-            info = '> ' + info
+        spec = self.theme.muted
+        if self.focused:
+            # Focus never depends on colour alone: a marker, and the info
+            # line in reverse video when there is colour.
+            info = ('> ' if _a11y.settings.ascii or not self._active()
+                    else '▸ ') + info
+            spec = 'reverse bold'
         self.hot(len(body), self._prev, 0, 2)
         self.hot(len(body), self._next, max(0, width - 2), None)
         return body + [_fx.fit_line(self.paint(info, spec), width, 'c')]

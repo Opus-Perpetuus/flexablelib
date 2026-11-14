@@ -17,7 +17,7 @@ _Enter = Key('enter')
 __all__ = ['Tabs', 'Menu', 'ContextMenu', 'MenuButton', 'Pagination',
            'Sidebar', 'TopBar', 'Toolbar', 'Wizard', 'Accordion',
            'Carousel', 'Tree', 'CommandPalette', 'Split', 'Stack',
-           'AppShell', 'SortControl', 'render_into']
+           'VStack', 'AppShell', 'SortControl', 'render_into']
 
 
 def render_into(child, width, height=None):
@@ -67,6 +67,10 @@ class Tabs(_Themed):
 
     def children(self):
         return [self.current] if self.current is not None else []
+
+    def form_children(self):
+        """Every pane, shown or not (the fields a form collects)."""
+        return [c for _, c in self.tabs if not isinstance(c, str)]
 
     def natural_width(self):
         bar = sum(_fx.visible_width(t) + 3 for t, _ in self.tabs)
@@ -622,6 +626,11 @@ class Wizard(_Themed):
         return ([content] if content is not None else []) + \
             [self.back, self.next]
 
+    def form_children(self):
+        """Every step's content (the fields a form collects)."""
+        return [c for _, c in self.steps
+                if c is not None and not isinstance(c, str)]
+
     def natural_width(self):
         return max([60] + [_natural_width(c) for _, c in self.steps])
 
@@ -715,6 +724,10 @@ class Accordion(_Themed):
     def children(self):
         return [c for i, (_, c) in enumerate(self.sections)
                 if i in self.opened and not isinstance(c, str)]
+
+    def form_children(self):
+        """Every section, open or not (the fields a form collects)."""
+        return [c for _, c in self.sections if not isinstance(c, str)]
 
     def natural_width(self):
         return max([_natural_width(c) + 2 for _, c in self.sections] +
@@ -1302,6 +1315,224 @@ class Stack(_Themed):
             out.extend(render_into(child, width))
         return out
 
+
+
+def _contains(node, target, depth=0):
+    """Whether ``target`` is ``node`` or somewhere inside it."""
+    if node is target:
+        return True
+    if depth > 64:
+        return False
+    from flexablelib_tui.app import _child_nodes
+    return any(_contains(c, target, depth + 1) for c in _child_nodes(node))
+
+
+def _share(room, weights, lows, highs):
+    """Split ``room`` rows by ``weights`` on top of ``lows``, each capped
+    at ``highs`` (None: no cap); leftover rows go to the largest
+    remainders."""
+    sizes = list(lows)
+    open_ = [i for i, w in enumerate(weights) if w > 0]
+    while room > 0 and open_:
+        total = float(sum(weights[i] for i in open_))
+        shares = {i: room * weights[i] / total for i in open_}
+        given = 0
+        capped = []
+        for i in open_:
+            add = int(shares[i])
+            if highs[i] is not None and sizes[i] + add >= highs[i]:
+                add = max(0, highs[i] - sizes[i])
+                capped.append(i)
+            sizes[i] += add
+            given += add
+        room -= given
+        if capped:
+            open_ = [i for i in open_ if i not in capped]
+            continue
+        order = sorted(open_, key=lambda i: shares[i] - int(shares[i]),
+                       reverse=True)
+        for i in order:
+            if room <= 0:
+                break
+            if highs[i] is None or sizes[i] < highs[i]:
+                sizes[i] += 1
+                room -= 1
+        break
+    return sizes
+
+
+class VStack(_Themed):
+    """
+    Children one below the other that share the height the stack gets.
+
+    ``weights`` (one per child) split the rows left over: a child with
+    weight 0 (the default) keeps its own height, the others grow in
+    proportion. ``min_heights`` / ``max_heights`` (one per child, None for
+    no limit) bound each one; ``gap`` puts blank rows between them and
+    ``height`` fixes the stack's own height (otherwise it takes its slot's).
+    When the children need more rows than there are, the stack scrolls and
+    follows the focus: whenever another component inside takes the focus,
+    the child holding it is brought into view (Tab reaches the children out
+    of view too). The wheel and PgUp/PgDn (when the focused child does not
+    use them) scroll it; ``scrollbar=True`` shows a bar on the right while
+    it scrolls.
+    """
+
+    role = 'group'
+    expand = True
+
+    def __init__(self, children, weights=None, min_heights=None,
+                 max_heights=None, gap=0, height=None, scrollbar=True,
+                 follow_focus=True, step=3, **kwargs):
+        super(VStack, self).__init__(**kwargs)
+        self.items = list(children)
+        n = len(self.items)
+
+        def per_child(values, default, name):
+            values = list(values) if values is not None else [default] * n
+            if len(values) != n:
+                raise ValueError('{0} needs one value per child ({1})'
+                                 .format(name, n))
+            return values
+        self.weights = [max(0.0, float(w or 0))
+                        for w in per_child(weights, 0, 'weights')]
+        self.min_heights = [max(0, int(v or 0)) for v in
+                            per_child(min_heights, 0, 'min_heights')]
+        self.max_heights = [None if v is None else max(0, int(v)) for v in
+                            per_child(max_heights, None, 'max_heights')]
+        self.gap = max(0, int(gap))
+        self.height = None if height is None else max(1, int(height))
+        self.scrollbar = bool(scrollbar)
+        self.follow_focus = bool(follow_focus)
+        self.step = max(1, int(step))
+        self.offset = 0
+        self.total = 0
+        self.view_height = 0
+        self.heights = []
+        self._followed = None
+        self._blocks = []
+
+    def children(self):
+        return list(self.items)
+
+    def natural_width(self):
+        return max([_natural_width(c) for c in self.items] or [0]) + \
+            (1 if self.scrollbar else 0)
+
+    @property
+    def max_offset(self):
+        return max(0, self.total - self.view_height)
+
+    def scroll_to(self, offset):
+        self.offset = max(0, min(int(offset), self.max_offset))
+        self.refresh()
+
+    def scroll(self, delta):
+        self.scroll_to(self.offset + delta)
+
+    def _clamp(self, i, rows):
+        rows = max(rows, self.min_heights[i])
+        high = self.max_heights[i]
+        return rows if high is None else min(rows, high)
+
+    def _layout(self, width, height):
+        """The height of every child and their rendered lines."""
+        naturals = [len(render_into(c, width)) for c in self.items]
+        gaps = self.gap * max(0, len(self.items) - 1)
+        if height is None:
+            sizes = [self._clamp(i, naturals[i])
+                     for i in range(len(self.items))]
+        else:
+            fixed = [self._clamp(i, naturals[i]) if not self.weights[i]
+                     else self.min_heights[i]
+                     for i in range(len(self.items))]
+            room = height - gaps - sum(fixed)
+            sizes = _share(room, self.weights, fixed, self.max_heights)
+        blocks = []
+        for child, rows in zip(self.items, sizes):
+            lines = render_into(child, width, rows) if rows else []
+            blocks.append(lines + [''] * (rows - len(lines)))
+        return sizes, blocks
+
+    def _holder(self):
+        app = self.app
+        target = getattr(app, 'focused', None) if app is not None else None
+        if target is None:
+            return None
+        for i, child in enumerate(self.items):
+            if _contains(child, target):
+                return i
+        return None
+
+    def draw(self, width, height):
+        h = self.height or height
+        sizes, blocks = self._layout(width, h)
+        lines = []
+        starts = []
+        for i, block in enumerate(blocks):
+            if i and self.gap:
+                lines.extend([''] * self.gap)
+            starts.append(len(lines))
+            lines.extend(block)
+        overflow = h is not None and len(lines) > h
+        inner = width
+        if overflow and self.scrollbar and width > 1:
+            inner = width - 1
+            sizes, blocks = self._layout(inner, h)
+            lines, starts = [], []
+            for i, block in enumerate(blocks):
+                if i and self.gap:
+                    lines.extend([''] * self.gap)
+                starts.append(len(lines))
+                lines.extend(block)
+        self.heights = sizes
+        self.total = len(lines)
+        self.view_height = h if h is not None else len(lines)
+        if not overflow:
+            self.offset = 0
+            return lines
+        if self.follow_focus:
+            target = getattr(self.app, 'focused', None) if self.app else None
+            if target is not self._followed:
+                self._followed = target
+                i = self._holder()
+                if i is not None:
+                    top, size = starts[i], sizes[i]
+                    if top < self.offset or size > h:
+                        self.offset = top
+                    elif top + size > self.offset + h:
+                        self.offset = top + size - h
+        self.offset = max(0, min(self.offset, self.max_offset))
+        visible = lines[self.offset:self.offset + h]
+        if not (self.scrollbar and inner < width):
+            return visible
+        thumb = max(1, h * h // self.total)
+        top = (h - thumb) * self.offset // max(1, self.max_offset)
+        bar = []
+        for k in range(h):
+            on = top <= k < top + thumb
+            bar.append(self.paint('┃' if on else '│', self.theme.border)
+                       if self._active() and not self._marked() else
+                       ('█' if on else '│'))
+        return [_fx.fit_line(line, inner) + mark
+                for line, mark in zip(visible, bar)]
+
+    def a11y_value(self):
+        if self.total <= self.view_height:
+            return ''
+        return 'líneas {0}-{1} de {2}'.format(
+            self.offset + 1, min(self.total, self.offset + self.view_height),
+            self.total)
+
+    def on_key(self, key):
+        k = str(key)
+        moves = {'scrollup': -self.step, 'scrolldown': self.step,
+                 'pageup': -max(1, self.view_height),
+                 'pagedown': max(1, self.view_height)}
+        if k in moves and self.total > self.view_height:
+            self.scroll(moves[k])
+            return True
+        return False
 
 class SortControl(_Themed):
     """

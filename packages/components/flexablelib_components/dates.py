@@ -4,6 +4,7 @@ month, year and weekday pickers, date ranges with presets, and a timer.
 """
 
 import calendar as _calendar
+import math
 import datetime as _dt
 import time
 
@@ -17,7 +18,7 @@ _ENTER = Key('enter')
 
 __all__ = ['Calendar', 'DateInput', 'TimeInput', 'DateTimeInput',
            'WeekInput', 'MonthInput', 'YearInput', 'WeekdayInput',
-           'DateRangeInput', 'Timer', 'LOCALES']
+           'DateRangeInput', 'Timer', 'Stopwatch', 'LOCALES']
 
 LOCALES = {
     'es': {
@@ -966,3 +967,161 @@ class Timer(_Themed):
                                                  else 'iniciar') + ' · r',
                                self.theme.muted)
         return [text]
+
+
+class Stopwatch(Input):
+    """
+    A stopwatch for forms: Space (or Enter) starts and stops it, ``l``
+    records a lap, ``r`` resets. ``value`` is the elapsed time as a
+    :class:`datetime.timedelta` (live while it runs); setting it (a
+    ``timedelta`` or seconds) stops the watch at that time. ``laps`` are the
+    split times (``timedelta``). :meth:`start`, :meth:`stop`,
+    :meth:`toggle`, :meth:`lap` and :meth:`reset` do the same from code;
+    ``on_lap(split)`` runs on each lap and ``on_change(value)`` when it
+    stops or resets. ``clock`` returns seconds (``time.monotonic``).
+    ``precision`` is the number of decimals of the seconds shown (0-3).
+    """
+
+    role = 'timer'
+
+    def __init__(self, label=None, value=None, clock=time.monotonic,
+                 on_lap=None, precision=1, max_laps=None, **kwargs):
+        self.clock = clock
+        self.on_lap = on_lap
+        self.precision = max(0, min(3, int(precision)))
+        self.max_laps = max_laps
+        self.laps = []
+        self._accum = 0.0
+        self._since = None
+        super(Stopwatch, self).__init__(label=label, value=value, **kwargs)
+
+    # -- value ----------------------------------------------------------------
+
+    @property
+    def value(self):
+        return _dt.timedelta(seconds=self.elapsed())
+
+    @value.setter
+    def value(self, new):
+        if isinstance(new, _dt.timedelta):
+            seconds = new.total_seconds()
+        else:
+            seconds = float(new or 0)
+        self._accum = max(0.0, seconds)
+        self._since = None
+
+    def is_empty(self):
+        return not self.running and self._accum == 0.0
+
+    @property
+    def running(self):
+        return self._since is not None
+
+    def elapsed(self):
+        """Seconds elapsed."""
+        extra = self.clock() - self._since if self._since is not None \
+            else 0.0
+        return self._accum + extra
+
+    # -- control --------------------------------------------------------------
+
+    def start(self):
+        if self._since is None:
+            self._since = self.clock()
+            self.error = None
+            self.refresh()
+        return True
+
+    def stop(self):
+        if self._since is not None:
+            self._accum += self.clock() - self._since
+            self._since = None
+            if self.on_change is not None:
+                self.on_change(self.value)
+            self.refresh()
+        return True
+
+    def toggle(self):
+        return self.stop() if self.running else self.start()
+
+    def lap(self):
+        """Record the current time as a lap (only while running)."""
+        if not self.running:
+            return False
+        split = self.value
+        self.laps.append(split)
+        if self.max_laps:
+            del self.laps[:-int(self.max_laps)]
+        if self.on_lap is not None:
+            self.on_lap(split)
+        self.refresh()
+        return True
+
+    def reset(self):
+        self._accum = 0.0
+        self._since = self.clock() if self._since is not None else None
+        self.laps = []
+        if self.on_change is not None:
+            self.on_change(self.value)
+        self.refresh()
+        return True
+
+    @staticmethod
+    def format_duration(seconds, precision=1):
+        """``seconds`` as ``HH:MM:SS`` (with ``precision`` decimals)."""
+        scale = 10 ** precision
+        total = int(math.floor(max(0.0, seconds) * scale + 1e-9))
+        whole, frac = divmod(total, scale)
+        hours, rest = divmod(whole, 3600)
+        minutes, secs = divmod(rest, 60)
+        text = '{0:02d}:{1:02d}:{2:02d}'.format(hours, minutes, secs)
+        if precision:
+            text += '.{0:0{1}d}'.format(frac, precision)
+        return text
+
+    def text(self):
+        return self.format_duration(self.elapsed(), self.precision)
+
+    def a11y_value(self):
+        text = '{0}, {1}'.format(self.text(), 'en marcha' if self.running
+                                 else 'detenido')
+        if self.laps:
+            text += ', {0} vueltas'.format(len(self.laps))
+        return text
+
+    def on_key(self, key):
+        k = str(key)
+        if k in ('space', 'enter'):
+            return self.toggle()
+        if k == 'l':
+            self.lap()
+            return True
+        if k == 'r':
+            return self.reset()
+        return False
+
+    def on_mouse(self, event):
+        if event.action == 'press' and event.button == 0:
+            return self.toggle()
+        return False
+
+    def natural_width(self):
+        return max(Input.natural_width(self), 40)
+
+    def control(self, width, height):
+        spec = self.theme.success if self.running else self.theme.muted
+        state = '▶' if self.running else '■'
+        if not self._active():
+            state = '>' if self.running else '='
+        line = self.marker() + ' ' + state + ' ' + \
+            self.paint(self.text(), 'bold ' + spec)
+        if self.focused:
+            line += self.paint('  espacio: ' + ('parar' if self.running
+                                                else 'iniciar') +
+                               ' · l: vuelta · r: reiniciar',
+                               self.theme.muted)
+        out = [line]
+        for n, split in enumerate(self.laps[-5:], max(1, len(self.laps) - 4)):
+            out.append('   {0:>2}. {1}'.format(n, self.format_duration(
+                split.total_seconds(), self.precision)))
+        return out
