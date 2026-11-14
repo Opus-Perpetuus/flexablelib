@@ -292,7 +292,9 @@ print(screen.render())
 focus, routes keys to the focused component and its parents, runs key
 bindings, opens dialogs and notifications, ticks on an interval and redraws
 on resize. `ScrollView` scrolls any content (arrows, PgUp/PgDn, Home/End,
-the mouse wheel). The components in
+the mouse wheel) and, since 3.7.0, follows the focus: when a component
+inside it takes the focus (Tab reaches the ones out of view), its rows are
+brought into view (`follow_focus=False` turns that off). The components in
 [COMPONENTS.md](COMPONENTS.md) (`flexablelib[components]`) are built on it.
 Grids, cards, tables and widgets go inside an `App` unchanged.
 

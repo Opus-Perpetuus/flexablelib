@@ -1115,6 +1115,10 @@ class ScrollView(Component):
     view's width minus the scroll bar). ``height`` fixes the view's height;
     otherwise it takes the height its slot gives it. ``follow=True`` keeps
     the view at the bottom while it is there (for logs).
+    ``follow_focus=True`` (the default) scrolls to the component inside
+    the content that takes the focus (Tab reaches the ones out of view):
+    each time the focus moves to another component inside, its rows are
+    brought into view; scrolling by hand afterwards is left alone.
     """
 
     focusable = True
@@ -1122,8 +1126,11 @@ class ScrollView(Component):
     role = 'scrollbar'
 
     def __init__(self, content='', height=None, follow=False, scrollbar=True,
-                 color='bright_black', focus_color='cyan', step=3, **kwargs):
+                 color='bright_black', focus_color='cyan', step=3,
+                 follow_focus=True, **kwargs):
         super(ScrollView, self).__init__(**kwargs)
+        self.follow_focus = bool(follow_focus)
+        self._followed = None
         self.content = content
         self.height = None if height is None else max(1, int(height))
         self.follow = bool(follow)
@@ -1165,10 +1172,56 @@ class ScrollView(Component):
 
     _last_width = None
 
+    def _focused_inside(self):
+        target = self.app.focused if self.app is not None else None
+        if target is None or target is self or \
+                isinstance(self.content, (str, list)):
+            return None
+        node, seen = getattr(target, 'parent', None), 0
+        while node is not None and seen < 256:
+            if node is self:
+                return target
+            node, seen = getattr(node, 'parent', None), seen + 1
+        return None
+
+    def focus_rows(self, width):
+        """``(first, last)`` content rows of the focused component inside
+        the view, or None."""
+        target = self._focused_inside()
+        if target is None:
+            return None
+        saved = _HIT['on'], _HIT['items']
+        _HIT['on'], _HIT['items'] = True, []
+        try:
+            text = _render_child(self.content, width)
+            items = _HIT['items']
+        finally:
+            _HIT['on'], _HIT['items'] = saved
+        _lines, regions = _fx.extract_marks(text.split('\n') if text else [])
+        rows = [row for i, row, x0, x1, depth in regions
+                if 0 <= i < len(items) and items[i] is target]
+        return (min(rows), max(rows)) if rows else None
+
+    def _follow(self, inner, h):
+        target = self._focused_inside()
+        if target is self._followed:
+            return
+        self._followed = target
+        span = self.focus_rows(inner) if target is not None else None
+        if span is None:
+            return
+        first, last = span
+        if first < self.offset or last - first + 1 > h:
+            self.offset = first
+        elif last >= self.offset + h:
+            self.offset = last - h + 1
+
     def draw(self, width, height):
         self._last_width = width
         h = self.height or height or self.view_height
         inner = max(1, width - 1) if self.scrollbar else width
+        if self.follow_focus:
+            self._follow(inner, max(1, h))
         lines = self._lines(inner)
         at_bottom = self.offset >= self.max_offset
         self.total = len(lines)

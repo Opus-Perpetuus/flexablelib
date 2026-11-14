@@ -18,7 +18,7 @@ keys to the focused component) and also renders on its own with
 ``render(width)``. See docs/COMPONENTS.md.
 """
 
-__version__ = '3.6.0'
+__version__ = '3.7.0'
 
 from .base import Theme, DEFAULT_THEME, Input, Box, Button, frame
 from .inputs import (TextInput, PasswordInput, NumberInput, ExpressionInput,
@@ -34,13 +34,13 @@ from .display import (Badge, Tag, StatusBadge, Alert, Link, Breadcrumbs,
                       EmptyState, ErrorPanel, Spinner, Skeleton, Code,
                       MarkdownView, HtmlView, DetailView, Timeline, Stepper,
                       CommentList, AttachmentList, Stat, LineChart,
-                      human_size)
+                      StatusLine, human_size)
 from .navigation import (Tabs, Menu, ContextMenu, MenuButton, Pagination,
                          Sidebar, TopBar, Toolbar, Wizard, Accordion,
                          Carousel, Tree, CommandPalette, Split, Stack,
-                         VStack, AppShell, SortControl)
+                         VStack, GridView, AppShell, SortControl)
 from .data import (DataTable, FilterBar, EditableTable, CatalogGrid, Form,
-                   ValidationSummary, LoginForm, FilePreview, parse_query)
+                   FormCell, ValidationSummary, LoginForm, FilePreview, parse_query)
 from .media import Image, ImageViewer, IMAGE_EXTENSIONS
 from .overlays import (Modal, ConfirmDialog, PromptDialog, LoadingOverlay,
                        Popover, HelpLine)
@@ -58,11 +58,13 @@ __all__ = [
     'Badge', 'Tag', 'StatusBadge', 'Alert', 'Link', 'Breadcrumbs',
     'EmptyState', 'ErrorPanel', 'Spinner', 'Skeleton', 'Code',
     'MarkdownView', 'HtmlView', 'DetailView', 'Timeline', 'Stepper',
-    'CommentList', 'AttachmentList', 'Stat', 'LineChart', 'human_size',
+    'CommentList', 'AttachmentList', 'Stat', 'LineChart', 'StatusLine',
+    'human_size',
     'Tabs', 'Menu', 'ContextMenu', 'MenuButton', 'Pagination', 'Sidebar',
     'TopBar', 'Toolbar', 'Wizard', 'Accordion', 'Carousel', 'Tree',
-    'CommandPalette', 'Split', 'Stack', 'VStack', 'AppShell', 'SortControl',
+    'CommandPalette', 'Split', 'Stack', 'VStack', 'GridView', 'AppShell', 'SortControl',
     'DataTable', 'FilterBar', 'EditableTable', 'CatalogGrid', 'Form',
+    'FormCell',
     'ValidationSummary', 'LoginForm', 'FilePreview', 'parse_query',
     'Modal', 'ConfirmDialog', 'PromptDialog', 'LoadingOverlay', 'Popover',
     'HelpLine', 'Image', 'ImageViewer', 'IMAGE_EXTENSIONS', '__version__',
