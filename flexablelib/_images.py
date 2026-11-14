@@ -733,8 +733,17 @@ def render_pdf(data, dpi=96):
     raise ImageError('PDF necesita PyMuPDF o pdftoppm (poppler)')
 
 
-def read_source(source, timeout=5.0, max_bytes=64 * 1024 * 1024):
-    """``(bytes, name)`` for a path, URL, bytes or file object."""
+_PRIVATE_HEADERS = ('authorization', 'proxy-authorization', 'cookie')
+
+
+def read_source(source, timeout=5.0, max_bytes=64 * 1024 * 1024,
+                headers=None):
+    """``(bytes, name)`` for a path, URL, bytes or file object.
+
+    ``headers`` (a dict) go with an ``http(s)://`` request, e.g.
+    ``{'Authorization': 'Bearer <token>'}`` for images behind a session.
+    ``Authorization``, ``Proxy-Authorization`` and ``Cookie`` are never
+    sent on to a redirect, and no header value appears in errors."""
     if isinstance(source, (bytes, bytearray, memoryview)):
         return bytes(source), None
     if hasattr(source, 'read'):
@@ -744,10 +753,19 @@ def read_source(source, timeout=5.0, max_bytes=64 * 1024 * 1024):
         from urllib.request import Request, urlopen
         try:
             req = Request(path, headers={'User-Agent': 'flexablelib'})
+            for name, value in (headers or {}).items():
+                if str(name).lower() in _PRIVATE_HEADERS:
+                    req.add_unredirected_header(str(name).capitalize(),
+                                                str(value))
+                else:
+                    req.add_header(str(name), str(value))
             with urlopen(req, timeout=timeout) as resp:
                 data = resp.read(max_bytes + 1)
         except Exception as error:
-            raise ImageError('no se pudo descargar ({0})'.format(error))
+            code = getattr(error, 'code', None)
+            reason = 'HTTP {0}'.format(code) if isinstance(code, int) else \
+                (getattr(error, 'reason', None) or error)
+            raise ImageError('no se pudo descargar ({0})'.format(reason))
         if len(data) > max_bytes:
             raise ImageError('imagen demasiado grande')
         return data, path

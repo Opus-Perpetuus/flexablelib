@@ -1,7 +1,8 @@
 """
 Form inputs: text, password, numbers, arithmetic, money, masked text,
 multi-line text, JSON, code scanners, checkboxes, switches, radio and
-checkbox groups, selects, autocomplete, colours, icons, coordinates and files.
+checkbox groups, selects, autocomplete, colours, icons, coordinates, files
+and signatures.
 
 All of them are :class:`~flexablelib_components.base.Input` subclasses: a
 ``label`` above, ``help`` and validation errors below, ``value`` /
@@ -19,13 +20,14 @@ from flexablelib import _frames as _fx
 
 from flexablelib_tui import Key
 
-from .base import Input, _Themed
+from .base import Input, _Themed, frame
 
 __all__ = ['TextInput', 'PasswordInput', 'NumberInput', 'ExpressionInput',
            'MoneyInput', 'MaskedInput', 'MASKS', 'TextArea', 'JsonInput',
            'ScanInput', 'Checkbox', 'Switch', 'RadioGroup', 'CheckboxGroup',
            'Select', 'Autocomplete', 'ColorInput', 'IconPicker',
-           'CoordinatesInput', 'FileInput', 'normalize_options',
+           'CoordinatesInput', 'FileInput', 'SignatureInput',
+           'normalize_options',
            'evaluate_expression', 'ICONS']
 
 _WORD = re.compile(r'\w', re.UNICODE)
@@ -844,14 +846,23 @@ class ScanInput(TextInput):
     ``transform``, checked against ``pattern`` and ``min_length`` /
     ``max_length``, repeated reads within ``duplicate_ms`` dropped,
     ``unique=True`` refusing codes already read -- then calls
-    ``on_scan(code)`` and clears for the next one. ``scans`` keeps them.
+    ``on_scan(code)``. ``scans`` keeps them.
+
+    ``keep_value=True`` (the default since 3.6.0) leaves the code that was
+    read in the field, so ``value`` (and a :class:`Form`) still has it: the
+    next character typed -- the scanner's next read -- replaces it, and
+    Enter on it does not read it twice. ``keep_value=False`` clears the
+    field after every read, as before 3.6.0.
     """
 
     def __init__(self, label=None, on_scan=None, pattern=None,
                  min_length=None, max_length=None, strip_prefix='',
                  strip_suffix='', unique=False, duplicate_ms=800,
-                 history_size=50, clock=time.monotonic, **kwargs):
+                 history_size=50, clock=time.monotonic, keep_value=True,
+                 **kwargs):
         self.on_scan = on_scan
+        self.keep_value = bool(keep_value)
+        self._fresh = False
         self.pattern = re.compile(pattern) if pattern else None
         self.min_length = min_length
         self.max_code = max_length
@@ -893,7 +904,7 @@ class ScanInput(TextInput):
         now = self.clock()
         last_code, last_time = self._last
         if code == last_code and (now - last_time) * 1000 < self.duplicate_ms:
-            self._edit('', 0)
+            self._settle(code, edit=True)
             return True
         self.error = self.check(code)
         if self.error is None:
@@ -902,9 +913,35 @@ class ScanInput(TextInput):
             self._last = (code, now)
             if self.on_scan is not None:
                 self.on_scan(code)
-            self.text, self.cursor_pos = '', 0
+            self._settle(code)
         self.refresh()
         return True
+
+    def _settle(self, code, edit=False):
+        """After a read: keep ``code`` shown (replaced by the next one) or
+        clear the field."""
+        if self.keep_value:
+            self.text, self.cursor_pos = code, len(code)
+            self._fresh = True
+        elif edit:
+            self._edit('', 0)
+        else:
+            self.text, self.cursor_pos = '', 0
+
+    @property
+    def last_code(self):
+        """The latest accepted code (None before the first one)."""
+        return self.scans[-1] if self.scans else None
+
+    def on_key(self, key):
+        if self._fresh:
+            k = str(key)
+            if k == 'enter':
+                return True          # the code shown was already read
+            if key.is_printable or k in ('space', 'paste'):
+                self.text, self.cursor_pos = '', 0
+            self._fresh = False
+        return super(ScanInput, self).on_key(key)
 
     def suffix(self):
         return '{0} leídos'.format(len(self.scans)) if self.scans else ''
@@ -1741,4 +1778,232 @@ class FileInput(Input):
                 text = self.mark_current(text, self.theme.selection)
             self.hot(len(out), lambda i=i: self._entry(i))
             out.append('  ' + text)
+        return out
+
+
+# +---------------------------------------------------------------------------+
+# Signature
+
+def _line_cells(a, b):
+    """The cells of a straight line from ``a`` to ``b`` (both included)."""
+    (x0, y0), (x1, y1) = a, b
+    dx, dy = abs(x1 - x0), -abs(y1 - y0)
+    sx, sy = (1 if x0 < x1 else -1), (1 if y0 < y1 else -1)
+    err = dx + dy
+    out = []
+    while True:
+        out.append((x0, y0))
+        if (x0, y0) == (x1, y1):
+            return out
+        e2 = 2 * err
+        if e2 >= dy:
+            err += dy
+            x0 += sx
+        if e2 <= dx:
+            err += dx
+            y0 += sy
+
+
+class SignatureInput(Input):
+    """
+    A signature drawn on a pad of ``columns`` x ``rows`` cells: with the
+    mouse (press and drag draws a stroke) or the keyboard -- the arrows move
+    the pen, Space puts it down (moving then draws) and lifts it, ``x`` or
+    Delete erase under the pen, Backspace undoes the last stroke and ``c``
+    clears the pad. ``value`` is the list of strokes, each a list of
+    ``(x, y)`` cells (``[]`` when nothing is drawn, so ``required=True``
+    asks for a signature). :meth:`to_text` gives the drawing as lines of
+    text, :meth:`to_bitmap` / :meth:`to_png` as an image (``scale`` pixels
+    per cell). The pen is shown with a ``+`` marker as well as in reverse,
+    so it never depends on colour.
+    """
+
+    role = 'img'
+
+    def __init__(self, label=None, value=None, columns=40, rows=8, ink='█',
+                 **kwargs):
+        self.columns = max(2, int(columns))
+        self.rows = max(1, int(rows))
+        self.ink = ink
+        self.pen = (0, 0)
+        self.pen_down = False
+        self._dragging = False
+        super(SignatureInput, self).__init__(label=label, value=value,
+                                             **kwargs)
+
+    def coerce(self, value):
+        strokes = []
+        for stroke in value or []:
+            points = [(int(x), int(y)) for x, y in stroke]
+            if points:
+                strokes.append(points)
+        return strokes
+
+    @property
+    def strokes(self):
+        return self._value
+
+    def is_empty(self):
+        return not self._value
+
+    def a11y_value(self):
+        if not self._value:
+            return 'sin firma'
+        return '{0} trazos'.format(len(self._value))
+
+    # -- drawing on the pad -------------------------------------------------
+
+    def _changed(self):
+        self.error = None
+        if self.on_change is not None:
+            self.on_change(self.value)
+        self.refresh()
+
+    def _inside(self, point):
+        x, y = point
+        return (max(0, min(self.columns - 1, x)),
+                max(0, min(self.rows - 1, y)))
+
+    def begin(self, point):
+        """Start a stroke at ``point``."""
+        self._value.append([self._inside(point)])
+        self._changed()
+
+    def extend(self, point):
+        """Continue the current stroke to ``point`` (a straight line)."""
+        point = self._inside(point)
+        if not self._value:
+            return self.begin(point)
+        stroke = self._value[-1]
+        stroke.extend(_line_cells(stroke[-1], point)[1:])
+        self._changed()
+
+    def clear(self):
+        self._value = []
+        self.pen_down = False
+        self._changed()
+
+    def undo(self):
+        if self._value:
+            self._value.pop()
+            self.pen_down = False
+            self._changed()
+
+    def erase(self, point):
+        point = self._inside(point)
+        kept = []
+        for stroke in self._value:
+            rest = [p for p in stroke if p != point]
+            if rest:
+                kept.append(rest)
+        if kept != self._value:
+            self._value = kept
+            self._changed()
+
+    def cells(self):
+        """The set of inked cells."""
+        return set(p for stroke in self._value for p in stroke)
+
+    def to_text(self, ink='#', blank=' '):
+        """The drawing as ``rows`` lines of ``columns`` characters."""
+        inked = self.cells()
+        return [''.join(ink if (x, y) in inked else blank
+                        for x in range(self.columns))
+                for y in range(self.rows)]
+
+    def to_bitmap(self, scale=8, ink=(0, 0, 0), paper=(255, 255, 255)):
+        """The drawing as a :class:`flexablelib._images.Bitmap`."""
+        from flexablelib import _images
+        scale = max(1, int(scale))
+        w, h = self.columns * scale, self.rows * scale
+        on = bytes(tuple(ink)[:3]) + b'\xff'
+        off = bytes(tuple(paper)[:3]) + b'\xff'
+        inked = self.cells()
+        rows = []
+        for y in range(self.rows):
+            row = b''.join((on if (x, y) in inked else off) * scale
+                           for x in range(self.columns))
+            rows.append(row * scale)
+        return _images.Bitmap(w, h, b''.join(rows))
+
+    def to_png(self, scale=8, **kwargs):
+        """The drawing as PNG bytes."""
+        from flexablelib import _images
+        return _images.encode_png(self.to_bitmap(scale, **kwargs))
+
+    # -- input ----------------------------------------------------------------
+
+    def on_key(self, key):
+        k = str(key)
+        moves = {'left': (-1, 0), 'right': (1, 0), 'up': (0, -1),
+                 'down': (0, 1)}
+        if k in moves:
+            dx, dy = moves[k]
+            self.pen = self._inside((self.pen[0] + dx, self.pen[1] + dy))
+            if self.pen_down:
+                self.extend(self.pen)
+            self.refresh()
+            return True
+        if k == 'space':
+            self.pen_down = not self.pen_down
+            if self.pen_down:
+                self.begin(self.pen)
+            self.refresh()
+            return True
+        if k in ('x', 'delete'):
+            self.erase(self.pen)
+            return True
+        if k == 'backspace':
+            self.undo()
+            return True
+        if k == 'c':
+            self.clear()
+            return True
+        if k == 'enter':
+            return self.submit()
+        return False
+
+    def on_mouse(self, event):
+        top = 2 if self.label else 1
+        point = (event.x - 1, event.y - top)
+        if event.action == 'press' and event.button == 0:
+            if not (0 <= point[0] < self.columns and
+                    0 <= point[1] < self.rows):
+                return False
+            self._dragging = True
+            self.pen = self._inside(point)
+            self.begin(point)
+            return True
+        if event.action == 'drag' and self._dragging:
+            self.pen = self._inside(point)
+            self.extend(point)
+            return True
+        if event.action == 'release' and self._dragging:
+            self._dragging = False
+            return True
+        return False
+
+    def natural_width(self):
+        return max(self.columns + 2, Input.natural_width(self))
+
+    def control(self, width, height):
+        inked = self.cells()
+        color = self.theme.accent if self.focused else self.theme.border
+        lines = []
+        for y in range(self.rows):
+            row = ''
+            for x in range(self.columns):
+                char = self.ink if (x, y) in inked else ' '
+                if self.focused and (x, y) == self.pen:
+                    char = self.paint('+', 'reverse') if self._active() \
+                        else '+'
+                row += char
+            lines.append(row)
+        out = frame(lines, self.columns + 2, None, color, self.paint,
+                    style='heavy' if self.focused else 'rounded')
+        if self.focused:
+            state = 'pluma abajo' if self.pen_down else 'pluma arriba'
+            out.append(self.paint('{0} · espacio: pluma · x: borrar · '
+                                  '⌫: deshacer · c: limpiar'.format(state),
+                                  self.theme.muted))
         return out
