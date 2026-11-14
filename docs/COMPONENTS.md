@@ -185,6 +185,7 @@ change). Details: [IMAGES.md](IMAGES.md).
 | `CommentList` | A conversation: dicts with `author`, `when`, `text` and optional `replies` (indented below). |
 | `AttachmentList` | Files with an icon by type, name and size: `(name, size)` pairs or dicts with `name` and `size`. |
 | `Stat` | A KPI: label, big value, change against before (`delta`, a number or text; positive is green unless `invert=True`) and an optional trend sparkline (`trend` values). |
+| `StatusLine` | A one-line status bar (3.7.0): `left`, `center`, `right` (text or callables read every frame) and `kind` (`'info'`, `'success'`, `'warning'`, `'error'`), shown with its symbol (`✔`, `⚠`, `✖`) as well as its colour. Role `status`: `set(...)` and `message(text, kind)` announce the change to screen readers (at once for errors); `announce=False` keeps it quiet. |
 | `LineChart` | Lines on a braille canvas (2x4 dots per cell) with a y axis and x labels. `series` maps names to value lists (or is one list); `height` is in rows. Each series takes a colour from `colors`. |
 
 ### navigation
@@ -192,11 +193,11 @@ change). Details: [IMAGES.md](IMAGES.md).
 | Component | What it is |
 | --- | --- |
 | `Tabs` | Tabbed panes: `tabs` is a mapping (or pairs) of title to content. Left/Right (or 1-9) switch while the tab bar has the focus; the content's own components follow it in the focus order. `on_change(index)`. |
-| `Menu` | A vertical menu. `items`: labels, `(label, action)`, or dicts with `label`, `action`, `shortcut`, `icon`, `disabled`; `'-'` is a separator. Up/Down move (skipping separators and disabled items), Enter runs the action, a letter jumps to the item starting with it, and an item's `shortcut` runs it directly. `on_select(index, item)`. |
+| `Menu` | A vertical menu. `items`: labels, `(label, action)`, or dicts with `label`, `action`, `shortcut`, `icon`, `disabled`; `'-'` is a separator. Up/Down move (skipping separators and disabled items), Enter runs the action, a letter jumps to the item starting with it, and an item's `shortcut` runs it directly. `on_select(index, item)`. With more items than its height (or `max_visible`) it shows a window around the current item with `▲ n más` / `▼ n más` lines (`^` / `v` without colour; click them to page); PgUp/PgDn move a page, the wheel scrolls (3.7.0). |
 | `ContextMenu` | A :class:`Menu` in a framed popup: `open(app, position)` shows it, Escape or choosing an item closes it. |
 | `MenuButton` | A button that opens a :class:`ContextMenu` of `items` below it. |
 | `Pagination` | `‹ 1 … 4 [5] 6 … 20 ›` with the item range: Left/Right (or PgUp/PgDn) change page, Home/End jump. `on_change(page)`; pages count from 1. |
-| `Sidebar` | Navigation down the side: `sections` maps a heading to items (as in :class:`Menu`). `collapsed=True` (or Ctrl-B) shows only the icons. |
+| `Sidebar` | Navigation down the side: `sections` maps a heading to items (as in :class:`Menu`). `collapsed=True` (or Ctrl-B) shows only the icons. It keeps to the height it gets: a window around the current item with `▲` / `▼` lines, the title staying on top (3.7.0). |
 | `TopBar` | The bar across the top: `title` (and `breadcrumbs`) on the left, `actions` -- text or `(key, label)` pairs -- and `status` on the right. |
 | `Toolbar` | A row of :class:`Button` s (or `(label, action)` pairs): Left/Right move between them while one has focus; each keeps its own shortcut. |
 | `Wizard` | Steps with a stepper on top, the current step's content, and Back / Next / Finish buttons. `steps` are `(title, content)` pairs; `validate(index) -> error or None` guards Next; `on_finish()`. Ctrl-N / Ctrl-P move too. |
@@ -206,7 +207,8 @@ change). Details: [IMAGES.md](IMAGES.md).
 | `CommandPalette` | A search box over commands -- `(label, action)` pairs or dicts with `label`, `action`, `hint`, `keywords` -- matched by fuzzy subsequence, best first. Up/Down choose, Enter runs, Escape closes. Open it with `open(app)` (bind it to `ctrl+k` or `/`). |
 | `Split` | Two panes side by side (`direction='horizontal'`) or stacked (`'vertical'`), divided at `ratio`; Ctrl-Left/Right (Ctrl-Up/Down) move the divider. |
 | `Stack` | Children one below the other (`direction='vertical'`) or side by side (`'horizontal'`, equal widths unless `widths` given), with `gap`. A horizontal stack with `min_width` wraps onto more rows when its children would get narrower than that (four cards become 2 x 2, then a column). |
-| `VStack` | Children one below the other that share the height the stack gets (3.6.0): `weights` split the rows left over (0, the default, keeps a child's own height), `min_heights` / `max_heights` bound each child, `gap` separates them and `height` fixes the stack's height. When they need more rows than there are, it scrolls and follows the focus: when a component inside takes the focus, the child holding it comes into view (Tab reaches the ones out of view). Wheel and PgUp/PgDn scroll; `scrollbar` shows a bar while it scrolls. |
+| `GridView` | A `flexablelib.Grid` as a component (3.7.0): `children` and the grid's keywords (`columns`, `min_width`, `gap`, `border`...), `title` (drawn above) or `a11y_label` as its accessible name, `role` `'group'` unless given. `audit(width)` checks it and every component inside (role, label, focus shown without colour) and returns `AuditIssue` s. |
+| `VStack` | Children one below the other that share the height the stack gets (3.6.0): `weights` split the rows left over (0, the default, keeps a child's own height), `min_heights` / `max_heights` bound each child, `gap` separates them and `height` fixes the stack's height. When they need more rows than there are, it scrolls and follows the focus: when a component inside takes the focus, the child holding it comes into view (Tab reaches the ones out of view). Wheel and PgUp/PgDn scroll; `scrollbar` shows a bar while it scrolls. Without `weights`, children with `expand` (`DataTable(fill=True)`, `ScrollView`, `Sidebar`, `Tabs`) get weight 1 (3.7.0). |
 | `AppShell` | The frame of an application: `sidebar` on the left, `topbar` above the content, `content` the current page. `pages` maps sidebar labels to content, so choosing an item in the sidebar shows its page. The sidebar hides itself below `sidebar_below` columns (Ctrl-B shows it). |
 | `SortControl` | Choose the sort field and direction: Left/Right pick the field, Space or Enter flips ascending/descending. `on_change(field, descending)`. |
 
@@ -214,11 +216,12 @@ change). Details: [IMAGES.md](IMAGES.md).
 
 | Component | What it is |
 | --- | --- |
-| `DataTable` | An interactive table. Focused while empty, its `empty` text shows a `▸` (`>`) marker in reverse video. |
+| `DataTable` | An interactive table. Given a height (`height=`, or a slot such as a `VStack` child or the app body) it shows as many rows as fit and scrolls to keep the cursor in view; `visible_rows` is how many it showed. `fill=True` takes the whole slot with the status line at the bottom (3.7.0). Focused while empty, its `empty` text shows a `▸` (`>`) marker in reverse video. |
 | `FilterBar` | Filters typed as a query -- `estado:pagado total>1000 mérida` (`:` contains, `=` / `!=` equal, `>` `<` `>=` `<=` compare, a bare word searches every field) -- shown as chips below. `predicate` is the row filter; `table` (a :class:`DataTable`) is refreshed on every change. |
 | `EditableTable` | A :class:`DataTable` whose cells are edited in place: Left/Right choose the cell, Enter edits it (Enter saves, Escape cancels), Ctrl-N adds a row, Ctrl-D deletes the current one. Column `type` `'number'` keeps numbers. `on_edit(row, key, value)` runs after a change. With a `name` it is a field of the `Form` around it: `value` (a copy of the rows) goes into `Form.values()`. |
 | `CatalogGrid` | Items as cards in a grid that reflows with the width: dicts with `title`, `subtitle`, `price`, `badge`, `fields` and (3.6.0) `image` -- a path, URL, bytes or bitmap, with `image_alt` (the title by default). Arrows move, Enter or a click on the current card selects it: `selected` / `value` is the item and `on_select(item)` runs. Pictures take `image_height` rows (6 when any item has one), drawn with `image_method`; `image_headers` go with URL downloads. The current card has a heavy border and a `▸` marker. |
-| `Form` | Fields with labels, help and validation, laid out in `columns`, with submit / cancel buttons. `fields`: inputs, section titles (strings) or tuples of inputs for one row. Enter in a one-line field moves to the next; Ctrl-S (or the submit button) validates and calls `on_submit(values)`; Escape calls `on_cancel()`. `values()` is the `{name: value}` dict -- since 3.6.0 every named input also inside containers (`Stack`, `VStack`, `Tabs` including hidden tabs, `Wizard` steps, `Accordion` sections, grids, cards) and the rows of a named `EditableTable`; `fields()` lists the inputs the same way. `errors` the last validation. |
+| `Form` | Fields with labels, help and validation, laid out in `columns`, with submit / cancel buttons. `fields`: inputs, section titles (strings) or tuples of inputs for one row. Enter in a one-line field moves to the next; Ctrl-S (or the submit button) validates and calls `on_submit(values)`; Escape calls `on_cancel()`. `values()` is the `{name: value}` dict -- since 3.6.0 every named input also inside containers (`Stack`, `VStack`, `Tabs` including hidden tabs, `Wizard` steps, `Accordion` sections, grids, cards) and the rows of a named `EditableTable`; `fields()` lists the inputs the same way. `errors` the last validation. Responsive grid (3.7.0): `min_column_width` drops to fewer columns when they would be narrower; a field wrapped in `FormCell(field, span=n, min_width=w)` (or `form.set_layout(field, span, min_width)`) takes `n` columns, more when narrower than `w`; `grid_columns(width)` says how many columns there are. |
+| `FormCell` | A form field with its layout: `span` columns and `min_width` (3.7.0). |
 | `ValidationSummary` | The list of errors of a form: a `{field: message}` dict or (3.6.0) a list -- of messages, `(field, message)` pairs, dicts with `field` / `message` (or `name` / `error`) or exceptions. With `fields` (a `Form` or a list of inputs) or `on_select` it takes the focus: Up/Down choose an error, Enter or a click moves the focus to its field (by `name`, then `label`) and calls `on_select(field, input)`. `entries` are the `(field, message)` pairs, `messages` the texts. |
 | `LoginForm` | User and password, a "remember me" box and an Enter button. `on_login(user, password, remember)` returns True, or an error message shown above the fields. |
 | `FilePreview` | A file's name, size, date and -- for text -- its first lines, with code highlighting by extension. Images (and the first page of PDFs and SVGs when a renderer is installed) are drawn with `Image` in `max_lines` rows; `images=False` shows details only. Other binaries show their details only. |
@@ -244,6 +247,9 @@ change). Details: [IMAGES.md](IMAGES.md).
 
 The `flexablelib-tui` package adds `ScrollView`, `ProgressBar`, `Sparkline`,
 `BarChart`, `StatusBar`, `KeyHints`, `LogView`, `Screen` and `Live`.
+Since 3.7.0 `ScrollView` follows the focus: the component inside that takes
+it is scrolled into view (`follow_focus=True`, the default; `focus_rows()`
+tells where it is).
 
 ## What is not included, and why
 
