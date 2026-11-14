@@ -16,7 +16,8 @@ from .base import Button, Input, _Themed, frame, join_columns
 from .inputs import TextInput, PasswordInput, Checkbox
 
 __all__ = ['DataTable', 'FilterBar', 'EditableTable', 'CatalogGrid', 'Form',
-           'ValidationSummary', 'LoginForm', 'FilePreview', 'parse_query']
+           'FormCell', 'ValidationSummary', 'LoginForm', 'FilePreview',
+           'parse_query']
 
 
 def _cell_text(value, fmt=None):
@@ -67,9 +68,21 @@ class DataTable(_Themed):
     ``on_activate(row)``. ``filters`` are extra predicates (a
     :class:`FilterBar`'s ``predicate``). ``page_size`` pages instead of
     scrolling.
+
+    Height: given one (``height=``, or the slot of a layout that passes
+    it, such as :class:`VStack` or the app's body) the table shows as many
+    rows as fit and scrolls to keep the cursor in view; ``visible_rows`` is
+    how many it showed. ``fill=True`` makes it take its whole slot (a
+    :class:`VStack` then gives it the rows left over) with the status line
+    at the bottom.
     """
 
     focusable = True
+
+    @property
+    def visible_rows(self):
+        """Rows shown in the last frame."""
+        return self._rows_shown
     expand = True
     role = 'grid'
 
@@ -128,8 +141,11 @@ class DataTable(_Themed):
     def __init__(self, columns, rows=(), height=None, selectable=False,
                  on_activate=None, on_select=None, zebra=True,
                  page_size=None, status=True, empty='Sin registros',
-                 id_columns='auto', id_names=None, **kwargs):
+                 id_columns='auto', id_names=None, fill=False, **kwargs):
         super(DataTable, self).__init__(**kwargs)
+        self.fill = bool(fill)
+        if self.fill:
+            self.expand = True
         self.id_columns = id_columns
         self.id_names = id_names
         self.columns = [self._column(c, i) for i, c in enumerate(columns)]
@@ -444,6 +460,9 @@ class DataTable(_Themed):
             elif self.zebra and n % 2 and self._active():
                 line = self.paint(line, 'on #1c1c1c')
             out.append(line)
+        if self.fill and height:
+            # Fill the slot: the query and status lines stay at its bottom.
+            out.extend([''] * max(0, 2 + rows_h - len(out)))
         if self.typing or self.query:
             cur = self.cursor(' ') if self.typing else ''
             out.append(self.paint('/', self.theme.accent) + self.query + cur)
@@ -1046,6 +1065,20 @@ class ValidationSummary(_Themed):
                      self.paint)
 
 
+class FormCell(object):
+    """
+    A field of a :class:`Form` with its layout: ``span`` columns of the
+    form's grid (capped at the columns there are) and ``min_width``, the
+    narrowest it may be -- below that it takes more columns, up to the whole
+    row. The form keeps the field itself (``fields()``, ``values()``).
+    """
+
+    def __init__(self, field, span=1, min_width=None):
+        self.field = field
+        self.span = max(1, int(span))
+        self.min_width = None if min_width is None else max(1, int(min_width))
+
+
 class Form(_Themed):
     """
     Fields with labels, help and validation, laid out in ``columns``, with
@@ -1074,14 +1107,17 @@ class Form(_Themed):
 
     def __init__(self, fields, on_submit=None, on_cancel=None,
                  submit_label='Guardar', cancel_label='Cancelar', columns=1,
-                 title=None, summary=True, **kwargs):
+                 title=None, summary=True, min_column_width=None, **kwargs):
         super(Form, self).__init__(**kwargs)
         self.rows = []
+        self.layout = {}
         for item in fields:
             if isinstance(item, (tuple, list)):
-                self.rows.append(list(item))
+                self.rows.append([self._unwrap(f) for f in item])
             else:
-                self.rows.append([item])
+                self.rows.append([self._unwrap(item)])
+        self.min_column_width = None if min_column_width is None else \
+            max(1, int(min_column_width))
         self.on_submit = on_submit
         self.on_cancel = on_cancel
         self.columns = max(1, int(columns))
@@ -1099,6 +1135,26 @@ class Form(_Themed):
         for field in self.fields():
             if isinstance(field, TextInput) and field.on_submit is None:
                 field.on_submit = self._next_from(field)
+
+    def _unwrap(self, item):
+        if isinstance(item, FormCell):
+            self.layout[id(item.field)] = (item.span, item.min_width)
+            return item.field
+        return item
+
+    def set_layout(self, field, span=1, min_width=None):
+        """Give ``field`` ``span`` columns and a ``min_width``."""
+        self.layout[id(field)] = (max(1, int(span)), min_width)
+        self.refresh()
+
+    def grid_columns(self, width):
+        """How many columns the fields get at ``width``: ``columns``, fewer
+        when they would be narrower than ``min_column_width``."""
+        cols = self.columns
+        if self.min_column_width:
+            cols = min(cols, max(1, (width + 2) //
+                                 (self.min_column_width + 2)))
+        return max(1, cols)
 
     def _next_from(self, field):
         def advance(value):
@@ -1199,6 +1255,67 @@ class Form(_Themed):
             out.extend(ValidationSummary(self.errors, theme=self._theme,
                                          use_colors=self.use_colors)
                        .render(width=width).split('\n'))
+        if self.layout or self.min_column_width:
+            out.extend(self._draw_grid(width))
+        else:
+            out.extend(self._draw_rows(width))
+        buttons = self.submit_button.render(
+            width=self.submit_button.natural_width())
+        if self.cancel_button is not None:
+            buttons = self.cancel_button.render(
+                width=self.cancel_button.natural_width()) + '  ' + buttons
+        out.append(_fx.fit_line(buttons, width, 'r'))
+        return out
+
+    def _section(self, title, width):
+        return [self.paint(title, 'bold'),
+                self.paint('─' * width, self.theme.border)]
+
+    def _draw_grid(self, width):
+        """Responsive layout: ``grid_columns(width)`` columns, each field
+        taking its span (more when narrower than its ``min_width``)."""
+        cols = self.grid_columns(width)
+        each = (width - 2 * (cols - 1)) // cols
+
+        def span_width(n):
+            return each * n + 2 * (n - 1)
+        out = []
+        pending = []
+
+        def flush():
+            if not pending:
+                return
+            used = sum(n for _, n in pending)
+            widths = [span_width(n) for _, n in pending]
+            widths[-1] += width - (sum(widths) + 2 * (len(widths) - 1)) \
+                if used == cols else 0
+            blocks = [f.render(width=max(1, w)).split('\n')
+                      for (f, _), w in zip(pending, widths)]
+            out.extend(join_columns(blocks, widths, gap=2))
+            out.append('')
+            del pending[:]
+        for row in self.rows:
+            if len(row) == 1 and isinstance(row[0], str):
+                flush()
+                out.extend(self._section(row[0], width))
+                continue
+            if len(row) > 1:
+                flush()
+            for field in row:
+                span, low = self.layout.get(id(field), (1, None))
+                span = min(span, cols)
+                while low and span < cols and span_width(span) < low:
+                    span += 1
+                if sum(n for _, n in pending) + span > cols:
+                    flush()
+                pending.append((field, span))
+            if len(row) > 1:
+                flush()
+        flush()
+        return out
+
+    def _draw_rows(self, width):
+        out = []
         pending = []
 
         def flush():
@@ -1225,12 +1342,6 @@ class Form(_Themed):
             if len(pending) >= self.columns:
                 flush()
         flush()
-        buttons = self.submit_button.render(
-            width=self.submit_button.natural_width())
-        if self.cancel_button is not None:
-            buttons = self.cancel_button.render(
-                width=self.cancel_button.natural_width()) + '  ' + buttons
-        out.append(_fx.fit_line(buttons, width, 'r'))
         return out
 
 

@@ -17,7 +17,7 @@ _Enter = Key('enter')
 __all__ = ['Tabs', 'Menu', 'ContextMenu', 'MenuButton', 'Pagination',
            'Sidebar', 'TopBar', 'Toolbar', 'Wizard', 'Accordion',
            'Carousel', 'Tree', 'CommandPalette', 'Split', 'Stack',
-           'VStack', 'AppShell', 'SortControl', 'render_into']
+           'VStack', 'GridView', 'AppShell', 'SortControl', 'render_into']
 
 
 def render_into(child, width, height=None):
@@ -119,6 +119,58 @@ class Tabs(_Themed):
         return out
 
 
+def _window(comp, out, row, height):
+    """The rows of ``out`` that fit ``height``, kept around ``row`` (the
+    current item) with ``▲ n``/``▼ n`` lines saying how many are hidden
+    above and below; clickable spots move with the rows. ``comp.top`` is
+    the first row shown (kept between frames)."""
+    total = len(out)
+    if not height or total <= height:
+        comp.top = 0
+        return out
+    height = max(1, int(height))
+    top = max(0, min(getattr(comp, 'top', 0), total - 1))
+    for _ in range(3):
+        up = 1 if top > 0 and height > 2 else 0
+        room = height - up
+        down = 1 if top + room < total and height > 2 else 0
+        room -= down
+        room = max(1, room)
+        if row is not None:
+            if row < top:
+                top = row
+            elif row >= top + room:
+                top = row - room + 1
+        top = max(0, min(top, total - room))
+    up = 1 if top > 0 and height > 2 else 0
+    room = height - up
+    down = 1 if top + room < total and height > 2 else 0
+    room = max(1, room - down)
+    comp.top = top
+    shown = out[top:top + room]
+    arrows = ('^', 'v') if not comp._active() else ('▲', '▼')
+    lines = []
+    if up:
+        lines.append(comp.paint(' {0} {1} más'.format(arrows[0], top),
+                                comp.theme.muted))
+    lines.extend(shown)
+    if down:
+        lines.append(comp.paint(' {0} {1} más'.format(
+            arrows[1], total - top - room), comp.theme.muted))
+    if isinstance(comp._hot, list):
+        moved = []
+        for r, x0, x1, action in comp._hot:
+            if top <= r < top + room:
+                moved.append((r - top + up, x0, x1, action))
+        if up:
+            moved.append((0, 0, None, lambda: comp.scroll_items(-room)))
+        if down:
+            moved.append((len(lines) - 1, 0, None,
+                          lambda: comp.scroll_items(room)))
+        comp._hot = moved
+    return lines
+
+
 class Menu(_Themed):
     """
     A vertical menu. ``items``: labels, ``(label, action)``, or dicts with
@@ -126,6 +178,9 @@ class Menu(_Themed):
     separator. Up/Down move (skipping separators and disabled items), Enter
     runs the action, a letter jumps to the item starting with it, and an
     item's ``shortcut`` runs it directly. ``on_select(index, item)``.
+    With more items than the height it gets (or ``max_visible``) it shows
+    a window around the current item with ``▲ n más`` / ``▼ n más`` lines
+    (click them to page); PgUp/PgDn move a page and the wheel scrolls.
     """
 
     focusable = True
@@ -231,14 +286,34 @@ class Menu(_Themed):
         self.refresh()
         return True
 
+    _page = 5
+
+    def scroll_items(self, delta):
+        """Move the current item ``delta`` enabled items (a page)."""
+        step = 1 if delta > 0 else -1
+        for _ in range(abs(int(delta))):
+            before = self.index
+            self._step(step)
+            if (step > 0 and self.index < before) or \
+                    (step < 0 and self.index > before):
+                self.index = before
+                break
+        self.refresh()
+        return True
+
+    def handle_key(self, key):
+        k = str(key)
+        if k in ('pageup', 'pagedown', 'scrollup', 'scrolldown') and \
+                self.items and k not in self.bindings:
+            page = self._page if k.startswith('page') else 3
+            return self.scroll_items(page if k.endswith('down') else -page)
+        return super(Menu, self).handle_key(key)
+
     def draw(self, width, height):
         rows = self.max_visible or height or len(self.items)
-        if self.index < self.top:
-            self.top = self.index
-        if self.index >= self.top + rows:
-            self.top = self.index - rows + 1
+        self._page = max(1, rows - 2)
         out = []
-        for i in range(self.top, min(len(self.items), self.top + rows)):
+        for i in range(len(self.items)):
             item = self.items[i]
             if item.get('separator'):
                 out.append(self.paint('─' * width, self.theme.border))
@@ -262,7 +337,7 @@ class Menu(_Themed):
                     text = text[:-len(shortcut) - 1] + self.paint(
                         shortcut, self.theme.muted) + ' '
                 out.append(text)
-        return out
+        return _window(self, out, self.index, rows)
 
 
 class ContextMenu(Menu):
@@ -415,6 +490,8 @@ class Sidebar(Menu):
     """
     Navigation down the side: ``sections`` maps a heading to items (as in
     :class:`Menu`). ``collapsed=True`` (or Ctrl-B) shows only the icons.
+    It keeps to the height it gets: a window around the current item with
+    ``▲`` / ``▼`` lines, the title staying on top.
     """
 
     role = 'navigation'
@@ -456,12 +533,17 @@ class Sidebar(Menu):
         return super(Sidebar, self).on_key(key)
 
     def draw(self, width, height):
-        out = []
+        head = []
         if self.title and not self.collapsed:
-            out.append(self.paint(' ' + self.title, 'bold ' +
-                                  self.theme.accent))
-            out.append('')
+            head.append(self.paint(' ' + self.title, 'bold ' +
+                                   self.theme.accent))
+            head.append('')
+        self._hot_base = len(head)
+        out = []
+        current = None
         for i, item in enumerate(self.items):
+            if i == self.index:
+                current = len(out)
             if item.get('heading'):
                 if not self.collapsed:
                     out.append(self.paint(' ' + item['label'].upper(),
@@ -488,7 +570,20 @@ class Sidebar(Menu):
             elif item.get('disabled'):
                 text = self.paint(text, 'dim')
             out.append(text)
-        return out
+        rows = self.max_visible or (max(1, height - len(head)) if height
+                                    else None)
+        if rows:
+            self._page = max(1, rows - 2)
+        if isinstance(self._hot, list):
+            # _window works in the item rows' own coordinates.
+            self._hot = [(r - len(head), x0, x1, a)
+                         for r, x0, x1, a in self._hot]
+        lines = _window(self, out, current, rows)
+        if isinstance(self._hot, list):
+            self._hot = [(r + len(head), x0, x1, a)
+                         for r, x0, x1, a in self._hot]
+        self._hot_base = 0
+        return head + lines
 
 
 class TopBar(_Themed):
@@ -1366,8 +1461,9 @@ class VStack(_Themed):
     Children one below the other that share the height the stack gets.
 
     ``weights`` (one per child) split the rows left over: a child with
-    weight 0 (the default) keeps its own height, the others grow in
-    proportion. ``min_heights`` / ``max_heights`` (one per child, None for
+    weight 0 keeps its own height, the others grow in proportion. By
+    default (3.7.0) children with ``expand`` -- a ``DataTable(fill=True)``,
+    a ``ScrollView``, a ``Sidebar``, ``Tabs`` -- get weight 1, the rest 0. ``min_heights`` / ``max_heights`` (one per child, None for
     no limit) bound each one; ``gap`` puts blank rows between them and
     ``height`` fixes the stack's own height (otherwise it takes its slot's).
     When the children need more rows than there are, the stack scrolls and
@@ -1394,6 +1490,11 @@ class VStack(_Themed):
                 raise ValueError('{0} needs one value per child ({1})'
                                  .format(name, n))
             return values
+        if weights is None:
+            # Children that fill their slot (expand: tables with fill=True,
+            # scroll views, sidebars, tabs) share the rows left over.
+            weights = [1 if getattr(c, 'expand', False) else 0
+                       for c in self.items]
         self.weights = [max(0.0, float(w or 0))
                         for w in per_child(weights, 0, 'weights')]
         self.min_heights = [max(0, int(v or 0)) for v in
@@ -1533,6 +1634,92 @@ class VStack(_Themed):
             self.scroll(moves[k])
             return True
         return False
+
+_COMPONENT_KWARGS = ('theme', 'use_colors', 'bindings', 'disabled',
+                     'a11y_label', 'description', 'role', 'tab_index')
+
+
+class GridView(_Themed):
+    """
+    A :class:`flexablelib.Grid` as a component, with an accessible name and
+    role: ``children`` and every other keyword (``columns``, ``min_width``,
+    ``gap``, ``border``, ``column_widths``...) are the grid's; ``title``
+    (drawn above it, bold) or ``a11y_label`` names it for screen readers,
+    and ``role`` is ``'group'`` unless given. Its components keep their
+    focus order. :meth:`audit` checks the grid and everything inside it
+    (role, label, focus shown without colour) and returns
+    :class:`flexablelib_tui.accessibility.AuditIssue` s.
+    """
+
+    role = 'group'
+    expand = False
+
+    def __init__(self, children, title=None, **kwargs):
+        own = dict((k, kwargs.pop(k)) for k in _COMPONENT_KWARGS
+                   if k in kwargs)
+        super(GridView, self).__init__(**own)
+        self.items = list(children)
+        self.title = title
+        self.options = kwargs
+
+    def a11y_name(self):
+        if self.a11y_label:
+            return str(self.a11y_label)
+        return self.title or ''
+
+    def a11y_value(self):
+        return '{0} elementos'.format(len(self.items))
+
+    def children(self):
+        from flexablelib.layout import GridCell
+        kids = []
+        for item in self.items:
+            if isinstance(item, GridCell):
+                item = item.child
+            elif isinstance(item, tuple) and item:
+                item = item[0]
+            if item is not None and not isinstance(item, str):
+                kids.append(item)
+        return kids
+
+    def grid(self):
+        """The :class:`flexablelib.Grid` drawn."""
+        from flexablelib.layout import Grid
+        return Grid(self.items, **self.options)
+
+    def natural_width(self):
+        return _natural_width(self.grid())
+
+    def draw(self, width, height):
+        out = []
+        if self.title:
+            out.append(self.paint(self.title, 'bold'))
+        room = None if height is None else max(1, height - len(out))
+        grid = self.grid()
+        text = grid.render(width=width, height=room) if room else \
+            grid.render(width=width)
+        out.extend(text.split('\n') if text else [])
+        return out
+
+    def audit(self, width=40, check_focus=True):
+        """Accessibility problems of the grid and of every component in
+        it (see :func:`flexablelib_tui.accessibility.audit`)."""
+        from flexablelib_tui import accessibility as a11y
+        from flexablelib_tui.app import Component, _child_nodes
+        found = []
+        stack = list(reversed(self.children()))
+        seen = set()
+        while stack:
+            node = stack.pop()
+            if id(node) in seen:
+                continue
+            seen.add(id(node))
+            if isinstance(node, Component):
+                found.append(node)
+            stack.extend(reversed(_child_nodes(node)))
+        return a11y.audit([self] + found, width=width,
+                          check_focus=check_focus)
+
 
 class SortControl(_Themed):
     """
