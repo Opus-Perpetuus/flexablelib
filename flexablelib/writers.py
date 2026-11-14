@@ -59,6 +59,24 @@ def _plain(value: Any) -> str:
     return strip_ansi(str(value)) if value is not None else ''
 
 
+# Every character str.splitlines() breaks on. compose() starts a new line at
+# each of them, and so does a Markdown or AsciiDoc reader, so a single-line
+# format has to flatten all of them, not just '\n'.
+_LINE_BREAKS = re.compile('\r\n|[\n\r\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029]')
+
+
+def _one_line(text: str) -> str:
+    r"""
+    ``text`` with every line break turned into a space.
+
+    Only replacing ``'\n'`` left the ``'\r'`` of Windows line endings, and
+    a lone ``'\r'``, ``'\u2028'`` or form feed, in the output: a cell
+    holding ``'a\r\nb'`` split its Markdown row in two, so reading the
+    table back shifted every row after it.
+    """
+    return _LINE_BREAKS.sub(' ', text)
+
+
 def _view(table, include_index: bool):
     """
     The rows, columns and cell texts ``compose()`` would show.
@@ -327,7 +345,7 @@ def to_markdown(table, include_index: bool = False,
         return ''
 
     def cell(value):
-        return _plain(value).replace('|', '\\|').replace('\n', ' ')
+        return _one_line(_plain(value)).replace('|', '\\|')
 
     header_texts = [cell(header) for header in headers]
     row_texts = [[cell(value) for value in row] for row in view.text]
@@ -919,7 +937,7 @@ def to_rst(table, include_index: bool = False) -> str:
         return ''
 
     def cell(value):
-        return _plain(value).replace('\n', ' ')
+        return _one_line(_plain(value))
 
     header_texts = [cell(h) for h in headers]
     row_texts = [[cell(v) for v in row] for row in view.text]
@@ -962,7 +980,7 @@ def to_asciidoc(table, include_index: bool = False) -> str:
         return ''
 
     def cell(value):
-        return _plain(value).replace('|', '\\|').replace('\n', ' ')
+        return _one_line(_plain(value)).replace('|', '\\|')
 
     lines = ['|===', '| ' + ' | '.join(cell(h) for h in headers)]
     for row in view.text:
@@ -985,7 +1003,7 @@ def to_latex(table, include_index: bool = False) -> str:
         return ''
 
     def escape_tex(value):
-        text = _plain(value).replace('\n', ' ')
+        text = _one_line(_plain(value))
         out = []
         for ch in text:
             if ch == '\\':

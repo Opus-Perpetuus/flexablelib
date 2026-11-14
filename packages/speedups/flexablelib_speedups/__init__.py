@@ -6,7 +6,7 @@ directly: :mod:`flexablelib._frames` picks it up when it is installed and
 falls back to identical pure-Python code when it is not.
 """
 
-__version__ = '3.5.4'
+__version__ = '3.5.5'
 
 from . import _frames  # noqa: F401,E402
 
