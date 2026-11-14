@@ -108,6 +108,9 @@ in colour or plain text: the full list, what each does and its keys is in
 <tr>
 <td colspan="2"><b>New in 3.6.0</b> — signature pad, stopwatch, a vertical stack that shares its height and follows the focus, focus shown without colour, forms that collect nested fields and editable tables, scanners that keep the code read, catalog cards with pictures, pictures downloaded with an <code>Authorization</code> header, a validation summary from a list of errors<br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v36/01_novedades.png" alt="3.6.0 components: SignatureInput, Stopwatch, VStack, focus markers, ScanInput, CatalogGrid with images, ValidationSummary" width="520"></td>
 </tr>
+<tr>
+<td colspan="2"><b>New in 3.7.0</b> — scroll views that follow the focus, menus and sidebars that keep to their height, responsive form columns with spans, tables that fill their slot, an accessible grid with its own audit, a status line for screen readers<br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v36/02_novedades_370.png" alt="3.7.0 components: ScrollView following the focus, Menu and Sidebar windows, Form grid, DataTable fill, GridView, StatusLine" width="520"></td>
+</tr>
 </table>
 
 ### Keyboard, mouse and accessibility
