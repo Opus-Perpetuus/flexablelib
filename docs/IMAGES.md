@@ -96,6 +96,7 @@ browser (the warning instead of the link).
 | `caption` | `True` adds the alternative text (or file name) below, as a link |
 | `cell_size` | `(w, h)` in pixels, when detection cannot know it |
 | `focusable`, `on_open` | Enter, `o` or a click open the picture in the browser (or call `on_open(image)`); without a browser a notice and an announcement say why, and nothing is opened |
+| `headers` | a dict sent with an `http(s)://` download, e.g. `{'Authorization': 'Bearer <session token>'}` for pictures behind a login (3.6.0). `Authorization`, `Proxy-Authorization` and `Cookie` are not sent on to a redirect, and no header value appears in errors, warnings or screen-reader text. `ImageViewer(headers=)` and `CatalogGrid(image_headers=)` pass them on; `flexablelib._images.load(url, headers=...)` takes them too |
 
 `image.used_method` tells what the last render used. Sizes keep the
 proportions using the cell size in pixels (detected, or 10×20 assumed).
