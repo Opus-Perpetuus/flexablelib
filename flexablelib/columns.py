@@ -497,6 +497,36 @@ def _float_extents(cells: Union[list, tuple],
     )
 
 
+def _float_shrink_floor(cells: Union[list, tuple],
+                        skip_rows: frozenset = frozenset()) -> int:
+    """
+    Narrowest a float column can be drawn without changing a number.
+
+    The integer digits always stay, and so does all of a number written
+    with an exponent: :func:`_round_float_cell` never rounds one, so its
+    point and everything after it keep their width too. Counting only the
+    integer digits booked reductions the column could not give back, and
+    the table came out wider than ``max_width``.
+
+    Example::
+
+        _float_shrink_floor([9.651, 6.5e+16])  -> 7   # '6' + '.5e+16'
+    """
+    extents = _float_extents(cells, skip_rows)
+    floor = extents.left
+    for row_i, cell in enumerate(cells):
+        if row_i in skip_rows:
+            continue
+        parts = cell if is_some_instance(cell, tuple, list) else (cell,)
+        for part in parts:
+            text = str(part)
+            if EXP_FILTER(text) is None or FLT_FILTER(text) is None:
+                continue
+            _, point, right = text.partition(FLOAT_SEPARATOR)
+            floor = max(floor, extents.left + len(point) + visible_width(right))
+    return floor
+
+
 def _round_float_cell(cell: Any, decimals: int) -> Any:
     """
     Re-render one numeric cell with ``decimals`` digits after the point.
@@ -511,6 +541,7 @@ def _round_float_cell(cell: Any, decimals: int) -> Any:
         _round_float_cell(9.651, 2)   -> '9.65'
         _round_float_cell(245.7, 0)   -> '246'
         _round_float_cell(3, 2)       -> 3
+        _round_float_cell(0.5, 4)     -> 0.5
         _round_float_cell('n/a', 2)   -> 'n/a'
     """
     text = str(cell)
@@ -518,6 +549,13 @@ def _round_float_cell(cell: Any, decimals: int) -> Any:
         # An exponential says how big a number is, not how precise it is.
         # Rounding 1.5e-05 to two decimals writes 0.00, which is a different
         # claim entirely.
+        return cell
+
+    _, point, written = text.partition(FLOAT_SEPARATOR)
+    if point and len(written) <= max(decimals, 0):
+        # Already short enough. Formatting it anyway pads it with zeros:
+        # -0.5 came out as -0.50000000 when another cell set the budget,
+        # widening the column this is trying to narrow.
         return cell
 
     if decimals <= 0:
