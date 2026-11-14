@@ -2,6 +2,57 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.6.0] - 2026-11-13
+
+### Added
+- **`SignatureInput`**: a signature pad drawn with the mouse (press and
+  drag) or the keyboard (arrows move the pen, Space puts it down and lifts
+  it, `x` erases, Backspace undoes, `c` clears). `value` is the list of
+  strokes; `to_text()`, `to_bitmap(scale)` and `to_png(scale)` export it.
+- **`Stopwatch`**: a stopwatch input for forms -- start / stop (Space or
+  Enter), laps (`l`), reset (`r`); `value` is the elapsed
+  `datetime.timedelta`, `laps` the split times, `on_lap(split)`.
+- **`VStack`**: children one below the other sharing the stack's height by
+  `weights`, within `min_heights` / `max_heights`; when they do not fit it
+  scrolls and follows the focus (the child holding the focused component
+  comes into view; Tab reaches the ones out of view). Wheel and PgUp/PgDn
+  scroll it, with an optional scroll bar.
+- **`CatalogGrid` pictures**: items take an `image` (path, URL, bytes or
+  bitmap) and `image_alt`; `image_height`, `image_method` and
+  `image_headers` control them. Enter or a click on the current card sets
+  `selected` / `value`.
+- **Image downloads with headers**: `Image(headers=)`,
+  `ImageViewer(headers=)`, `CatalogGrid(image_headers=)` and
+  `_images.load(url, headers=)` send e.g. an `Authorization` bearer token.
+  `Authorization`, `Proxy-Authorization` and `Cookie` are not sent on to
+  redirects, and no header value appears in errors.
+- **`ValidationSummary` from a list**: messages, `(field, message)` pairs,
+  dicts with `field` / `message` or exceptions, besides the
+  `{field: message}` dict. With `fields` (a `Form` or inputs) or
+  `on_select` it takes the focus and Enter moves the focus to the field.
+  `entries` and `messages` list them.
+- **`EditableTable(name=)`** and its `value` (a copy of the rows), so a
+  `Form` collects it.
+
+### Changed
+- **`Form.values()` and `Form.fields()` reach nested fields**: inputs inside
+  containers (`Stack`, `VStack`, `Tabs` -- hidden tabs too --, `Wizard`
+  steps, `Accordion` sections, grids, cards) and named `EditableTable`s,
+  not only the top-level ones. Validation and "Enter moves to the next
+  field" reach them too.
+- **`ScanInput` keeps the code it read** (`keep_value=True`, the new
+  default): `value` and a `Form` still have it after the read, the next
+  read replaces it as soon as it starts typing, and Enter on the shown code
+  does not read it twice. `keep_value=False` restores the old behaviour of
+  clearing the field after every read. `last_code` is the latest code.
+- **Focus without colour**: a focused empty `DataTable`, an `Image` drawn as
+  text (alt text, `[alt]`, the warning) and the `ImageViewer` info line now
+  show a `▸` marker (`>` without colour or in ASCII mode) and reverse
+  video, not only a colour. A focused `CatalogGrid` card always has the
+  `▸` marker besides its heavy border.
+- Image download errors give the HTTP status or the reason
+  (`no se pudo descargar (HTTP 401)`) instead of the exception text.
+
 ## [3.5.5] - 2026-11-13
 
 ### Fixed

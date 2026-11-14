@@ -367,7 +367,7 @@ class TestOtherTextInputs:
         for c in 'P123#':
             press(s, c)
         press(s, 'enter')
-        assert codes == ['123'] and s.text == ''
+        assert codes == ['123'] and s.text == '123'   # 3.6.0: kept
         for c in '123':
             press(s, c)
         press(s, 'enter')          # duplicate within the window: dropped
