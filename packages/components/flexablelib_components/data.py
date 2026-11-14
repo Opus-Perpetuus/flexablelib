@@ -406,8 +406,16 @@ class DataTable(_Themed):
                 self.top = self.cursor_row - rows_h + 1
         shown = view[self.top:self.top + rows_h]
         if not view:
-            out.append(self.paint(_fx.fit_line(self.empty, width, 'c'),
-                                  self.theme.muted))
+            if self.focused:
+                # Focus on an empty table: a marker and reverse video, not
+                # only the accent colour of the rule above.
+                mark = '▸ ' if self._active() else '> '
+                text = _fx.fit_line(mark + self.empty, width, 'c')
+                out.append(self.paint(text, 'reverse') if self._active()
+                           else text)
+            else:
+                out.append(self.paint(_fx.fit_line(self.empty, width, 'c'),
+                                      self.theme.muted))
         for n, i in enumerate(shown):
             row = self.rows[i]
             pick = (lambda x, n=n: self._click_row(self.top + n, x))
@@ -559,17 +567,34 @@ class EditableTable(DataTable):
     A :class:`DataTable` whose cells are edited in place: Left/Right choose
     the cell, Enter edits it (Enter saves, Escape cancels), Ctrl-N adds a
     row, Ctrl-D deletes the current one. Column ``type`` ``'number'`` keeps
-    numbers. ``on_edit(row, key, value)`` runs after a change.
+    numbers. ``on_edit(row, key, value)`` runs after a change. With a
+    ``name`` the table is a field of the :class:`Form` around it (also
+    inside containers): its ``value`` -- a copy of the rows -- goes into
+    ``Form.values()`` under that name.
     """
 
-    def __init__(self, columns, rows=(), on_edit=None, **kwargs):
+    form_field = True
+
+    def __init__(self, columns, rows=(), on_edit=None, name=None, **kwargs):
         super(EditableTable, self).__init__(columns, rows, **kwargs)
         self.on_edit = on_edit
+        self.name = name
         self.cursor_col = 0
         self.editor = None
 
     def children(self):
         return []
+
+    @property
+    def value(self):
+        """The rows (a copy: each row a new dict or list)."""
+        return [dict(r) if isinstance(r, dict) else list(r)
+                for r in self.rows]
+
+    @value.setter
+    def value(self, rows):
+        self.rows = list(rows or [])
+        self.invalidate()
 
     def _set(self, row, ci, value):
         column = self.columns[ci]
@@ -693,8 +718,15 @@ class EditableTable(DataTable):
 class CatalogGrid(_Themed):
     """
     Items as cards in a grid that reflows with the width: dicts with
-    ``title``, ``subtitle``, ``price``, ``badge`` and ``fields``. Arrows
-    move, Enter calls ``on_select(item)``.
+    ``title``, ``subtitle``, ``price``, ``badge``, ``fields`` and
+    ``image`` (a path, URL, bytes or bitmap; ``image_alt`` its text
+    alternative, the title by default). Arrows move, Enter (or a click on
+    the current card) selects: ``selected`` / ``value`` is the item and
+    ``on_select(item)`` runs. Cards with pictures get ``image_height``
+    rows for them (6 by default when any item has one), drawn with
+    ``image_method`` (see :class:`Image`); ``image_headers`` go with URL
+    downloads (e.g. an ``Authorization`` token). The current card has a
+    heavy border and a ``▸`` marker, not only a colour.
     """
 
     focusable = True
@@ -712,21 +744,64 @@ class CatalogGrid(_Themed):
         return text
 
     def _click(self, i):
-        if i == self.index and self.on_select is not None:
-            self.on_select(self.items[i])
+        if i == self.index:
+            self.select(i)
         self.index = i
         return True
 
     def __init__(self, items, min_width=24, on_select=None, card_height=6,
+                 image_height=None, image_method=None, image_headers=None,
                  **kwargs):
         super(CatalogGrid, self).__init__(**kwargs)
         self.items = list(items)
         self.min_width = min_width
         self.on_select = on_select
         self.card_height = card_height
+        self.image_height = image_height
+        self.image_method = image_method
+        self.image_headers = image_headers
+        self.selected = None
         self.index = 0
         self.top_row = 0
         self._columns = 1
+        self._images = {}
+
+    @property
+    def value(self):
+        return self.selected
+
+    def select(self, i=None):
+        """Select item ``i`` (default: the current one)."""
+        if not self.items:
+            return False
+        if i is not None:
+            self.index = max(0, min(i, len(self.items) - 1))
+        self.selected = self.items[self.index]
+        if self.on_select is not None:
+            self.on_select(self.selected)
+        self.refresh()
+        return True
+
+    def _picture_rows(self):
+        if not any(item.get('image') is not None for item in self.items):
+            return 0
+        return 6 if self.image_height is None else max(0, self.image_height)
+
+    def _picture(self, item, width, rows):
+        source = item.get('image')
+        key = id(item)
+        cached = self._images.get(key)
+        if cached is None or cached[0] is not source:
+            from .media import Image
+            img = Image(source, alt=item.get('image_alt') or
+                        item.get('title'), method=self.image_method,
+                        headers=self.image_headers, theme=self._theme,
+                        use_colors=self.use_colors)
+            cached = self._images[key] = (source, img)
+        img = cached[1]
+        img.app = self.app
+        lines = img.render(width, rows).split('\n')
+        return lines[:rows] + [''] * (rows - len(lines))
 
     def natural_width(self):
         return self.min_width * 3 + 2
@@ -738,8 +813,8 @@ class CatalogGrid(_Themed):
                  'down': self._columns}
         if k in moves and n:
             self.index = max(0, min(n - 1, self.index + moves[k]))
-        elif k == 'enter' and n and self.on_select is not None:
-            self.on_select(self.items[self.index])
+        elif k == 'enter' and n:
+            self.select()
         elif k == 'home':
             self.index = 0
         elif k == 'end':
@@ -762,8 +837,14 @@ class CatalogGrid(_Themed):
                 self.paint(' ' + str(badge) + ' ', 'black on ' +
                            self.theme.warning) if self._active() else \
                 head + ' [' + str(badge) + ']'
-        if selected and self._marked():
+        if selected:
             head = ('▸ ' if self._active() else '> ') + head
+        pic_rows = self._picture_rows()
+        if pic_rows:
+            if item.get('image') is not None:
+                lines.extend(self._picture(item, inner, pic_rows))
+            else:
+                lines.extend([''] * pic_rows)
         lines.append(head)
         if item.get('subtitle'):
             lines.append(self.paint(_fx.truncate(str(item['subtitle']), inner,
@@ -776,19 +857,23 @@ class CatalogGrid(_Themed):
             text = '${0:,.2f}'.format(price) if isinstance(price, (int, float)) \
                 else str(price)
             lines.append(self.paint(text, 'bold ' + self.theme.success))
-        rows = self.card_height - 2
+        rows = self._card_rows() - 2
         lines = lines[:rows] + [''] * (rows - len(lines))
         color = self.theme.accent if selected else self.theme.border
         return frame([' ' + l for l in lines], width, None, color,
                      self.paint, style='heavy' if selected else 'rounded')
 
+    def _card_rows(self):
+        return self.card_height + self._picture_rows()
+
     def draw(self, width, height):
+        card_rows = self._card_rows()
         cols = max(1, (width + 1) // (self.min_width + 1))
         self._columns = cols
         card_w = (width - (cols - 1)) // cols
         n_rows = int(math.ceil(len(self.items) / float(cols)))
         visible_rows = n_rows if not height else max(1, height //
-                                                     self.card_height)
+                                                     card_rows)
         row_of = self.index // cols
         if row_of < self.top_row:
             self.top_row = row_of
@@ -804,7 +889,7 @@ class CatalogGrid(_Themed):
                     break
                 blocks.append(self._card(self.items[i], card_w,
                                          self.focused and i == self.index))
-                for k in range(self.card_height):
+                for k in range(card_rows):
                     self.hot(len(out) + k, lambda i=i: self._click(i),
                              c * (card_w + 1), c * (card_w + 1) + card_w)
             out.extend(join_columns(blocks, [card_w] * len(blocks)))
@@ -813,8 +898,41 @@ class CatalogGrid(_Themed):
         return out
 
 
+def _error_entries(errors):
+    """``[(field or None, message)]`` from a dict, a list of messages,
+    ``(field, message)`` pairs, dicts with ``field`` / ``message`` or
+    exceptions."""
+    if not errors:
+        return []
+    if isinstance(errors, dict):
+        return [(f, str(m)) for f, m in errors.items()]
+    if isinstance(errors, str):
+        return [(None, errors)]
+    out = []
+    for item in errors:
+        if isinstance(item, dict):
+            field = item.get('field', item.get('name'))
+            message = item.get('message', item.get('error', ''))
+            out.append((field, str(message)))
+        elif isinstance(item, (tuple, list)) and len(item) == 2:
+            out.append((item[0], str(item[1])))
+        else:
+            out.append((None, str(item)))
+    return out
+
+
 class ValidationSummary(_Themed):
-    """The list of errors of a form: ``{field: message}``."""
+    """
+    The list of errors of a form. ``errors``: a ``{field: message}`` dict or
+    a list -- of messages, ``(field, message)`` pairs, dicts with ``field``
+    and ``message`` (or ``name`` / ``error``) or exceptions. With
+    ``fields`` (a :class:`Form` or a list of inputs) or ``on_select`` the
+    summary takes the focus: Up/Down choose an error and Enter (or a click)
+    moves the focus to its field (found by ``name`` or ``label``) and calls
+    ``on_select(field, input)`` (``input`` None when not found). The
+    chosen error is shown with ``▸`` (``>`` without colour) as well as in
+    reverse video.
+    """
 
     role = 'alert'
 
@@ -822,20 +940,108 @@ class ValidationSummary(_Themed):
         return self.a11y_label or self.title
 
     def a11y_value(self):
-        return '; '.join('{0}: {1}'.format(f, m)
-                         for f, m in self.errors.items())
+        return '; '.join('{0}: {1}'.format(f, m) if f is not None else m
+                         for f, m in self.entries)
 
-    def __init__(self, errors=None, title='Revisa estos campos', **kwargs):
+    def __init__(self, errors=None, title='Revisa estos campos',
+                 fields=None, on_select=None, **kwargs):
         super(ValidationSummary, self).__init__(**kwargs)
-        self.errors = dict(errors or {})
         self.title = title
+        self.fields = fields
+        self.on_select = on_select
+        self.index = 0
+        self.errors = errors
+
+    @property
+    def errors(self):
+        """``{field: message}`` of the errors tied to a field."""
+        return dict((f, m) for f, m in self.entries if f is not None)
+
+    @errors.setter
+    def errors(self, value):
+        self.entries = _error_entries(value)
+        self.index = max(0, min(getattr(self, 'index', 0),
+                                len(self.entries) - 1))
+
+    @property
+    def messages(self):
+        """Every message, in order."""
+        return [m for f, m in self.entries]
+
+    @property
+    def focusable(self):
+        return bool(self.entries) and (self.fields is not None or
+                                       self.on_select is not None)
+
+    def _inputs(self):
+        fields = self.fields
+        if fields is None:
+            return []
+        if hasattr(fields, 'fields') and callable(fields.fields):
+            return list(fields.fields())
+        return list(fields)
+
+    def find(self, field):
+        """The input for ``field`` (by ``name``, then ``label``) or None."""
+        if field is None:
+            return None
+        for f in self._inputs():
+            if getattr(f, 'name', None) == field:
+                return f
+        for f in self._inputs():
+            if getattr(f, 'label', None) == field:
+                return f
+        return None
+
+    def activate(self, i=None):
+        """Go to the field of error ``i`` (default: the current one)."""
+        if not self.entries:
+            return False
+        if i is not None:
+            self.index = max(0, min(i, len(self.entries) - 1))
+        field = self.entries[self.index][0]
+        target = self.find(field)
+        if target is not None and self.app is not None:
+            self.app.focus(target)
+        if self.on_select is not None:
+            self.on_select(field, target)
+        self.refresh()
+        return True
+
+    def on_key(self, key):
+        k = str(key)
+        n = len(self.entries)
+        if not n:
+            return False
+        if k in ('up', 'down'):
+            step = 1 if k == 'down' else -1
+            self.index = max(0, min(n - 1, self.index + step))
+        elif k == 'home':
+            self.index = 0
+        elif k == 'end':
+            self.index = n - 1
+        elif k in ('enter', 'space'):
+            return self.activate()
+        else:
+            return False
+        self.refresh()
+        return True
 
     def draw(self, width, height):
-        if not self.errors:
+        if not self.entries:
             return []
         lines = [self.paint('✖ ' + self.title, 'bold ' + self.theme.error)]
-        for field, message in self.errors.items():
-            lines.append('  • {0}: {1}'.format(field, message))
+        for i, (field, message) in enumerate(self.entries):
+            text = '{0}: {1}'.format(field, message) if field is not None \
+                else message
+            if self.focused and i == self.index:
+                mark = '▸ ' if self._active() else '> '
+                line = ' ' + mark + text
+                line = self.paint(line, 'reverse') if self._active() else line
+            else:
+                line = '  • ' + text
+            self.hot(len(lines) + 1, lambda i=i: self.activate(i))
+            lines.append(line)
         return frame([' ' + l for l in lines], width, None, self.theme.error,
                      self.paint)
 
@@ -847,7 +1053,10 @@ class Form(_Themed):
     tuples of inputs for one row. Enter in a one-line field moves to the
     next; Ctrl-S (or the submit button) validates and calls
     ``on_submit(values)``; Escape calls ``on_cancel()``. ``values()`` is the
-    ``{name: value}`` dict; ``errors`` the last validation.
+    ``{name: value}`` dict -- every named input, also those inside
+    containers (:class:`Stack`, :class:`VStack`, :class:`Tabs`, grids,
+    cards...), and the rows of a named :class:`EditableTable`; ``errors``
+    the last validation.
     """
 
     role = 'form'
@@ -897,8 +1106,40 @@ class Form(_Themed):
                 self.app.focus_next()
         return advance
 
+    def _collect(self, node, out, depth=0):
+        """Inputs and named ``form_field`` components inside ``node``,
+        through containers (stacks, tabs, grids, cards...)."""
+        from flexablelib_tui.app import _child_nodes
+        if depth > 64:
+            return
+        kids = node.form_children() if hasattr(node, 'form_children') \
+            else _child_nodes(node)
+        for child in kids:
+            if isinstance(child, Input) or getattr(child, 'form_field',
+                                                   False):
+                out.append(child)
+            elif not isinstance(child, (Button, str)):
+                self._collect(child, out, depth + 1)
+
+    def form_nodes(self):
+        """Every field of the form, nested ones included -- also those in
+        hidden tabs, other wizard steps and closed accordion sections
+        (containers list them in ``form_children()``)."""
+        out = []
+        for row in self.rows:
+            for item in row:
+                if isinstance(item, str):
+                    continue
+                if isinstance(item, Input) or getattr(item, 'form_field',
+                                                      False):
+                    out.append(item)
+                else:
+                    self._collect(item, out)
+        return out
+
     def fields(self):
-        return [f for row in self.rows for f in row if isinstance(f, Input)]
+        """The inputs of the form, also those inside containers."""
+        return [f for f in self.form_nodes() if isinstance(f, Input)]
 
     def children(self):
         kids = [f for row in self.rows for f in row if not isinstance(f, str)]
@@ -912,7 +1153,8 @@ class Form(_Themed):
         return 60 if self.columns == 1 else 90
 
     def values(self):
-        return {f.name: f.value for f in self.fields() if f.name}
+        return {f.name: f.value for f in self.form_nodes()
+                if getattr(f, 'name', None)}
 
     def validate(self):
         self.errors = {}

@@ -105,6 +105,9 @@ in colour or plain text: the full list, what each does and its keys is in
 <td><b>Data</b> — interactive table, filters, editable table, catalog, forms, login<br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v33/12_datos.png" alt="Data components" width="420"></td>
 <td><b>Dialogs</b> — modal, confirm, prompt, loading, popover<br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v33/13_dialogos.png" alt="Dialog components" width="420"></td>
 </tr>
+<tr>
+<td colspan="2"><b>New in 3.6.0</b> — signature pad, stopwatch, a vertical stack that shares its height and follows the focus, focus shown without colour, forms that collect nested fields and editable tables, scanners that keep the code read, catalog cards with pictures, pictures downloaded with an <code>Authorization</code> header, a validation summary from a list of errors<br><img src="https://raw.githubusercontent.com/Opus-Perpetuus/flexablelib/main/docs/img/v36/01_novedades.png" alt="3.6.0 components: SignatureInput, Stopwatch, VStack, focus markers, ScanInput, CatalogGrid with images, ValidationSummary" width="520"></td>
+</tr>
 </table>
 
 ### Keyboard, mouse and accessibility
