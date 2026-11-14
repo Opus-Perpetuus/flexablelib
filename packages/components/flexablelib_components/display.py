@@ -20,7 +20,7 @@ __all__ = ['Badge', 'Tag', 'StatusBadge', 'Alert', 'Link', 'Breadcrumbs',
            'EmptyState', 'ErrorPanel', 'Spinner', 'Skeleton', 'Code',
            'highlight', 'MarkdownView', 'HtmlView', 'DetailView', 'Timeline',
            'Stepper', 'CommentList', 'AttachmentList', 'Stat', 'LineChart',
-           'human_size']
+           'StatusLine', 'human_size']
 
 
 def _wrap(text, width):
@@ -1274,3 +1274,88 @@ class LineChart(_Themed):
         return out
 
 
+
+
+class StatusLine(_Themed):
+    """
+    A one-line status bar with ``left``, ``center`` and ``right`` text
+    (strings or callables returning text, read on every frame). ``kind``
+    (``'info'``, ``'success'``, ``'warning'``, ``'error'``) colours it and
+    puts its symbol (``✔``, ``⚠``, ``✖``...) before the left text, so the
+    state never depends on colour alone. Its role is ``status``: with
+    ``announce=True`` (the default) :meth:`set` and :meth:`message` tell
+    screen readers about the change -- politely, or at once for errors.
+    """
+
+    role = 'status'
+
+    def __init__(self, left='', center='', right='', kind=None,
+                 announce=True, color=None, **kwargs):
+        super(StatusLine, self).__init__(**kwargs)
+        self.left = left
+        self.center = center
+        self.right = right
+        self.kind = kind
+        self.announce_changes = bool(announce)
+        self.color = color
+
+    @staticmethod
+    def _value(part):
+        part = part() if callable(part) else part
+        return '' if part is None else str(part)
+
+    def parts(self):
+        """``(left, center, right)`` as text."""
+        return (self._value(self.left), self._value(self.center),
+                self._value(self.right))
+
+    def a11y_name(self):
+        return str(self.a11y_label) if self.a11y_label else 'Estado'
+
+    def a11y_value(self):
+        text = ' · '.join(p for p in self.parts() if p)
+        if self.kind:
+            word = _a11y.status_symbol(self.kind, word=True).split(' ', 1)
+            if len(word) == 2 and word[1]:
+                text = word[1] + ': ' + text if text else word[1]
+        return text
+
+    def set(self, left=None, center=None, right=None, kind=False):
+        """Change some parts (and ``kind``; ``None`` clears it)."""
+        before = self.a11y_value()
+        if left is not None:
+            self.left = left
+        if center is not None:
+            self.center = center
+        if right is not None:
+            self.right = right
+        if kind is not False:
+            self.kind = kind
+        after = self.a11y_value()
+        if self.announce_changes and after and after != before:
+            self.announce(after, 'assertive' if self.kind == 'error'
+                          else 'polite')
+        self.refresh()
+        return True
+
+    def message(self, text, kind='info'):
+        """Show ``text`` on the left with ``kind``."""
+        return self.set(left=text, kind=kind)
+
+    def natural_width(self):
+        return sum(_fx.visible_width(p) + 2 for p in self.parts()) + 2
+
+    def draw(self, width, height):
+        left, center, right = self.parts()
+        if self.kind:
+            left = _a11y.status_symbol(self.kind) + ' ' + left
+        left, right = ' ' + left, right + ' ' if right else right
+        room = max(0, width - _fx.visible_width(left) -
+                   _fx.visible_width(right))
+        mid = _fx.fit_line(_fx.truncate(center, room, '…'), room, 'c')
+        line = _fx.fit_line(left + mid + right, width)
+        if not self._active():
+            return [line]
+        spec = self.color or ('black on ' + self.theme.kind(self.kind)
+                              if self.kind else 'reverse')
+        return [self.paint(line, spec)]

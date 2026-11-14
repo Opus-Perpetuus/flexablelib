@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.7.0] - 2026-11-13
+
+### Added
+- **`ScrollView` follows the focus** (`follow_focus=True`, the default):
+  when a component inside it takes the focus, its rows are scrolled into
+  view; scrolling by hand afterwards is left alone. `focus_rows(width)`
+  gives the rows of the focused component.
+- **`Menu` and `Sidebar` keep to their height**: with more items than fit,
+  a window around the current item with `▲ n más` / `▼ n más` lines (click
+  them to page); PgUp/PgDn move a page and the wheel scrolls. The sidebar
+  title stays on top.
+- **Responsive `Form` grid**: `min_column_width` drops to fewer columns when
+  they would be narrower; `FormCell(field, span=, min_width=)` and
+  `Form.set_layout()` give a field several columns, more when it would be
+  narrower than its minimum; `grid_columns(width)`.
+- **`DataTable(fill=True)`** takes its whole slot with the status line at
+  the bottom; `visible_rows` is how many rows the last frame showed.
+- **`GridView`**: a `flexablelib.Grid` as a component with an accessible
+  name (`title` / `a11y_label`) and role, and `audit()` for itself and
+  every component inside.
+- **`StatusLine`**: a one-line status bar with role `status`, a symbol per
+  kind besides the colour, and screen-reader announcements on change.
+
+### Changed
+- **`VStack` without `weights`** gives weight 1 to children that fill their
+  slot (`expand`: `DataTable(fill=True)`, `ScrollView`, `Sidebar`, `Tabs`),
+  so they share the rows left over; before, every child kept its own
+  height.
+- `Menu` with `max_visible` (or a height) now shows the `▲` / `▼` lines.
+
 ## [3.6.0] - 2026-11-13
 
 ### Added
