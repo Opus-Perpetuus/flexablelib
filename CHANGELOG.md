@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.5.5] - 2026-11-13
+
+### Fixed
+- **Line breaks in Markdown, reStructuredText, AsciiDoc and LaTeX exports**:
+  every break `compose()` and the readers honour (`\r\n`, a lone `\r`,
+  `\u2028`, `\u2029`, vertical tab, form feed, `\x85`, `\x1c`-`\x1e`) now
+  becomes a space, as `\n` already did. A cell with a Windows line ending
+  split its Markdown row in two, so `from_markdown()` read back extra rows
+  and shifted every column after it; the RST grid came out ragged.
+- **Fitting a float column to `max_width`** no longer pads its shorter
+  numbers with zeros: `-0.5` printed as `-0.50000000` when another number
+  in the column set the decimal budget.
+- **A number written with an exponent** (`6.01e+16`) counts whole towards
+  how narrow its column can go. Only its integer digits were counted, so
+  the reduction was booked against a column that could not give it back
+  and the other columns kept their decimals while the table stayed too
+  wide.
+
 ## [3.5.4] - 2026-11-13
 
 ### Fixed
