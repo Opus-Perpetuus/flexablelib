@@ -23,6 +23,7 @@ from .columns import (
     _align_columns,
     _align_headers,
     _float_extents,
+    _float_shrink_floor,
     _is_numeric_cell,
     _round_float_cell,
     TYPE_NAMES,
@@ -3347,8 +3348,10 @@ class Table(object):
             if type_name != TYPE_NAMES.float_ or column is None:
                 floor = MIN_COLUMN_SIZE
             else:
-                extents = _float_extents(column['data'], skip_rows)
-                floor = max(MIN_COLUMN_SIZE, extents.left)
+                floor = max(
+                    MIN_COLUMN_SIZE,
+                    _float_shrink_floor(column['data'], skip_rows),
+                )
             lo = self.__bound_for_column(
                 self.__column_min_width, header, user_i
             )
