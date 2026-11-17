@@ -1840,6 +1840,16 @@ class SignatureInput(Input):
         return strokes
 
     @property
+    def value(self):
+        # A copy: what a Form collected (or on_change got) does not change
+        # as the user keeps drawing.
+        return [list(stroke) for stroke in self._value]
+
+    @value.setter
+    def value(self, new):
+        self._value = self.coerce(new)
+
+    @property
     def strokes(self):
         return self._value
 
@@ -1891,6 +1901,9 @@ class SignatureInput(Input):
 
     def erase(self, point):
         point = self._inside(point)
+        # Erasing lifts the pen: moving on must not join what is left of
+        # the stroke (or the one before it) to the pen with a line.
+        self.pen_down = False
         kept = []
         for stroke in self._value:
             rest = [p for p in stroke if p != point]
