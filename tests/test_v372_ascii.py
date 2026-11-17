@@ -67,3 +67,54 @@ class TestAsciiFold:
             frame = strip_ansi(app.render(70, 4))
         assert '00:00' in frame
         assert frame.isascii(), [ch for ch in frame if not ch.isascii()]
+
+
+class TestMarksReference:
+    """The pure-Python mark extraction (used without the C package) on
+    nested, unclosed and malformed marks, checked against the C one."""
+
+    CASES = [
+        F.mark_open(1) + 'ab' + F.MARK_CLOSE + 'cd',
+        F.mark_open(1) + 'a' + F.mark_open(2) + '中' + F.MARK_CLOSE + 'b',
+        F.mark_open(3) + 'unclosed',
+        F.mark_open(4) + 'x' + F.mark_open(5) + 'y',
+        'a' + F.MARK_CLOSE + 'b',                   # close with no open
+        '\x1b]8970;x1\x07plain',                    # ident not a number
+        '\x1b]8970;1234567890\x07ten digits',       # ident too long
+        '\x1b]8970;12 no terminator',
+        '\x1b[31m' + F.mark_open(7) + 'red' + F.MARK_CLOSE + '\x1b[0m',
+    ]
+
+    def test_regions(self):
+        py = F._PYTHON['extract_marks']
+        clean, regions = py([self.CASES[1]])
+        assert clean == ['a中b']
+        assert sorted(regions) == [(1, 0, 0, 4, 0), (2, 0, 1, 3, 1)]
+        clean, regions = py([self.CASES[3]])
+        assert clean == ['xy']
+        assert sorted(regions) == [(4, 0, 0, 2, 0), (5, 0, 1, 2, 1)]
+        clean, regions = py([self.CASES[5]])
+        assert clean == ['plain'] and regions == []
+
+    def test_c_matches(self):
+        if not F.available():
+            pytest.skip('speedups not built')
+        for line in self.CASES:
+            assert F._C['extract_marks']([line, 'x', line]) == \
+                F._PYTHON['extract_marks']([line, 'x', line]), repr(line)
+
+
+class TestExpandGraphics:
+    def test_without_marks_unchanged(self):
+        assert F.expand_graphics('plain') == 'plain'
+
+    def test_finds_the_module_again_after_a_reload(self, monkeypatch):
+        import sys
+        import types
+        line = F.GRAPHICS_MARK + '1\x07'
+        monkeypatch.setattr(F, '_graphics_expander', None)
+        fake = types.SimpleNamespace(expand=lambda text: 'EXPANDED')
+        monkeypatch.setitem(sys.modules, 'flexablelib_tui.graphics', fake)
+        assert F.expand_graphics(line) == 'EXPANDED'
+        monkeypatch.delitem(sys.modules, 'flexablelib_tui.graphics')
+        assert F.expand_graphics(line) == line
