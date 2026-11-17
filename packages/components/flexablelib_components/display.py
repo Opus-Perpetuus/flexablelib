@@ -1276,6 +1276,9 @@ class LineChart(_Themed):
 
 
 
+_LINE_BREAKS = re.compile('[\t\n\v\f\r\x1c-\x1e\x85\u2028\u2029]+')
+
+
 class StatusLine(_Themed):
     """
     A one-line status bar with ``left``, ``center`` and ``right`` text
@@ -1302,7 +1305,8 @@ class StatusLine(_Themed):
     @staticmethod
     def _value(part):
         part = part() if callable(part) else part
-        return '' if part is None else str(part)
+        # One line: line breaks and tabs in a part become spaces.
+        return '' if part is None else _LINE_BREAKS.sub(' ', str(part))
 
     def parts(self):
         """``(left, center, right)`` as text."""
@@ -1350,8 +1354,13 @@ class StatusLine(_Themed):
         if self.kind:
             left = _a11y.status_symbol(self.kind) + ' ' + left
         left, right = ' ' + left, right + ' ' if right else right
-        room = max(0, width - _fx.visible_width(left) -
-                   _fx.visible_width(right))
+        right_w = _fx.visible_width(right)
+        if right and _fx.visible_width(left) + right_w > width and \
+                width - right_w >= 4:
+            # Too long: the left text gives way so the right one (often a
+            # position or a count) stays in view.
+            left = _fx.truncate(left, width - right_w - 1, '…') + ' '
+        room = max(0, width - _fx.visible_width(left) - right_w)
         mid = _fx.fit_line(_fx.truncate(center, room, '…'), room, 'c')
         line = _fx.fit_line(left + mid + right, width)
         if not self._active():

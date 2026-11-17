@@ -750,22 +750,38 @@ def read_source(source, timeout=5.0, max_bytes=64 * 1024 * 1024,
         return source.read(), getattr(source, 'name', None)
     path = os.fspath(source)
     if path.startswith(('http://', 'https://')):
+        from http.client import InvalidURL
+        from urllib.error import URLError
         from urllib.request import Request, urlopen
         try:
             req = Request(path, headers={'User-Agent': 'flexablelib'})
             for name, value in (headers or {}).items():
-                if str(name).lower() in _PRIVATE_HEADERS:
-                    req.add_unredirected_header(str(name).capitalize(),
-                                                str(value))
+                # A token read from a file keeps its newline: HTTP trims
+                # the spaces around a value anyway.
+                name, value = str(name).strip(), str(value).strip()
+                if name.lower() in _PRIVATE_HEADERS:
+                    req.add_unredirected_header(name.capitalize(), value)
                 else:
-                    req.add_header(str(name), str(value))
+                    req.add_header(name, value)
             with urlopen(req, timeout=timeout) as resp:
                 data = resp.read(max_bytes + 1)
         except Exception as error:
             code = getattr(error, 'code', None)
-            reason = 'HTTP {0}'.format(code) if isinstance(code, int) else \
-                (getattr(error, 'reason', None) or error)
-            raise ImageError('no se pudo descargar ({0})'.format(reason))
+            if isinstance(code, int):
+                reason = 'HTTP {0}'.format(code)
+            elif isinstance(error, URLError):
+                reason = error.reason
+            elif isinstance(error, InvalidURL):
+                reason = 'URL no válida'
+            elif isinstance(error, OSError):
+                reason = str(error) or type(error).__name__
+            elif isinstance(error, ValueError):
+                # http.client quotes the offending header (a token, say).
+                reason = 'cabecera no válida'
+            else:
+                reason = type(error).__name__
+            raise ImageError('no se pudo descargar ({0})'.format(reason)) \
+                from None
         if len(data) > max_bytes:
             raise ImageError('imagen demasiado grande')
         return data, path
