@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.7.2] - 2026-11-17
+
+### Fixed
+- **Damaged or hostile images** read by the built-in decoders (PNG, GIF,
+  BMP, PNM -- used without Pillow, or when Pillow gives up on one of
+  those formats): a bad pixel token, a cut header, a palette or block that
+  points past the data, an unknown bit depth or interlace method now
+  raise `ImageError` (they could raise `ValueError`, `IndexError` or
+  `struct.error`). A header that asks for more than `MAX_PIXELS` pixels
+  (Pillow's limit), or for more pixel data than the file holds, is
+  refused before any memory is set aside -- a few bytes could ask for
+  gigabytes and end the process. The C `unfilter` raises `ImageError`
+  like the Python one, also for a row of zero bytes, and the Python
+  `quantize` refuses an empty or short image like the C one.
+- **ASCII mode** (`FLEXABLELIB_ASCII=1`): the erase-key, info, plus,
+  stopwatch, pause, stop, record, refresh and diagonal-arrow symbols used
+  in help lines and status texts get one-column ASCII stand-ins
+  (`SignatureInput` showed `⌫`, `Stopwatch` its clock).
+- **Table titles, subtitles and captions** longer than the width the
+  table has to fit into (`max_width` or the terminal) wrap at spaces
+  instead of running past it, never narrower than the table itself; in
+  card mode they keep to the width the cards are rendered at.
+- **`too_narrow_message`** is also shown when the drawn table is still
+  wider than the space (a float column keeps the digits in front of its
+  point), with `{needed}` the width it took; the overflowing table was
+  returned before.
+
+### Tests
+- The suite starts every test with `NO_COLOR` and `FORCE_COLOR` unset, so
+  it gives the same result whatever the shell exports and no test leaks
+  colour into the next.
+
 ## [3.7.1] - 2026-11-16
 
 ### Fixed

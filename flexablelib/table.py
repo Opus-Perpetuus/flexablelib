@@ -2148,6 +2148,9 @@ class Table(object):
         A table squeezed far below the width of its own data wraps every cell
         to a couple of characters and becomes unreadable. Setting a message
         says so plainly instead. None, the default, renders the table anyway.
+        The message is also shown when the table, once drawn, is still wider
+        than the space -- the digits in front of a decimal point are never
+        cut -- with ``{needed}`` the width it took.
 
         The message may use ``{needed}`` and ``{available}`` placeholders::
 
@@ -3149,9 +3152,21 @@ class Table(object):
 
         # A table with no columns has nothing to number: the index column
         # alone would have no cells, so it is drawn as without the index.
-        return self.__form_string(
+        table_string = self.__form_string(
             table_with_i=self.__show_index and len(self.__columns) != 0
         )
+        if self.__too_narrow_message is not None and len(self.__columns):
+            # Numbers are never cut, so a table whose columns could each
+            # shrink to the minimum can still come out wider than the space:
+            # the caller asked to be told rather than get it overflowing.
+            available = self.__available_width()
+            drawn = max((visible_width(line)
+                         for line in table_string.split('\n')), default=0)
+            if drawn > available:
+                return self.__too_narrow_message.format(
+                    needed=drawn, available=available
+                )
+        return table_string
 
     def __get_string_table_width(self) -> int:
         """
@@ -4721,14 +4736,27 @@ class Table(object):
             lines.append(self.__aligned_label(text, table_width, spec))
         return '\n'.join(lines)
 
-    def __aligned_label(self, text, table_width, spec=None):
-        """Place ``text`` left/centre/right over ``table_width`` columns."""
+    def __aligned_label(self, text, table_width, spec=None, limit=None):
+        """
+        Place ``text`` left/centre/right over ``table_width`` columns; a line
+        wider than ``limit`` (by default the table width or the width the
+        table has to fit into, whichever is more) is wrapped.
+        """
         text = expand_tabs(str(text), TAB_SIZE)
         if '\n' in text:
             # Every line is placed on its own; aligning the block as a whole
             # left the lines after the first at column 0.
-            return '\n'.join(self.__aligned_label(line, table_width, spec)
+            return '\n'.join(self.__aligned_label(line, table_width, spec,
+                                                   limit)
                              for line in text.split('\n'))
+        if limit is None:
+            limit = self.__label_limit(table_width)
+        if visible_width(text) > limit:
+            # Wider than the table and than the width it must fit into: it
+            # wraps (at spaces when it can) instead of running past it.
+            return '\n'.join(self.__aligned_label(line, table_width, spec,
+                                                   limit)
+                             for line in wrap_to_width(text, max(1, limit)))
         if spec and self.__colors_active:
             text = colorize(text, spec)
         width = visible_width(text)
@@ -4740,6 +4768,13 @@ class Table(object):
         if align == 'r':
             return ' ' * (table_width - width) + text
         return ' ' * ((table_width - width) // 2) + text
+
+    def __label_limit(self, table_width):
+        """
+        Widest a title, subtitle or caption line may be: the table's own
+        width, or the width it has to fit into when that is more.
+        """
+        return max(1, table_width, self.__body_width())
 
     def __inset_border_labels(self, table_string, head, tail):
         """
@@ -4886,8 +4921,15 @@ class Table(object):
         if not self.__caption or self.__caption_position == 'border':
             return None
         table_width = drawn_width or self.__get_string_table_width()
-        lines = []
+        limit = self.__label_limit(table_width)
+        captions = []
         for caption in expand_tabs(self.__caption, TAB_SIZE).split('\n'):
+            if visible_width(caption) > limit:
+                captions.extend(wrap_to_width(caption, limit))
+            else:
+                captions.append(caption)
+        lines = []
+        for caption in captions:
             caption_width = visible_width(caption)
             if caption_width >= table_width:
                 lines.append(caption)
@@ -6532,10 +6574,10 @@ class Table(object):
         lines = []
         if self.__title:
             lines.append(self.__aligned_label(self.__title, width,
-                                              self.__title_color))
+                                              self.__title_color, width))
         if self.__subtitle:
             for line in self.__subtitle.split('\n'):
-                lines.append(self.__aligned_label(line, width, 'dim'))
+                lines.append(self.__aligned_label(line, width, 'dim', width))
         if cards:
             min_width = opts.get('min_width')
             if min_width is None:
@@ -6545,7 +6587,8 @@ class Table(object):
                         min_width=min(int(min_width), width))
             lines.append(grid.render(width=width))
         if self.__caption:
-            lines.append(self.__aligned_label(self.__caption, width))
+            lines.append(self.__aligned_label(self.__caption, width,
+                                              limit=width))
         out = '\n'.join(lines)
         if not self.__colors_active:
             out = strip_ansi(out)
