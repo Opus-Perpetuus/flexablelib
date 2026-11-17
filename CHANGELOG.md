@@ -2,6 +2,42 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.7.1] - 2026-11-16
+
+### Fixed
+- **`Form` at narrow widths**: with `columns` (or a tuple row) wider than
+  the form, drawing raised `ValueError: width must be >= 1`; fields that
+  do not get a cell each now stack below, and `grid_columns(width)` never
+  gives more columns than get one cell.
+- **`CatalogGrid`** with `card_height` under 3 (0 divided by zero when a
+  height was given) or `min_width` under 1 (-1 divided by zero): a card
+  keeps its border and a line inside.
+- **`SignatureInput`**: erasing (`x` / Delete) with the pen down and then
+  moving joined what was left of the drawing to the pen with a line nobody
+  drew; erasing now lifts the pen. `value` is a copy, so what a `Form`
+  collected (or `on_change` got) no longer changes as the user keeps
+  drawing.
+- **`Stopwatch`** numbers its laps by lap also when `max_laps` dropped the
+  first ones (laps 8-10 were shown as 1-3).
+- **`Menu` / `Sidebar`**: a `max_visible` larger than the height they are
+  drawn in hid the current item (the window was cut at the bottom); a
+  sidebar too short for its title and an item keeps the item.
+- **`VStack`**: when the child holding the focus is taller than the view,
+  the focused component inside it is scrolled into view, not the child's
+  first rows; a `height` larger than the slot keeps to the slot (it was
+  cut off, losing the focus); a growing child left without rows keeps one
+  instead of vanishing while Tab could still land on it.
+- **`DataTable`** with a `page_size` taller than its slot scrolls inside
+  the page, so the cursor row stays in view (it could be cut off).
+- **`StatusLine`** stays on one line: line breaks and tabs in its parts
+  become spaces (a newline drew a second line). A long left text now gives
+  way (`…`) so the right one stays in view.
+- **Image downloads with headers**: an invalid header value (a token with a
+  line break) was quoted in the error text shown on screen; now the error
+  says `cabecera no válida`, never the value, and the original exception
+  is not chained. Spaces and a trailing newline around header values (a
+  token read from a file) are trimmed.
+
 ## [3.7.0] - 2026-11-13
 
 ### Added
