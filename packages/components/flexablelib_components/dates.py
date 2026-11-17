@@ -991,6 +991,7 @@ class Stopwatch(Input):
         self.precision = max(0, min(3, int(precision)))
         self.max_laps = max_laps
         self.laps = []
+        self._lap_count = 0
         self._accum = 0.0
         self._since = None
         super(Stopwatch, self).__init__(label=label, value=value, **kwargs)
@@ -1050,6 +1051,7 @@ class Stopwatch(Input):
             return False
         split = self.value
         self.laps.append(split)
+        self._lap_count += 1
         if self.max_laps:
             del self.laps[:-int(self.max_laps)]
         if self.on_lap is not None:
@@ -1061,6 +1063,7 @@ class Stopwatch(Input):
         self._accum = 0.0
         self._since = self.clock() if self._since is not None else None
         self.laps = []
+        self._lap_count = 0
         if self.on_change is not None:
             self.on_change(self.value)
         self.refresh()
@@ -1121,7 +1124,13 @@ class Stopwatch(Input):
                                ' · l: vuelta · r: reiniciar',
                                self.theme.muted)
         out = [line]
-        for n, split in enumerate(self.laps[-5:], max(1, len(self.laps) - 4)):
+        shown = self.laps[-5:]
+        # Numbered by lap, also when max_laps dropped the first ones (and
+        # when laps was set from code).
+        total = len(self.laps)
+        if self.max_laps and self._lap_count > total:
+            total = self._lap_count
+        for n, split in enumerate(shown, total - len(shown) + 1):
             out.append('   {0:>2}. {1}'.format(n, self.format_duration(
                 split.total_seconds(), self.precision)))
         return out
