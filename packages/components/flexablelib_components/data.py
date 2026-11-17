@@ -405,7 +405,12 @@ class DataTable(_Themed):
         extra = (1 if self.status else 0) + (1 if self.typing or self.query
                                              else 0)
         rows_h = self.height or (height - 2 - extra if height else None)
+        room = None
         if self.page_size:
+            # A page taller than the slot scrolls inside the page, so the
+            # cursor row stays on screen.
+            room = max(1, rows_h) if rows_h is not None and \
+                rows_h < self.page_size else None
             rows_h = self.page_size
         if rows_h is None:
             rows_h = len(view)
@@ -414,13 +419,27 @@ class DataTable(_Themed):
         self.cursor_row = max(0, min(self.cursor_row, len(view) - 1))
         if self.page_size:
             self.page = self.cursor_row // self.page_size + 1
-            self.top = (self.page - 1) * self.page_size
+            start = (self.page - 1) * self.page_size
+            if room is None:
+                self.top = start
+            else:
+                end = min(len(view), start + self.page_size)
+                top = max(start, min(self.top, end - room))
+                if self.cursor_row < top:
+                    top = self.cursor_row
+                elif self.cursor_row >= top + room:
+                    top = self.cursor_row - room + 1
+                self.top = max(start, top)
+                rows_h = room
         else:
             if self.cursor_row < self.top:
                 self.top = self.cursor_row
             if self.cursor_row >= self.top + rows_h:
                 self.top = self.cursor_row - rows_h + 1
-        shown = view[self.top:self.top + rows_h]
+        stop = self.top + rows_h
+        if self.page_size:
+            stop = min(stop, (self.page) * self.page_size)
+        shown = view[self.top:stop]
         if not view:
             if self.focused:
                 # Focus on an empty table: a marker and reverse video, not
@@ -883,11 +902,13 @@ class CatalogGrid(_Themed):
                      self.paint, style='heavy' if selected else 'rounded')
 
     def _card_rows(self):
-        return self.card_height + self._picture_rows()
+        # A card is at least its border and one line inside.
+        return max(3, (self.card_height or 0) + self._picture_rows())
 
     def draw(self, width, height):
         card_rows = self._card_rows()
-        cols = max(1, (width + 1) // (self.min_width + 1))
+        step = max(1, (self.min_width or 0) + 1)
+        cols = max(1, (width + 1) // step)
         self._columns = cols
         card_w = (width - (cols - 1)) // cols
         n_rows = int(math.ceil(len(self.items) / float(cols)))
@@ -1154,6 +1175,8 @@ class Form(_Themed):
         if self.min_column_width:
             cols = min(cols, max(1, (width + 2) //
                                  (self.min_column_width + 2)))
+        # Never more columns than get one cell each.
+        cols = min(cols, (width + 2) // 3)
         return max(1, cols)
 
     def _next_from(self, field):
@@ -1321,11 +1344,16 @@ class Form(_Themed):
         def flush():
             if not pending:
                 return
-            n = len(pending)
-            each = (width - 2 * (n - 1)) // n
-            blocks = [p.render(width=each).split('\n') for p in pending]
-            out.extend(join_columns(blocks, [each] * n, gap=2))
-            out.append('')
+            # At most as many side by side as get one cell each: a narrow
+            # form stacks the rest below instead of failing.
+            fit = max(1, (width + 2) // 3)
+            for start in range(0, len(pending), fit):
+                chunk = pending[start:start + fit]
+                n = len(chunk)
+                each = (width - 2 * (n - 1)) // n
+                blocks = [p.render(width=each).split('\n') for p in chunk]
+                out.extend(join_columns(blocks, [each] * n, gap=2))
+                out.append('')
             del pending[:]
         for row in self.rows:
             if len(row) == 1 and isinstance(row[0], str):
