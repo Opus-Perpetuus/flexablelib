@@ -194,3 +194,19 @@ class TestBackendParity:
 
     def test_image_error_is_a_value_error(self):
         assert issubclass(I.ImageError, ValueError)
+
+
+class TestDecoderEdges:
+    def test_png_bad_zlib_stream(self, backend, no_pillow):
+        data = _png(1, 1, b'\x00' + bytes(3))
+        start = data.index(b'IDAT') + 4
+        broken = data[:start] + b'\xff\xff\xff' + data[start + 3:]
+        with pytest.raises(I.ImageError, match='PNG dañado'):
+            I.decode(broken)
+
+    def test_gif_frame_past_the_canvas_is_clipped(self, backend, no_pillow):
+        # A 1x1 canvas with a 2x2 frame placed at (0, 0): only the corner
+        # pixel lands; the rest is outside and skipped.
+        data = _gif(1, 1, frame=(2, 2))
+        bitmap = I.decode(data)
+        assert bitmap.size == (1, 1)
