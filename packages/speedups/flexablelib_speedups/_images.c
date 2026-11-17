@@ -62,6 +62,20 @@ static int buf_int(Buf *b, long v)
 /* ------------------------------------------------------------------ */
 /* unfilter                                                            */
 
+/* Raise flexablelib._images.ImageError (a ValueError) with a message, the
+   same exception the Python implementation raises. */
+static void
+set_image_error(const char *message)
+{
+    PyObject *mod = PyImport_ImportModule("flexablelib._images");
+    PyObject *cls = mod ? PyObject_GetAttrString(mod, "ImageError") : NULL;
+    Py_XDECREF(mod);
+    if (cls) {
+        PyErr_SetString(cls, message);
+        Py_DECREF(cls);
+    }
+}
+
 static PyObject *
 img_unfilter(PyObject *self, PyObject *args)
 {
@@ -81,6 +95,14 @@ img_unfilter(PyObject *self, PyObject *args)
     for (Py_ssize_t r = 0; r < rows; r++) {
         if (pos + 1 + stride > in.len) goto truncated;
         int ft = src[pos];
+        if (ft > 4) {
+            char message[48];
+            Py_DECREF(res); PyBuffer_Release(&in);
+            PyOS_snprintf(message, sizeof message,
+                          "PNG con filtro desconocido %d", ft);
+            set_image_error(message);
+            return NULL;
+        }
         const unsigned char *line = src + pos + 1;
         unsigned char *o = out + r * stride;
         const unsigned char *prev = r ? out + (r - 1) * stride : NULL;
@@ -100,10 +122,7 @@ img_unfilter(PyObject *self, PyObject *args)
                 int pa = abs(p - a), pb = abs(p - b), pc = abs(p - c);
                 pred = (pa <= pb && pa <= pc) ? a : (pb <= pc ? b : c);
                 break; }
-            default:
-                Py_DECREF(res); PyBuffer_Release(&in);
-                PyErr_Format(PyExc_ValueError, "PNG con filtro desconocido %d", ft);
-                return NULL;
+            default: pred = 0; break;  /* unreachable: checked above */
             }
             o[i] = (unsigned char)((line[i] + pred) & 255);
         }
@@ -113,12 +132,7 @@ img_unfilter(PyObject *self, PyObject *args)
 truncated:
     Py_DECREF(res);
     PyBuffer_Release(&in);
-    {
-        PyObject *mod = PyImport_ImportModule("flexablelib._images");
-        PyObject *cls = mod ? PyObject_GetAttrString(mod, "ImageError") : NULL;
-        Py_XDECREF(mod);
-        if (cls) { PyErr_SetString(cls, "PNG truncado"); Py_DECREF(cls); }
-    }
+    set_image_error("PNG truncado");
     return NULL;
 }
 

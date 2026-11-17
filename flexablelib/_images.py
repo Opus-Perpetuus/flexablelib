@@ -34,6 +34,22 @@ class ImageError(ValueError):
     """An image that could not be read, with a reason people can read."""
 
 
+# Largest picture the built-in decoders accept, in pixels: the size Pillow
+# refuses as a decompression bomb. A header is only a few bytes, so without a
+# limit a small damaged or hostile file could ask for gigabytes of memory.
+MAX_PIXELS = 178956970
+
+
+def _check_size(width, height, kind):
+    """Refuse a header size that is empty, negative or absurdly large."""
+    if width <= 0 or height <= 0:
+        raise ImageError('{0} sin tamaño ({1}×{2})'.format(kind, width,
+                                                             height))
+    if width * height > MAX_PIXELS:
+        raise ImageError('imagen demasiado grande ({0}×{1})'.format(
+            width, height))
+
+
 class Bitmap(object):
     """``width`` x ``height`` pixels, ``data`` as RGBA bytes, row by row."""
 
@@ -262,14 +278,29 @@ def decode_png(data):
         raise ImageError('PNG sin cabecera o sin datos')
     width, height, depth, ctype, _comp, _filt, interlace = header
     channels = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}.get(ctype)
-    if channels is None or depth not in (1, 2, 4, 8, 16):
+    if channels is None or depth not in (1, 2, 4, 8, 16) \
+            or interlace not in (0, 1):
         raise ImageError('PNG no soportado')
     if ctype == 3 and not palette:
         raise ImageError('PNG con paleta pero sin PLTE')
+    _check_size(width, height, 'PNG')
+    # The size the header promises: never inflate more than that, so a
+    # small compressed stream cannot fill the memory.
+    if interlace:
+        expected = 0
+        for x0, y0, dx, dy in _ADAM7:
+            pw = (width - x0 + dx - 1) // dx
+            ph = (height - y0 + dy - 1) // dy
+            if pw > 0 and ph > 0:
+                expected += ph * ((pw * channels * depth + 7) // 8 + 1)
+    else:
+        expected = height * ((width * channels * depth + 7) // 8 + 1)
     try:
-        raw = zlib.decompress(b''.join(idat))
+        raw = zlib.decompressobj().decompress(b''.join(idat), expected)
     except zlib.error:
         raise ImageError('PNG dañado')
+    if len(raw) < expected:
+        raise ImageError('PNG truncado')
     bpp = max(1, channels * depth // 8)
     if not interlace:
         stride = (width * channels * depth + 7) // 8
@@ -354,6 +385,7 @@ def decode_pnm(data):
         maxval = 1 if bitmap else head[2]
     except (ValueError, IndexError):
         raise ImageError('cabecera PNM dañada')
+    _check_size(width, height, 'PNM')
     n = width * height
     channels = 3 if magic in (b'P3', b'P6') else 1
     if magic in (b'P4', b'P5', b'P6'):
@@ -381,7 +413,10 @@ def decode_pnm(data):
             values = raw if maxval == 255 else bytes(
                 min(255, v * 255 // max(1, maxval)) for v in raw)
     else:
-        nums, pos = _pnm_tokens(data, n * channels, pos)
+        try:
+            nums, pos = _pnm_tokens(data, n * channels, pos)
+        except ValueError:
+            raise ImageError('PNM dañado')
         if len(nums) < n * channels:
             raise ImageError('PNM truncado')
         if bitmap:
@@ -422,9 +457,14 @@ def decode_bmp(data):
         '<iiHHI', data[18:34])
     top_down = height < 0
     height = abs(height)
+    _check_size(width, height, 'BMP')
+    if bits not in (1, 2, 4, 8, 16, 24, 32):
+        raise ImageError('BMP de {0} bits'.format(bits))
     colors = struct.unpack('<I', data[46:50])[0] if header >= 40 else 0
     masks = None
     if compression in (3, 6):
+        if len(data) < 70:
+            raise ImageError('BMP truncado')
         masks = struct.unpack('<III', data[54:66])
         alpha_mask = struct.unpack('<I', data[66:70])[0] if header >= 56 \
             else 0
@@ -435,10 +475,15 @@ def decode_bmp(data):
     if bits <= 8:
         count = colors or (1 << bits)
         start = 14 + header
-        for i in range(count):
-            b, g, r = data[start + i * 4:start + i * 4 + 3]
+        for i in range(min(count, 256)):
+            entry = data[start + i * 4:start + i * 4 + 3]
+            if len(entry) < 3:
+                break
+            b, g, r = entry
             palette.append((r, g, b))
     stride = ((width * bits + 31) // 32) * 4
+    if len(data) < offset + stride * height:
+        raise ImageError('BMP truncado')
     out = bytearray(width * height * 4)
     shifts = [_mask_shift(m) for m in masks] if masks else None
     for row in range(height):
@@ -520,7 +565,10 @@ def _lzw(data, min_size, count):
 def decode_gif(data, all_frames=False):
     if data[:6] not in (b'GIF87a', b'GIF89a'):
         raise ImageError('no es GIF')
+    if len(data) < 13:
+        raise ImageError('GIF truncado')
     width, height, flags = struct.unpack('<HHB', data[6:11])
+    _check_size(width, height, 'GIF')
     pos = 13
     global_table = None
     if flags & 0x80:
@@ -550,8 +598,13 @@ def decode_gif(data, all_frames=False):
             continue
         if block != 0x2C:
             raise ImageError('GIF dañado')
+        if len(data) < pos + 10:
+            raise ImageError('GIF truncado')
         x0, y0, fw, fh, fflags = struct.unpack('<HHHHB', data[pos:pos + 9])
         pos += 9
+        if fw * fh > MAX_PIXELS:
+            raise ImageError('imagen demasiado grande ({0}×{1})'.format(
+                fw, fh))
         table = global_table
         if fflags & 0x80:
             n = 2 << (fflags & 7)
@@ -824,9 +877,17 @@ def decode(data, all_frames=False):
                 raise ImageError('no se pudo leer la imagen ({0})'.format(
                     error))
     if kind in _PURE:
-        if kind == 'gif':
-            return decode_gif(data, all_frames)
-        bitmap = _PURE[kind](data)
+        try:
+            if kind == 'gif':
+                return decode_gif(data, all_frames)
+            bitmap = _PURE[kind](data)
+        except ImageError:
+            raise
+        except (ValueError, IndexError, KeyError, OverflowError,
+                ZeroDivisionError, struct.error, zlib.error):
+            # A header or block that points past the data or holds values
+            # the format does not allow: the file is damaged.
+            raise ImageError('{0} dañado'.format(kind.upper())) from None
         return [bitmap] if all_frames else bitmap
     if kind is None:
         raise ImageError('formato de imagen desconocido')
@@ -975,6 +1036,8 @@ def _py_quantize(data, width, height, colors, alpha_threshold):
     """
     colors = max(1, min(255, colors))
     n = width * height
+    if width <= 0 or height <= 0 or len(data) < n * 4:
+        raise ValueError('bad image size')
     count = [0] * 32768
     sums = [0] * (32768 * 3)
     keys = [0] * n
