@@ -95,7 +95,8 @@ def test_vertical_center_align():
     assert rows == [(len(lines) - 1) // 2]
 
 
-def test_colour_still_applies_with_alignment():
+def test_colour_still_applies_with_alignment(monkeypatch):
+    monkeypatch.setenv('FORCE_COLOR', '1')
     table = _framed()
     table.border_text('v2', where='top', align='right', color='red')
     assert '\x1b[31m' in table.compose()
