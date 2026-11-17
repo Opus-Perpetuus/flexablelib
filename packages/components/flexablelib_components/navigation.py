@@ -119,6 +119,14 @@ class Tabs(_Themed):
         return out
 
 
+def _rows_for(max_visible, height):
+    """The rows a menu window gets: ``max_visible``, never more than the
+    ``height`` it is drawn in (either may be None)."""
+    if max_visible and height:
+        return max(1, min(int(max_visible), int(height)))
+    return max_visible or height
+
+
 def _window(comp, out, row, height):
     """The rows of ``out`` that fit ``height``, kept around ``row`` (the
     current item) with ``▲ n``/``▼ n`` lines saying how many are hidden
@@ -310,7 +318,7 @@ class Menu(_Themed):
         return super(Menu, self).handle_key(key)
 
     def draw(self, width, height):
-        rows = self.max_visible or height or len(self.items)
+        rows = _rows_for(self.max_visible, height) or len(self.items)
         self._page = max(1, rows - 2)
         out = []
         for i in range(len(self.items)):
@@ -570,13 +578,18 @@ class Sidebar(Menu):
             elif item.get('disabled'):
                 text = self.paint(text, 'dim')
             out.append(text)
-        rows = self.max_visible or (max(1, height - len(head)) if height
-                                    else None)
+        base = len(head)
+        if height:
+            # Too short for the title and an item: the item wins (the
+            # blank line goes first, then the title).
+            del head[max(0, int(height) - 1):]
+        rows = _rows_for(self.max_visible,
+                         max(1, height - len(head)) if height else None)
         if rows:
             self._page = max(1, rows - 2)
         if isinstance(self._hot, list):
             # _window works in the item rows' own coordinates.
-            self._hot = [(r - len(head), x0, x1, a)
+            self._hot = [(r - base, x0, x1, a)
                          for r, x0, x1, a in self._hot]
         lines = _window(self, out, current, rows)
         if isinstance(self._hot, list):
@@ -1549,6 +1562,10 @@ class VStack(_Themed):
                      for i in range(len(self.items))]
             room = height - gaps - sum(fixed)
             sizes = _share(room, self.weights, fixed, self.max_heights)
+            # No rows left for a growing child: it keeps one (the stack
+            # scrolls) rather than vanishing -- Tab could land on it.
+            sizes = [self._clamp(i, 1) if not size and self.weights[i] and
+                     naturals[i] else size for i, size in enumerate(sizes)]
         blocks = []
         for child, rows in zip(self.items, sizes):
             lines = render_into(child, width, rows) if rows else []
@@ -1565,8 +1582,29 @@ class VStack(_Themed):
                 return i
         return None
 
+    def _focus_span(self, i, width, rows):
+        """``(first, last)`` rows of the focused component inside child
+        ``i`` drawn ``rows`` high, or None when it is not drawn there."""
+        from flexablelib_tui.app import _HIT
+        target = getattr(self.app, 'focused', None)
+        saved = _HIT['on'], _HIT['items']
+        _HIT['on'], _HIT['items'] = True, []
+        try:
+            lines = render_into(self.items[i], width, rows)
+            items = _HIT['items']
+        finally:
+            _HIT['on'], _HIT['items'] = saved
+        _lines, regions = _fx.extract_marks(lines)
+        found = [row for k, row, x0, x1, depth in regions
+                 if 0 <= k < len(items) and items[k] is target]
+        return (min(found), max(found)) if found else None
+
     def draw(self, width, height):
         h = self.height or height
+        if self.height and height:
+            # Never taller than the slot: what does not fit scrolls (and
+            # the focus is followed) instead of being cut off.
+            h = min(self.height, height)
         sizes, blocks = self._layout(width, h)
         lines = []
         starts = []
@@ -1598,11 +1636,18 @@ class VStack(_Themed):
                 self._followed = target
                 i = self._holder()
                 if i is not None:
-                    top, size = starts[i], sizes[i]
-                    if top < self.offset or size > h:
-                        self.offset = top
-                    elif top + size > self.offset + h:
-                        self.offset = top + size - h
+                    first, last = starts[i], starts[i] + sizes[i] - 1
+                    if sizes[i] > h:
+                        # A child taller than the view: follow the focused
+                        # component inside it, not the child's first row.
+                        span = self._focus_span(i, inner, sizes[i])
+                        if span is not None:
+                            first, last = starts[i] + span[0], \
+                                starts[i] + span[1]
+                    if first < self.offset or last - first + 1 > h:
+                        self.offset = first
+                    elif last >= self.offset + h:
+                        self.offset = last - h + 1
         self.offset = max(0, min(self.offset, self.max_offset))
         visible = lines[self.offset:self.offset + h]
         if not (self.scrollbar and inner < width):
