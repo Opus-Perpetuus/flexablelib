@@ -55,6 +55,21 @@ def repo_root_cwd(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def colour_environment(monkeypatch):
+    """
+    Start every test with no NO_COLOR / FORCE_COLOR in the environment.
+
+    Colour depends on those variables, so without this a developer who
+    exports NO_COLOR=1 (or a CI runner with FORCE_COLOR set) gets different
+    results, and a test that writes ``os.environ['FORCE_COLOR']`` directly
+    leaks colour into every test that runs after it. ``monkeypatch`` puts the
+    original values back after each test, including over direct writes.
+    """
+    monkeypatch.delenv('NO_COLOR', raising=False)
+    monkeypatch.delenv('FORCE_COLOR', raising=False)
+
+
+@pytest.fixture(autouse=True)
 def default_terminal(monkeypatch):
     """
     Give every test a wide, fixed terminal so CI never renders differently
