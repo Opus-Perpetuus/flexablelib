@@ -2148,6 +2148,9 @@ class Table(object):
         A table squeezed far below the width of its own data wraps every cell
         to a couple of characters and becomes unreadable. Setting a message
         says so plainly instead. None, the default, renders the table anyway.
+        The message is also shown when the table, once drawn, is still wider
+        than the space -- the digits in front of a decimal point are never
+        cut -- with ``{needed}`` the width it took.
 
         The message may use ``{needed}`` and ``{available}`` placeholders::
 
@@ -3149,9 +3152,21 @@ class Table(object):
 
         # A table with no columns has nothing to number: the index column
         # alone would have no cells, so it is drawn as without the index.
-        return self.__form_string(
+        table_string = self.__form_string(
             table_with_i=self.__show_index and len(self.__columns) != 0
         )
+        if self.__too_narrow_message is not None and len(self.__columns):
+            # Numbers are never cut, so a table whose columns could each
+            # shrink to the minimum can still come out wider than the space:
+            # the caller asked to be told rather than get it overflowing.
+            available = self.__available_width()
+            drawn = max((visible_width(line)
+                         for line in table_string.split('\n')), default=0)
+            if drawn > available:
+                return self.__too_narrow_message.format(
+                    needed=drawn, available=available
+                )
+        return table_string
 
     def __get_string_table_width(self) -> int:
         """
