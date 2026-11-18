@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.7.3] - 2026-11-18
+
+### Fixed
+- **Bare labels**: a plain string where a `(label, action)` pair is
+  expected is one whole label. `Modal(buttons=['Sí', 'No'])` made buttons
+  labelled `S` and `N` whose "actions" were `'í'` and `'o'` (TypeError on
+  press); the same in `Toolbar(['Guardar'])` and
+  `CommandPalette(['Abrir'])`. A bare string in `Timeline` is the event's
+  title (it was split into `when` and `title` letters). In a dialog a bare
+  label is a button that just closes it.
+- **Mouse capture and dialogs**: closing a dialog releases the mouse from
+  any component inside it, so a drag that began on a `SignatureInput`
+  (or slider) in the dialog stops reaching it once the dialog is gone.
+- **Grid keeps to its width**: children that refuse their column (a
+  `Card` narrower than its frame) make the grid stack in one column, as
+  when the column minimums don't fit, instead of raising `ValueError`; a
+  bordered cell's padding gives way in one- or two-column tracks instead
+  of pushing the row past the frame; an int `columns` never asks for more
+  columns than fit one character wide with their gaps or borders; and a
+  coloured `GridCell(title=...)` on a bordered grid no longer raises
+  `IndexError` (its escape sequence was laid out one cell per character).
+
+### Tests
+- Regression tests for the above, plus focus cycling with nothing
+  focused, key releases and terminal focus reports, screen-reader text
+  with notifications and a plain footer, and the too-small screen in
+  ASCII mode.
+
 ## [3.7.2] - 2026-11-17
 
 ### Fixed
