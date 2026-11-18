@@ -588,7 +588,11 @@ class App(object):
         if getattr(layer, '_modal', True):
             previous = self._focus_stack.pop() if self._focus_stack else None
             self.focus(previous)
-        if self._capture is not None and self._capture is layer:
+        # A press inside the dialog (a signature pad, a slider) captured the
+        # mouse: the drag and release that follow must not reach a component
+        # that is no longer on screen.
+        if self._capture is not None and any(
+                node is self._capture for node in self.walk(layer)):
             self._capture = None
         self._dirty = True
         popped = getattr(layer, '_popped', None)
