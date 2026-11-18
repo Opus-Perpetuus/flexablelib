@@ -18,9 +18,9 @@ __all__ = ['Modal', 'ConfirmDialog', 'PromptDialog', 'LoadingOverlay',
 class Modal(_Themed):
     """
     A framed dialog over the screen: ``content`` and a row of ``buttons``
-    (``(label, action)`` pairs or :class:`Button` s; an action returning
-    anything but False closes the dialog). ``open(app)`` shows it; Escape
-    closes it when ``closable``. ``width`` caps its width.
+    (``(label, action)`` pairs, bare labels or :class:`Button` s; an action
+    returning anything but False closes the dialog). ``open(app)`` shows it;
+    Escape closes it when ``closable``. ``width`` caps its width.
     """
 
     role = 'dialog'
@@ -43,6 +43,8 @@ class Modal(_Themed):
         colors = kwargs.get('use_colors')
         for b in buttons:
             if not isinstance(b, Button):
+                if isinstance(b, str):
+                    b = (b,)    # a bare label: a button that just closes
                 label, action = b[0], b[1] if len(b) > 1 else None
                 kind = b[2] if len(b) > 2 else 'default'
                 b = Button(label, None, kind=kind, theme=self._theme,

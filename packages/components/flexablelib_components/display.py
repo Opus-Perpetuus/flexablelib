@@ -869,9 +869,9 @@ class DetailView(_Themed):
 
 class Timeline(_Themed):
     """
-    Events down a line: ``(when, title, detail)`` or dicts with ``when``,
-    ``title``, ``detail``, ``kind`` / ``status``. Also a status history: give
-    ``kind`` per event (``'success'``, ``'error'`` ...).
+    Events down a line: ``(when, title, detail)``, a bare title, or dicts
+    with ``when``, ``title``, ``detail``, ``kind`` / ``status``. Also a
+    status history: give ``kind`` per event (``'success'``, ``'error'`` ...).
     """
 
     role = 'list'
@@ -896,6 +896,9 @@ class Timeline(_Themed):
             return (str(event.get('when', '')), str(event.get('title', '')),
                     event.get('detail'), event.get('kind',
                                                    event.get('status')))
+        if isinstance(event, str):
+            # A bare string is the event's title, not (when, title) letters.
+            return ('', event, None, None)
         event = tuple(event) + (None, None)
         return (str(event[0]), str(event[1]), event[2], event[3])
 
