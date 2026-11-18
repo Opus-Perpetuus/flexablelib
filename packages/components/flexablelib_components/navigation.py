@@ -653,8 +653,9 @@ class TopBar(_Themed):
 
 class Toolbar(_Themed):
     """
-    A row of :class:`Button` s (or ``(label, action)`` pairs): Left/Right
-    move between them while one has focus; each keeps its own shortcut.
+    A row of :class:`Button` s (or ``(label, action)`` pairs, or bare
+    labels): Left/Right move between them while one has focus; each keeps
+    its own shortcut.
     """
 
     role = 'toolbar'
@@ -662,11 +663,18 @@ class Toolbar(_Themed):
     def __init__(self, buttons, gap=1, align='l', **kwargs):
         super(Toolbar, self).__init__(**kwargs)
         self.buttons = [b if isinstance(b, Button) else
-                        Button(b[0], b[1], theme=self._theme,
-                               use_colors=kwargs.get('use_colors'))
+                        self._button(b, kwargs.get('use_colors'))
                         for b in buttons]
         self.gap = gap
         self.align = align
+
+    def _button(self, spec, use_colors):
+        # A bare label is a button with no action -- not a label made of
+        # its first character and an "action" made of the second.
+        if isinstance(spec, str):
+            spec = (spec,)
+        return Button(spec[0], spec[1] if len(spec) > 1 else None,
+                      theme=self._theme, use_colors=use_colors)
 
     def children(self):
         return list(self.buttons)
@@ -1122,9 +1130,9 @@ class Tree(_Themed):
 
 class CommandPalette(_Themed):
     """
-    A search box over commands -- ``(label, action)`` pairs or dicts with
-    ``label``, ``action``, ``hint``, ``keywords`` -- matched by fuzzy
-    subsequence, best first. Up/Down choose, Enter runs, Escape closes.
+    A search box over commands -- ``(label, action)`` pairs, bare labels
+    (no action) or dicts with ``label``, ``action``, ``hint``, ``keywords``
+    -- matched by fuzzy subsequence, best first. Up/Down choose, Enter runs, Escape closes.
     Open it with ``open(app)`` (bind it to ``ctrl+k`` or ``/``).
     """
 
@@ -1154,8 +1162,9 @@ class CommandPalette(_Themed):
                  title='Comandos', **kwargs):
         super(CommandPalette, self).__init__(**kwargs)
         self.commands = [c if isinstance(c, dict) else
-                         {'label': c[0], 'action': c[1] if len(c) > 1
-                          else None} for c in commands]
+                         {'label': c, 'action': None} if isinstance(c, str)
+                         else {'label': c[0], 'action': c[1] if len(c) > 1
+                               else None} for c in commands]
         self.placeholder = placeholder
         self.max_visible = max_visible
         self.title = title

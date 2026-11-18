@@ -372,6 +372,25 @@ def _zebra_specs(zebra):
     return ('', zebra)
 
 
+def _title_clusters(text):
+    """``(cluster, width)`` over ``text`` with its escape sequences (a
+    coloured title) carried on the next visible cluster, so each cluster is
+    one cell of a border line -- not an escape spread over five."""
+    out = []
+    escapes = ''
+    for kind, piece in tokenize(text):
+        if kind == 'ansi':
+            escapes += piece
+            continue
+        for cluster, w in measured_clusters(piece):
+            out.append((escapes + cluster, w))
+            escapes = ''
+    if escapes and out:
+        cluster, w = out[-1]
+        out[-1] = (cluster + escapes, w)
+    return out
+
+
 def _render_child(child, width):
     """Render any supported child into at most ``width`` columns."""
     if child is None:
@@ -1499,6 +1518,11 @@ class Grid(object):
             return max(0, int(self.padding))
         return 1 if self._bordered() else 0
 
+    def _slot_padding(self, cell, slot_width):
+        """The cell's padding, cut so at least one column of content is
+        left in a ``slot_width`` slot (else the row grows past its track)."""
+        return max(0, min(self._cell_padding(cell), (slot_width - 1) // 2))
+
     def _separator(self):
         """Columns between two tracks."""
         return 1 if self._bordered() else self.gap
@@ -1609,7 +1633,13 @@ class Grid(object):
             return max(1, min(fit, spans))
         if self.min_width is not None:
             return max(1, min(self.columns, fit))
-        return self.columns
+        # No more columns than fit one character wide with their gaps or
+        # borders: past that the rows would run over the width.
+        if self._bordered():
+            most = (width - 1) // 2
+        else:
+            most = (width + sep) // (1 + sep)
+        return max(1, min(self.columns, most))
 
     def _place(self, n, children=None):
         """
@@ -1717,13 +1747,27 @@ class Grid(object):
         def span_width(c, cs):
             return sum(tracks[c:c + cs]) + sep * (cs - 1)
 
-        # Natural render of every child at its slot width.
-        blocks = []
-        for cell, r, c, rs, cs in placed:
-            pad = self._cell_padding(cell)
-            inner = max(1, span_width(c, cs) - 2 * pad)
-            text = _render_child(cell.child, inner)
-            blocks.append([cell, r, c, rs, cs, inner, text])
+        def render_blocks():
+            # Natural render of every child at its slot width.
+            out = []
+            for cell, r, c, rs, cs in placed:
+                pad = self._slot_padding(cell, span_width(c, cs))
+                inner = max(1, span_width(c, cs) - 2 * pad)
+                text = _render_child(cell.child, inner)
+                out.append([cell, r, c, rs, cs, inner, text])
+            return out
+
+        try:
+            blocks = render_blocks()
+        except ValueError:
+            # A child refused its column (a card narrower than its frame):
+            # stack them all in one column, as when the minimums don't fit.
+            if stacked:
+                raise
+            n, tracks, stacked = 1, [max(1, width - self._frame_columns(1))], \
+                True
+            placed = [(cell, i, 0, 1, 1) for i, cell in enumerate(children)]
+            blocks = render_blocks()
 
         n_rows = max(r + rs for _, r, _, rs, _, _, _ in blocks)
         if bordered and self.fill_gaps and not stacked:
@@ -1876,7 +1920,8 @@ class Grid(object):
         for w in tracks:
             x_of.append(x_of[-1] + w + gap)
         for cell, r, c, rs, cs, inner, text in blocks:
-            pad = self._cell_padding(cell)
+            pad = self._slot_padding(cell, sum(tracks[c:c + cs]) +
+                                     gap * (cs - 1))
             slot = sum(heights[r:r + rs]) + self.row_gap * (rs - 1)
             lines = self._slot_lines(cell, text, inner, slot, painter)
             for k, line in enumerate(lines):
@@ -1956,7 +2001,7 @@ class Grid(object):
                 continue
             x = x0 + pos
             start = x
-            for cluster, w in measured_clusters(' ' + label + ' '):
+            for cluster, w in _title_clusters(' ' + label + ' '):
                 grid[y][x] = cluster
                 for k in range(1, w):
                     grid[y][x + k] = ''
@@ -1966,8 +2011,8 @@ class Grid(object):
         title_prefix = painter.prefix(self.title_color)
         content = {}
         for cell, r, c, rs, cs, inner, text in blocks:
-            pad = self._cell_padding(cell)
             slot_w = xs[c + cs] - xs[c] - 1
+            pad = self._slot_padding(cell, slot_w)
             slot_h = ys[r + rs] - ys[r] - 1
             inner_w = max(0, slot_w - 2 * pad)
             lines = self._slot_lines(cell, text, inner_w, slot_h, painter)
