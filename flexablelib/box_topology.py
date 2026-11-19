@@ -172,9 +172,8 @@ def visible_cells(line: str):
             i += 1
             continue
         out.append((col, ch, bg))
-        for _ in range(width - 1):
-            out.append((col + 1, '', bg))
-            col += 1
+        for extra in range(1, width):
+            out.append((col + extra, '', bg))
         col += width
         i += 1
     return out

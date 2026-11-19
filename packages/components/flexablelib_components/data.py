@@ -436,6 +436,9 @@ class DataTable(_Themed):
                 self.top = self.cursor_row
             if self.cursor_row >= self.top + rows_h:
                 self.top = self.cursor_row - rows_h + 1
+            # Taller again (a resize): fill the room from above instead of
+            # keeping the rows the short layout scrolled to at the top.
+            self.top = max(0, min(self.top, len(view) - rows_h))
         stop = self.top + rows_h
         if self.page_size:
             stop = min(stop, (self.page) * self.page_size)
@@ -919,6 +922,9 @@ class CatalogGrid(_Themed):
             self.top_row = row_of
         if row_of >= self.top_row + visible_rows:
             self.top_row = row_of - visible_rows + 1
+        # More columns or rows of room (a resize): no empty rows of cards
+        # below while earlier ones stay scrolled out above.
+        self.top_row = max(0, min(self.top_row, n_rows - visible_rows))
         out = []
         for r in range(self.top_row, min(n_rows, self.top_row +
                                          visible_rows)):

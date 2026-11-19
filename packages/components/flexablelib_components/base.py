@@ -281,6 +281,23 @@ def frame(lines, width, title=None, color=None, painter=None, style='rounded',
     return out
 
 
+def pairs(items):
+    """``items`` (a mapping or a sequence) as a list of ``(key, value)``
+    pairs. A bare string, or a one-item tuple, is a key with no value
+    (``None``) -- not a pair made of the string's first two characters."""
+    if isinstance(items, dict):
+        return list(items.items())
+    out = []
+    for item in items:
+        if isinstance(item, str):
+            out.append((item, None))
+        elif len(item) < 2:
+            out.append((tuple(item) + (None, None))[:2])
+        else:
+            out.append(item)
+    return out
+
+
 def join_columns(blocks, widths, gap=1):
     """Side-by-side blocks of lines, each fitted to its width."""
     height = max((len(b) for b in blocks), default=0)

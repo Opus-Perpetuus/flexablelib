@@ -267,6 +267,12 @@ class TextInput(Input):
             self.scroll_x = cursor_col
         if cursor_col >= self.scroll_x + avail:
             self.scroll_x = cursor_col - avail + 1
+        # Never scrolled further than the text needs: once the field is
+        # wide enough again (a resize, a shorter value), it shows from the
+        # start instead of keeping only the tail it showed when narrow.
+        needed = sum(widths) + (1 if self.focused and
+                                self.cursor_pos >= len(shown) else 0)
+        self.scroll_x = max(0, min(self.scroll_x, needed - avail))
         out, col = [], 0
         for i, (char, w) in enumerate(zip(shown, widths)):
             if col >= self.scroll_x and col + w <= self.scroll_x + avail:
@@ -782,6 +788,9 @@ class TextArea(Input):
             self.scroll_y = cur
         if cur >= self.scroll_y + self.rows:
             self.scroll_y = cur - self.rows + 1
+        # Wider again (fewer wrapped lines): fill the box from the top
+        # instead of keeping the offset the narrow layout needed.
+        self.scroll_y = max(0, min(self.scroll_y, len(segs) - self.rows))
         out = []
         if not self.text and not self.focused and self.placeholder:
             out.append(marker + ' ' + self.paint(self.placeholder,
