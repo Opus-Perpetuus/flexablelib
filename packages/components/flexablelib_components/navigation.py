@@ -10,7 +10,7 @@ from flexablelib.layout import _accepts_height, _natural_width, _render_child
 
 from flexablelib_tui import Key
 
-from .base import Button, _Themed, frame, join_columns
+from .base import Button, _Themed, frame, join_columns, pairs
 
 _Enter = Key('enter')
 
@@ -39,7 +39,8 @@ def render_into(child, width, height=None):
 
 class Tabs(_Themed):
     """
-    Tabbed panes: ``tabs`` is a mapping (or pairs) of title to content.
+    Tabbed panes: ``tabs`` is a mapping (or pairs) of title to content; a
+    bare title is a tab with no content.
     Left/Right (or 1-9) switch while the tab bar has the focus; the content's
     own components follow it in the focus order. ``on_change(index)``.
     """
@@ -56,8 +57,7 @@ class Tabs(_Themed):
 
     def __init__(self, tabs, index=0, on_change=None, **kwargs):
         super(Tabs, self).__init__(**kwargs)
-        self.tabs = list(tabs.items()) if isinstance(tabs, dict) \
-            else list(tabs)
+        self.tabs = pairs(tabs)
         self.index = index
         self.on_change = on_change
 
@@ -70,7 +70,8 @@ class Tabs(_Themed):
 
     def form_children(self):
         """Every pane, shown or not (the fields a form collects)."""
-        return [c for _, c in self.tabs if not isinstance(c, str)]
+        return [c for _, c in self.tabs
+                if c is not None and not isinstance(c, str)]
 
     def natural_width(self):
         bar = sum(_fx.visible_width(t) + 3 for t, _ in self.tabs)
@@ -706,7 +707,8 @@ class Toolbar(_Themed):
 class Wizard(_Themed):
     """
     Steps with a stepper on top, the current step's content, and Back /
-    Next / Finish buttons. ``steps`` are ``(title, content)`` pairs;
+    Next / Finish buttons. ``steps`` are ``(title, content)`` pairs (or bare
+    titles);
     ``validate(index) -> error or None`` guards Next; ``on_finish()``.
     Ctrl-N / Ctrl-P move too.
     """
@@ -725,7 +727,7 @@ class Wizard(_Themed):
 
     def __init__(self, steps, on_finish=None, validate=None, **kwargs):
         super(Wizard, self).__init__(**kwargs)
-        self.steps = list(steps)
+        self.steps = pairs(steps)
         self.index = 0
         self.on_finish = on_finish
         self.check = validate
@@ -806,7 +808,8 @@ class Wizard(_Themed):
 
 class Accordion(_Themed):
     """
-    Collapsible sections: ``sections`` are ``(title, content)`` pairs. Up/Down
+    Collapsible sections: ``sections`` are ``(title, content)`` pairs (or a
+    mapping; a bare title is a section with no content). Up/Down
     move between headers, Enter/Space toggle; ``multiple=False`` keeps one
     open at a time. A single section works as a collapsible panel.
     """
@@ -831,19 +834,20 @@ class Accordion(_Themed):
 
     def __init__(self, sections, open=(0,), multiple=True, **kwargs):
         super(Accordion, self).__init__(**kwargs)
-        self.sections = list(sections.items()) if isinstance(sections, dict) \
-            else list(sections)
+        self.sections = pairs(sections)
         self.opened = set(open or ())
         self.multiple = bool(multiple)
         self.index = 0
 
     def children(self):
         return [c for i, (_, c) in enumerate(self.sections)
-                if i in self.opened and not isinstance(c, str)]
+                if i in self.opened and c is not None
+                and not isinstance(c, str)]
 
     def form_children(self):
         """Every section, open or not (the fields a form collects)."""
-        return [c for _, c in self.sections if not isinstance(c, str)]
+        return [c for _, c in self.sections
+                if c is not None and not isinstance(c, str)]
 
     def natural_width(self):
         return max([_natural_width(c) + 2 for _, c in self.sections] +
@@ -1108,6 +1112,8 @@ class Tree(_Themed):
             self.top = self.index
         if self.index >= self.top + view:
             self.top = self.index - view + 1
+        # Taller again, or nodes collapsed: fill the room from above.
+        self.top = max(0, min(self.top, len(rows) - view))
         out = []
         for i in range(self.top, min(len(rows), self.top + view)):
             path, key, value, depth, branch = rows[i]
