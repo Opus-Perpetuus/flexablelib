@@ -14,7 +14,7 @@ from flexablelib.text_width import wrap_to_width
 
 from flexablelib_tui import accessibility as _a11y
 
-from .base import _Themed, frame
+from .base import _Themed, frame, pairs
 
 __all__ = ['Badge', 'Tag', 'StatusBadge', 'Alert', 'Link', 'Breadcrumbs',
            'EmptyState', 'ErrorPanel', 'Spinner', 'Skeleton', 'Code',
@@ -812,26 +812,26 @@ class HtmlView(MarkdownView):
 class DetailView(_Themed):
     """
     Labelled values in aligned columns -- a record's detail. ``fields`` is a
-    mapping or ``(label, value)`` pairs; a label starting with ``#`` is a
-    section heading. ``columns=2`` lays the pairs out in two columns.
+    mapping or ``(label, value)`` pairs (a bare label has no value); a
+    label starting with ``#`` is a section heading. ``columns=2`` lays the pairs out in two columns.
     """
 
     role = 'list'
 
     def a11y_value(self):
-        return '; '.join('{0}: {1}'.format(k, v) for k, v in self.fields
+        return '; '.join(str(k) if v is None else '{0}: {1}'.format(k, v)
+                         for k, v in self.fields
                          if not str(k).startswith('#'))
 
     def __init__(self, fields, columns=1, label_color=None, **kwargs):
         super(DetailView, self).__init__(**kwargs)
-        self.fields = list(fields.items()) if isinstance(fields, dict) \
-            else list(fields)
+        self.fields = pairs(fields)
         self.columns = max(1, int(columns))
         self.label_color = label_color
 
     def natural_width(self):
-        widths = [_fx.visible_width(str(k)) + _fx.visible_width(str(v)) + 2
-                  for k, v in self.fields]
+        widths = [_fx.visible_width(str(k)) + 2 + _fx.visible_width(
+                  '' if v is None else str(v)) for k, v in self.fields]
         return min(100, max(widths or [10]) * self.columns +
                    3 * (self.columns - 1))
 
@@ -1054,8 +1054,8 @@ def human_size(size):
 
 
 class AttachmentList(_Themed):
-    """Files with an icon by type, name and size: ``(name, size)`` pairs or
-    dicts with ``name`` and ``size``."""
+    """Files with an icon by type, name and size: ``(name, size)`` pairs,
+    bare names (no size) or dicts with ``name`` and ``size``."""
 
     ICONS = {'pdf': '📕', 'xlsx': '📗', 'xls': '📗', 'csv': '📗', 'doc': '📘',
              'docx': '📘', 'png': '🖼', 'jpg': '🖼', 'jpeg': '🖼', 'gif': '🖼',
@@ -1069,8 +1069,8 @@ class AttachmentList(_Themed):
 
     def __init__(self, files, **kwargs):
         super(AttachmentList, self).__init__(**kwargs)
-        self.files = [(f.get('name'), f.get('size')) if isinstance(f, dict)
-                      else tuple(f) for f in files]
+        self.files = pairs((f.get('name'), f.get('size'))
+                           if isinstance(f, dict) else f for f in files)
 
     def draw(self, width, height):
         out = []
