@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.7.4] - 2026-11-18
+
+### Fixed
+- **Bare titles**: a plain string where a `(title, content)` or
+  `(label, value)` pair is expected is one title with nothing under it.
+  `Tabs(['Datos', 'Extra'])` drew tabs `D` and `E` with `a` and `x` as
+  their content; the same in `Accordion`, `Wizard` (also given a mapping,
+  whose keys were split the same way), `DetailView` and `AttachmentList`.
+  A one-item tuple works too, and an empty value no longer reads (or
+  measures) as `None`.
+- **Scrolling after a resize**: `TextInput`, `TextArea`, `DataTable`,
+  `Tree` and `CatalogGrid` fill the room they get back when the terminal
+  grows instead of keeping the offset the smaller layout needed (a field
+  that showed `.mx` of `ana@x.mx` while narrow kept showing only that
+  when wide again; a table kept its last three rows at the top of an
+  empty screen).
+- **Numbers from text** (`from_csv`, `from_html`, `from_markdown`,
+  `parse_str_numbers`): only ASCII digits make a number -- `'1٣'` and
+  `'1１'` became `13` and `11` while `'٣'` alone stayed text -- and a
+  float past what a float holds (`'1e400'`) stays text instead of
+  becoming `inf`.
+- The Python PNG `unfilter` refuses negative sizes and `bpp` 0 like the C
+  one; `read_json` reads UTF-8 whatever the locale;
+  `box_topology.visible_cells` puts the character after a wide one at the
+  right column.
+
+### Tests
+- Regression tests for the above and for the `box_topology` checks the
+  merge tests rely on.
+
 ## [3.7.3] - 2026-11-18
 
 ### Fixed
