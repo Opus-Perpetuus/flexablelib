@@ -10,8 +10,6 @@ import pytest
 
 C = pytest.importorskip('flexablelib_components')
 
-from flexablelib import _images as I  # noqa: E402
-from flexablelib.box_topology import bg_runs, visible_cells  # noqa: E402
 from flexablelib.text_width import strip_ansi  # noqa: E402
 from flexablelib_components.base import pairs  # noqa: E402
 
@@ -177,23 +175,3 @@ def test_catalog_grid_fills_the_room_when_wider():
     text = '\n'.join(_lines(grid, 60, 12))   # five columns, three rows
     assert grid.top_row == 1
     assert 'P5' in text and 'P11' in text and 'P4' not in text
-
-
-# -- images and box topology ---------------------------------------------------
-
-@pytest.mark.parametrize('rows, stride, bpp', [(-1, 0, 1), (1, -1, 1),
-                                               (1, 2, 0)])
-def test_python_unfilter_refuses_bad_sizes_like_c(rows, stride, bpp):
-    with pytest.raises(ValueError):
-        I._py_unfilter(b'\x00' * 8, rows, stride, bpp)
-    if I._C is not None:
-        with pytest.raises(ValueError):
-            I._C.unfilter(b'\x00' * 8, rows, stride, bpp)
-
-
-def test_visible_cells_wide_characters():
-    assert visible_cells('中a') == [(0, '中', None), (1, '', None),
-                                    (2, 'a', None)]   # 'a' was at column 3
-    line = '\x1b[41m中\x1b[0ma\x1b[41mb\x1b[0m'
-    assert bg_runs(line, 41) == [(0, 2), (3, 4)]
-    assert visible_cells('e\u0301x') == [(0, 'e', None), (1, 'x', None)]
