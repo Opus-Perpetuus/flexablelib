@@ -76,7 +76,9 @@ def is_multi_row(row):
 
 
 def read_json(file):
-    with open(file) as json_file:
+    """Load a JSON file. Read as UTF-8 (what JSON is), not in the locale's
+    encoding, so the same file loads on Windows as anywhere else."""
+    with open(file, encoding='utf-8') as json_file:
         data = json.load(json_file)
     return data
 
