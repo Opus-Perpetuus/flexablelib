@@ -137,6 +137,10 @@ _ADAM7 = ((0, 0, 8, 8), (4, 0, 8, 8), (0, 4, 4, 8), (2, 0, 4, 4),
 def _py_unfilter(data, rows, stride, bpp):
     """Undo PNG scanline filters: ``rows`` lines of ``stride`` bytes, each
     led by its filter byte. Returns the raw bytes without filter bytes."""
+    if rows < 0 or stride < 0 or bpp < 1:
+        # Refused as the C version does: rows=-1 gave b'' and bpp=0 took
+        # each byte as its own left neighbour.
+        raise ValueError('bad sizes')
     out = bytearray(rows * stride)
     prev = bytearray(stride)
     pos = 0
