@@ -40,10 +40,14 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence
 # '007' to 7 silently destroys data that cannot be recovered from the table,
 # so anything with a redundant leading zero stays a string. '0' and '0.5' are
 # of course still numbers.
-_INT_TEXT = re.compile(r'^-?(?:0|[1-9]\d*)$')
-_FLOAT_TEXT = re.compile(r'^-?(?:(?:0|[1-9]\d*)\.\d*|\.\d+)$')
+#
+# Digits are ASCII only (re.ASCII): int() and float() also read other
+# scripts' digits, so '1٣' or '1１' became 13 and 11 while '٣' alone stayed
+# text.
+_INT_TEXT = re.compile(r'^-?(?:0|[1-9]\d*)$', re.ASCII)
+_FLOAT_TEXT = re.compile(r'^-?(?:(?:0|[1-9]\d*)\.\d*|\.\d+)$', re.ASCII)
 _EXPONENT_TEXT = re.compile(
-    r'^-?(?:(?:0|[1-9]\d*)(?:\.\d*)?|\.\d+)[eE][-+]?\d+$'
+    r'^-?(?:(?:0|[1-9]\d*)(?:\.\d*)?|\.\d+)[eE][-+]?\d+$', re.ASCII
 )
 
 
@@ -67,9 +71,12 @@ def parse_value(text: Any, parse_numbers: bool = True) -> Any:
             return text
     if _FLOAT_TEXT.match(stripped) or _EXPONENT_TEXT.match(stripped):
         try:
-            return float(stripped)
+            number = float(stripped)
         except ValueError:
             return text
+        # '1e400' is past what a float holds: keep the text rather than
+        # turn it into inf, which would print (and export) as 'inf'.
+        return number if number - number == 0 else text
     return text
 
 
