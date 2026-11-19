@@ -151,6 +151,8 @@ def test_supports_color_environment(monkeypatch):
     monkeypatch.setenv('FORCE_COLOR', '1')
     assert supports_color(_Stream(False)) is True
     monkeypatch.setenv('NO_COLOR', '')
+    assert supports_color(_Stream(True)) is True
+    monkeypatch.setenv('NO_COLOR', '1')
     assert supports_color(_Stream(True)) is False
 
 

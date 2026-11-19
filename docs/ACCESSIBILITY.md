@@ -30,9 +30,14 @@ as a context manager (`with configure(ascii=True): ...`).
 
 ### Colour environment
 
-- `NO_COLOR` (any value) turns colour off and wins over everything else.
+- `NO_COLOR` (any non-empty value) turns colour off and wins over
+  everything else; an empty `NO_COLOR=` is ignored, as no-color.org says.
 - `FORCE_COLOR=0|1|2|3` forces none, 16, 256 or true colour, even into a
-  pipe.
+  pipe. Hex colours (`#5f87ff`) and grey levels follow it: with `2` they
+  are drawn with the nearest of the 256 xterm colours, with `1` with the
+  nearest of the 16 ANSI colours (256-colour indexes too).
+- The `default` theme's message colours reach WCAG AA (4.5:1) on a black
+  background: `info` is `#5f87ff` and `error` `bright_red`.
 - `TERM=dumb` turns colour off and, for a real terminal, switches the app
   to screen-reader (linear) mode, since there is no cursor addressing.
 

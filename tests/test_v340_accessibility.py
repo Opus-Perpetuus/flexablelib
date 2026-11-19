@@ -223,8 +223,10 @@ class TestThemes:
 class TestColourEnvironment:
 
     def test_no_color_wins(self):
-        assert capabilities.color_level({'NO_COLOR': '', 'TERM': 'xterm'},
+        assert capabilities.color_level({'NO_COLOR': '1', 'TERM': 'xterm'},
                                         tty=True) == 'none'
+        assert capabilities.color_level({'NO_COLOR': '', 'TERM': 'xterm'},
+                                        tty=True) == '16'
 
     @pytest.mark.parametrize('value,level', [('0', 'none'), ('1', '16'),
                                              ('2', '256'),

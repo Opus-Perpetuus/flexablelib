@@ -4,7 +4,7 @@ labels, help text and validation, and a few drawing helpers.
 """
 
 from flexablelib import _frames as _fx
-from flexablelib.colors import RESET, parse_spec
+from flexablelib.colors import RESET, color_depth, parse_spec
 from flexablelib_tui import Component
 
 __all__ = ['Theme', 'DEFAULT_THEME', 'THEMES', 'Input', 'frame',
@@ -30,8 +30,8 @@ class Theme(object):
 
     def __init__(self, accent='cyan', muted='bright_black', text=None,
                  selection='bold black on cyan', border='bright_black',
-                 info='blue', success='green', warning='yellow',
-                 error='red', title='bold', field='on #262626',
+                 info='#5f87ff', success='green', warning='yellow',
+                 error='bright_red', title='bold', field='on #262626',
                  background='#000000', foreground='#e5e5e5', marker=False,
                  name='custom'):
         self.name = name
@@ -134,6 +134,17 @@ THEMES = {
 
 DEFAULT_THEME = Theme(name='default')
 
+
+def _text_on(colour):
+    """``'black'`` or ``'white'``, whichever reads better on ``colour``."""
+    from flexablelib_tui.accessibility import spec_colors, contrast_ratio
+    rgb = spec_colors(colour)[0]
+    if rgb is None:
+        return 'white'
+    black = contrast_ratio((0, 0, 0), rgb)
+    white = contrast_ratio(spec_colors('white')[0], rgb)
+    return 'black' if black > white else 'white'
+
 _SPEC_CACHE = {}
 
 _BOXES = {
@@ -234,9 +245,10 @@ class _Themed(Component):
     def paint(self, text, spec):
         if not text or not spec or not self._active():
             return text
-        prefix = _SPEC_CACHE.get(spec)
+        key = (spec, color_depth())
+        prefix = _SPEC_CACHE.get(key)
         if prefix is None:
-            prefix = _SPEC_CACHE[spec] = parse_spec(spec)
+            prefix = _SPEC_CACHE[key] = parse_spec(spec)
         if not prefix:
             return text
         return prefix + text.replace(RESET, RESET + prefix) + RESET
@@ -547,7 +559,8 @@ class Button(_Themed):
         if self.disabled:
             return theme.muted
         base = {'primary': 'black on ' + theme.accent,
-                'danger': 'white on ' + theme.error}.get(self.kind)
+                'danger': _text_on(theme.error) + ' on ' + theme.error
+                }.get(self.kind)
         if self.focused:
             return 'bold reverse' if base is None else 'bold ' + base
         return base or 'on bright_black'

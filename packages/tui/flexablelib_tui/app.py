@@ -1034,8 +1034,8 @@ class App(object):
 class _Toast(Component):
     """A notification drawn by :meth:`App.notify`; a click dismisses it."""
 
-    COLORS = {'info': 'blue', 'success': 'green', 'warning': 'yellow',
-              'error': 'red'}
+    COLORS = {'info': '#5f87ff', 'success': 'green', 'warning': 'yellow',
+              'error': 'bright_red'}
     ICONS = {'info': 'ℹ', 'success': '✔', 'warning': '⚠', 'error': '✖'}
     role = 'status'
 

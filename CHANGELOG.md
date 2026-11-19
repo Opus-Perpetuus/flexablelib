@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.7.5] - 2026-11-19
+
+### Changed
+- **Hex colours follow `FORCE_COLOR`**, as the docs promised:
+  `FORCE_COLOR=2` draws `#rrggbb` and `greyNN` with the nearest of the
+  256 xterm colours and `FORCE_COLOR=1` with the nearest of the 16 ANSI
+  colours (256-colour indexes too); `3` or no `FORCE_COLOR` keeps true
+  colour. Tables and components alike (the components' colour cache is
+  kept per depth). `flexablelib.colors.color_depth()` tells which applies.
+  If you set `FORCE_COLOR=1` only to force colour on and want true colour,
+  use `FORCE_COLOR=3`.
+- **An empty `NO_COLOR` no longer turns colour off**, following the
+  current no-color.org wording ("present and not an empty string"), in
+  `supports_color` and the TUI's `color_level`.
+- **Default theme contrast**: `info` (`blue`, 2.2:1) is now `#5f87ff`
+  (6.4:1) and `error` (`red`, 3.6:1) is `bright_red` (5.3:1) on black, so
+  every message kind reaches WCAG AA 4.5:1; notifications use the same
+  colours. A `danger` button picks black or white text, whichever reads
+  better on the theme's error colour (white on `#ff6060` in the
+  high-contrast theme was 2.3:1, black is 7.1:1).
+
 ## [3.7.4] - 2026-11-18
 
 ### Fixed

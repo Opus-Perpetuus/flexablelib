@@ -27,7 +27,7 @@ def _base(style, colored):
     table.add_column('C', ['c0', 'c1', 'c2', 'c3'])
     table.add_column('D', ['d0', 'd1', 'd2', 'd3'])
     if colored:
-        os.environ['FORCE_COLOR'] = '1'
+        os.environ['FORCE_COLOR'] = '3'
         table.use_colors = True
         table.border_color = 'red'
         table.zebra = 'black on #222222'
@@ -87,7 +87,7 @@ def test_battery_plain_topology(style, name, merges):
 
 @pytest.mark.parametrize('style', _styles())
 def test_battery_colored_matches_plain_and_fills(style):
-    os.environ['FORCE_COLOR'] = '1'
+    os.environ['FORCE_COLOR'] = '3'
     # One table with H + V + 2D together (they do not overlap).
     merges = [
         ('h', (0, 0, 0, 1), 'HSPAN'),

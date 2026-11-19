@@ -123,7 +123,7 @@ def _build(style, colored):
     table.add_column('C', ['c0', 'c1', 'c2'])
     table.add_column('D', ['d0', 'd1', 'd2'])
     if colored:
-        os.environ['FORCE_COLOR'] = '1'
+        os.environ['FORCE_COLOR'] = '3'
         table.use_colors = True
         table.zebra = 'black on #222222'
         table.border_color = 'red'
@@ -168,7 +168,7 @@ def _assert_rectangular(rendered, label, wanted):
 
 @pytest.mark.parametrize('style', _styles())
 def test_coloured_merges_and_zebra_paint_cleanly(style):
-    os.environ['FORCE_COLOR'] = '1'
+    os.environ['FORCE_COLOR'] = '3'
     plain = str(_build(style, colored=False))
     colored = str(_build(style, colored=True))
 
@@ -211,7 +211,7 @@ def test_multi_column_merge_keeps_topology_and_width(style):
 
 
 def test_zebra_plus_border_color_on_rows_keeps_rule_chrome():
-    os.environ['FORCE_COLOR'] = '1'
+    os.environ['FORCE_COLOR'] = '3'
     table = Table(style_name='single_rows')
     table.use_colors = True
     table.zebra = 'black on #333333'
@@ -230,7 +230,7 @@ def test_zebra_plus_border_color_on_rows_keeps_rule_chrome():
 
 
 def test_theme_slate_2d_merge_is_rectangular():
-    os.environ['FORCE_COLOR'] = '1'
+    os.environ['FORCE_COLOR'] = '3'
     table = Table()
     table.apply_theme('slate')
     table.use_colors = True
@@ -246,7 +246,7 @@ def test_theme_slate_2d_merge_is_rectangular():
 
 def test_merge_fill_covers_inherited_cell_text():
     """A leftover RESET from a dim border must not close the fill mid-label."""
-    os.environ['FORCE_COLOR'] = '1'
+    os.environ['FORCE_COLOR'] = '3'
     table = Table(
         rows=[
             ['Norte', 'Ana', 28, 'Guadalajara', 12],

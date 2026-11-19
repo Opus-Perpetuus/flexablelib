@@ -386,7 +386,7 @@ class TestKeyMap:
 class TestCapabilities:
     @pytest.mark.parametrize('env,tty,level', [
         ({'NO_COLOR': '1', 'TERM': 'xterm-256color'}, True, 'none'),
-        ({'NO_COLOR': '', 'TERM': 'xterm-256color'}, True, 'none'),
+        ({'NO_COLOR': '', 'TERM': 'xterm-256color'}, True, '256'),
         ({'FORCE_COLOR': '0'}, True, 'none'),
         ({'FORCE_COLOR': 'false'}, True, 'none'),
         ({'FORCE_COLOR': '1'}, False, '16'),

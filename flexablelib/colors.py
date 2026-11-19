@@ -12,6 +12,11 @@ Colours may be given as:
     a name        'red', 'bright_blue', 'bold', 'dim'
     a 256 index   'color:93'      or the int 93
     a hex triple  '#ff8800'       true colour, 24-bit
+
+Hex colours come out as true colour unless ``FORCE_COLOR`` asks for fewer:
+``FORCE_COLOR=2`` draws them (and the grey levels) with the nearest of the
+256 xterm colours, ``FORCE_COLOR=1`` with the nearest of the 16 ANSI colours,
+which also replaces 256-colour indexes.
     a grey level  'grey23'        Rich/X11 style, nearest xterm grey
     a combination 'bold red on white'
 
@@ -81,6 +86,48 @@ _DIGITS_RE = re.compile(r'^[0-9]+$')
 _INDEX_RE = re.compile(r'^(?:color|colour):([0-9]{1,3})$')
 
 
+def color_depth() -> str:
+    """
+    ``'16'``, ``'256'`` or ``'truecolor'``: how many colours a spec may use.
+
+    ``FORCE_COLOR=1`` (or ``true``/``yes``/``on``) means 16 colours and
+    ``FORCE_COLOR=2`` means 256, as in other tools; anything else, including
+    no ``FORCE_COLOR``, keeps hex colours in true colour.
+    """
+    force = os.environ.get('FORCE_COLOR')
+    if force is None:
+        return 'truecolor'
+    force = force.strip().lower()
+    if force == '2':
+        return '256'
+    if force in ('1', 'true', 'yes', 'on'):
+        return '16'
+    return 'truecolor'
+
+
+def _ansi16_code(index: int, offset: int) -> int:
+    """SGR code for ANSI colour 0-15 (foreground; +10 for background)."""
+    return (30 + index if index < 8 else 90 + index - 8) + offset
+
+
+def _rgb_to_256(red: int, green: int, blue: int) -> int:
+    from ._images import rgb_to_256
+    return rgb_to_256(red, green, blue)
+
+
+def _rgb_to_16(red: int, green: int, blue: int) -> int:
+    from ._images import rgb_to_16
+    return rgb_to_16(red, green, blue)
+
+
+def _index_to_16(index: int) -> int:
+    """Nearest ANSI colour 0-15 for an xterm 256-colour index."""
+    if index < 16:
+        return index
+    rgb = _xterm_hex(index)
+    return _rgb_to_16(int(rgb[0:2], 16), int(rgb[2:4], 16), int(rgb[4:6], 16))
+
+
 class ColourError(ValueError):
     """Raised when a colour specification cannot be understood."""
 
@@ -98,24 +145,28 @@ def _colour_codes(token: str, background: bool = False) -> list:
         red = int(digits[0:2], 16)
         green = int(digits[2:4], 16)
         blue = int(digits[4:6], 16)
+        depth = color_depth()
+        if depth == '16':
+            return [_ansi16_code(_rgb_to_16(red, green, blue), offset)]
+        if depth == '256':
+            return [48 if background else 38, 5, _rgb_to_256(red, green, blue)]
         return [48 if background else 38, 2, red, green, blue]
 
+    index = None
     grey_match = _GREY_RE.match(token)
     if grey_match:
         index = _grey_index(int(grey_match.group(1)))
-        return [48 if background else 38, 5, index]
-
-    index_match = _INDEX_RE.match(token)
-    if index_match:
-        index = int(index_match.group(1))
-        if not 0 <= index <= 255:
+    else:
+        index_match = _INDEX_RE.match(token)
+        if index_match:
+            index = int(index_match.group(1))
+        elif _DIGITS_RE.match(token):
+            index = int(token)
+        if index is not None and not 0 <= index <= 255:
             raise ColourError(f'256-colour index out of range: {index}')
-        return [48 if background else 38, 5, index]
-
-    if _DIGITS_RE.match(token):
-        index = int(token)
-        if not 0 <= index <= 255:
-            raise ColourError(f'256-colour index out of range: {index}')
+    if index is not None:
+        if color_depth() == '16':
+            return [_ansi16_code(_index_to_16(index), offset)]
         return [48 if background else 38, 5, index]
 
     raise ColourError(f'unknown colour: {token!r}')
@@ -182,15 +233,15 @@ def supports_color(stream=None) -> bool:
     """
     Whether colour should be emitted to the given stream.
 
-    Honours the NO_COLOR convention (https://no-color.org): any value, even
-    empty, disables colour. FORCE_COLOR overrides in the other direction, which
+    Honours the NO_COLOR convention (https://no-color.org): any non-empty
+    value disables colour (an empty ``NO_COLOR=`` does not). FORCE_COLOR overrides in the other direction, which
     is what CI systems and pipes into `less -R` need (``FORCE_COLOR=0`` /
     ``false`` turns colour off, as in other tools).
 
     Otherwise colour is emitted only to a terminal, so redirecting output to a
     file does not fill it with escape sequences.
     """
-    if 'NO_COLOR' in os.environ:
+    if os.environ.get('NO_COLOR'):
         return False
     force = os.environ.get('FORCE_COLOR')
     if force is not None and force.strip().lower() in ('0', 'false', 'no',
@@ -224,6 +275,7 @@ __all__ = [
     'colorize',
     'parse_spec',
     'supports_color',
+    'color_depth',
     'strip_if_unsupported',
     'ColourError',
     'COLOURS',

@@ -1324,7 +1324,7 @@ class TestDialogs:
 
 def test_theme():
     theme = C.Theme(accent='magenta')
-    assert theme.kind('success') == 'green' and theme.kind('zzz') == 'blue'
+    assert theme.kind('success') == 'green' and theme.kind('zzz') == '#5f87ff'
     b = C.Badge('x', theme=theme, use_colors=True)
     assert '\x1b[' in b.render(width=5)
 
@@ -1338,7 +1338,7 @@ def test_button_states():
     assert '[>Ok<]' in text(b, 10)
     colored = C.Button('Ok', kind='danger', use_colors=True)
     colored.focused = True
-    assert '\x1b[1;37;41m' in colored.render(width=10)
+    assert '\x1b[1;30;101m' in colored.render(width=10)
     colored.kind = 'default'
     assert '\x1b[1;7m' in colored.render(width=10)
 
@@ -1365,7 +1365,7 @@ def test_paint_cache_and_empty_prefix():
     b = C.Badge('x', use_colors=True)
     assert b.paint('x', 'on #262626') == b.paint('x', 'on #262626')
     from flexablelib_components import base
-    base._SPEC_CACHE['weird'] = ''
+    base._SPEC_CACHE[('weird', base.color_depth())] = ''
     assert b.paint('x', 'weird') == 'x'
     assert b.cursor('a') == '\x1b[7ma\x1b[0m'
     b.use_colors = False
