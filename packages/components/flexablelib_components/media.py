@@ -310,6 +310,13 @@ class Image(_Themed):
         if method == 'text':
             cell_px = _img.CELL_PIXELS[mode]
         cols, rows, crop = self._box(bm, width, height, cell)
+        limit = len(_g.DIACRITICS)
+        if method == 'kitty' and (info.kitty_placeholders or info.tmux) \
+                and (cols > limit or rows > limit):
+            # Placeholder cells number their row and column with one of
+            # these combining marks: a bigger picture is drawn smaller.
+            cols, rows, crop = self._box(bm, min(width, limit),
+                                         min(height or limit, limit), cell)
         if cols < 2 or rows < 1:
             return self._fallback(avail, 'no cabe ({0}×{1})'.format(
                 width, height)) + caption
