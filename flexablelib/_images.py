@@ -879,6 +879,13 @@ def decode(data, all_frames=False):
             return _from_pillow(img, all_frames)
         except Exception as error:
             if kind not in _PURE:
+                if type(error).__name__ == 'UnidentifiedImageError':
+                    # Its message is "cannot identify image file
+                    # <_io.BytesIO object at 0x...>".
+                    raise ImageError('formato de imagen desconocido'
+                                     if kind is None else
+                                     '{0} dañado'.format(kind.upper())) \
+                        from None
                 raise ImageError('no se pudo leer la imagen ({0})'.format(
                     error))
     if kind in _PURE:

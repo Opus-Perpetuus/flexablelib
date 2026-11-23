@@ -221,3 +221,29 @@ class TestSchemeCase:
         url = path.as_uri()
         for scheme in ('FILE', 'File'):
             assert I.read_source(scheme + url[4:])[0] == png
+
+
+class TestUnknownFormatMessage:
+    """Bytes in no known format say so, with or without Pillow; with
+    Pillow the message held Pillow's ``<_io.BytesIO object at 0x...>``."""
+
+    @pytest.mark.parametrize('data', [b'xx', b'\x89PNG', b'hola mundo' * 50])
+    def test_message(self, monkeypatch, data):
+        for no_pillow in ('1', ''):
+            monkeypatch.setenv('FLEXABLELIB_NO_PILLOW', no_pillow)
+            with pytest.raises(I.ImageError) as err:
+                I.decode(data)
+            assert str(err.value) == 'formato de imagen desconocido'
+
+    def test_shown_by_image(self, monkeypatch):
+        use(monkeypatch, info())
+        img = fc.Image(b'xx', alt='Logo')
+        out = img.render(80)
+        assert 'formato de imagen desconocido' in out
+        assert 'object at 0x' not in out
+
+    def test_damaged_known_format(self):
+        pytest.importorskip('PIL')
+        with pytest.raises(I.ImageError) as err:
+            I.decode(b'\xff\xd8\xff' + b'\x00' * 40)
+        assert 'object at 0x' not in str(err.value)
