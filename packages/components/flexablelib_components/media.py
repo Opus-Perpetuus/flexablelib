@@ -81,6 +81,8 @@ class Image(_Themed):
         self.method = method
         self.blocks = blocks
         self.align = align
+        if background is not None:
+            _rgb(background)            # refuse an unknown colour now
         self.background = background
         self.upscale = upscale
         self.animate = animate
@@ -102,7 +104,13 @@ class Image(_Themed):
         if isinstance(src, (str, os.PathLike)):
             text = os.fspath(src)
             if '://' in text:
-                return text.rstrip('/').rsplit('/', 1)[-1] or text
+                # The file name: no query (a signed URL's token) or
+                # fragment, and %-escapes decoded.
+                from urllib.parse import unquote, urlsplit
+                parts = urlsplit(text)
+                path = parts.path.rstrip('/')
+                last = unquote(path.rsplit('/', 1)[-1]) if path else ''
+                return last or parts.netloc or text
             return os.path.basename(text.rstrip('/\\')) or text
         return getattr(src, 'name', None) or 'imagen'
 
@@ -310,6 +318,13 @@ class Image(_Themed):
         if method == 'text':
             cell_px = _img.CELL_PIXELS[mode]
         cols, rows, crop = self._box(bm, width, height, cell)
+        limit = len(_g.DIACRITICS)
+        if method == 'kitty' and (info.kitty_placeholders or info.tmux) \
+                and (cols > limit or rows > limit):
+            # Placeholder cells number their row and column with one of
+            # these combining marks: a bigger picture is drawn smaller.
+            cols, rows, crop = self._box(bm, min(width, limit),
+                                         min(height or limit, limit), cell)
         if cols < 2 or rows < 1:
             return self._fallback(avail, 'no cabe ({0}×{1})'.format(
                 width, height)) + caption
@@ -546,12 +561,24 @@ class ImageViewer(_Themed):
 
 
 def _rgb(color):
+    """``(r, g, b)`` for a background: a tuple, or any colour the library
+    draws (``'#fff'``, ``'white'``, ``'color:15'``, ``'grey50'``, ``'on
+    white'``)."""
     if isinstance(color, (tuple, list)):
         return tuple(int(c) for c in color[:3])
-    text = str(color).lstrip('#')
-    if len(text) == 3:
-        text = ''.join(c * 2 for c in text)
-    return int(text[0:2], 16), int(text[2:4], 16), int(text[4:6], 16)
+    text = str(color).strip()
+    bare = text.lstrip('#')
+    if len(bare) in (3, 6, 8) and all(c in '0123456789abcdefABCDEF'
+                                      for c in bare):
+        if len(bare) == 3:
+            bare = ''.join(c * 2 for c in bare)
+        return int(bare[0:2], 16), int(bare[2:4], 16), int(bare[4:6], 16)
+    fg, bg, _attrs = _a11y.spec_colors(text)
+    rgb = bg or fg
+    if rgb is None:
+        raise ValueError('background: colour not understood: {0!r}'
+                         .format(color))
+    return tuple(rgb)
 
 
 def _wrap(text, width):

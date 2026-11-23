@@ -90,7 +90,7 @@ browser (the warning instead of the link).
 | `fit` | `contain` (all of it, proportions kept), `cover` (fills the area, cropped), `fill` (stretched), `none` (pixels 1:1, cropped) |
 | `method`, `blocks` | see above |
 | `align` | `center`, `left`, `right` |
-| `background` | colour behind transparent pixels (`'#fff'`, `(r, g, b)`) |
+| `background` | colour behind transparent pixels: `'#fff'`, `(r, g, b)` or any colour name or spec the library draws (`'white'`, `'color:15'`, `'grey50'`, `'on white'`); an unknown one raises `ValueError` when the `Image` is created |
 | `upscale` | `False` never enlarges small pictures |
 | `animate` | animated GIF/WebP in `Live`/`App` (first frame otherwise and with reduced motion) |
 | `caption` | `True` adds the alternative text (or file name) below, as a link |

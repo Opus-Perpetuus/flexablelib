@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.7.6] - 2026-11-23
+
+### Fixed
+- **Big pictures with kitty placeholders** (Ghostty, kitty 0.28+, tmux):
+  a picture taller or wider than 297 cells raised `IndexError` (there are
+  297 row/column marks); it is now drawn as big as fits within them,
+  proportions kept. Direct kitty, iTerm2 and sixel keep the full size.
+- **Half blocks without colour**: a dark pixel next to a transparent one
+  was drawn as a lit block (`▀`/`▄`); a transparent half is now unlit like
+  a dark one, in Python and C.
+- **The name of a URL picture** (link text, caption, warnings, screen
+  readers) is the file name: a query (a signed URL's token) or fragment no
+  longer shows, and `%20` and the like are decoded
+  (`https://x/silla%20roja.png?token=…` is `silla roja.png`).
+- **`Image(background=)`** takes colour names and specs (`'white'`,
+  `'color:15'`, `'grey50'`, `'on white'`) besides `'#fff'` and `(r, g, b)`;
+  a name raised `ValueError` while drawing. An unknown colour is refused
+  when the `Image` is created.
+- **Upper-case URL schemes**: `HTTPS://…` and `FILE://…` were read as file
+  names ("no existe el archivo").
+- **Unknown image data with Pillow installed** says `formato de imagen
+  desconocido` (as without Pillow) instead of Pillow's `cannot identify
+  image file <_io.BytesIO object at 0x…>`; a damaged JPEG/WebP/TIFF that
+  Pillow cannot identify says e.g. `JPEG dañado`.
+
 ## [3.7.5] - 2026-11-19
 
 ### Changed

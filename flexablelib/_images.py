@@ -806,7 +806,8 @@ def read_source(source, timeout=5.0, max_bytes=64 * 1024 * 1024,
     if hasattr(source, 'read'):
         return source.read(), getattr(source, 'name', None)
     path = os.fspath(source)
-    if path.startswith(('http://', 'https://')):
+    scheme = path[:8].lower()       # schemes are case-insensitive
+    if scheme.startswith(('http://', 'https://')):
         from http.client import InvalidURL
         from urllib.error import URLError
         from urllib.request import Request, urlopen
@@ -842,7 +843,7 @@ def read_source(source, timeout=5.0, max_bytes=64 * 1024 * 1024,
         if len(data) > max_bytes:
             raise ImageError('imagen demasiado grande')
         return data, path
-    if path.startswith('file://'):
+    if scheme.startswith('file://'):
         from urllib.parse import unquote, urlparse
         path = unquote(urlparse(path).path)
         if os.name == 'nt' and path[:1] == '/' and path[2:3] == ':':
@@ -878,6 +879,13 @@ def decode(data, all_frames=False):
             return _from_pillow(img, all_frames)
         except Exception as error:
             if kind not in _PURE:
+                if type(error).__name__ == 'UnidentifiedImageError':
+                    # Its message is "cannot identify image file
+                    # <_io.BytesIO object at 0x...>".
+                    raise ImageError('formato de imagen desconocido'
+                                     if kind is None else
+                                     '{0} dañado'.format(kind.upper())) \
+                        from None
                 raise ImageError('no se pudo leer la imagen ({0})'.format(
                     error))
     if kind in _PURE:
@@ -1229,13 +1237,15 @@ def _cell(px, mode, mono, gx, gy, pw):
         top, bottom = px
         if top is None and bottom is None:
             return ' ', None, None
+        if mono:
+            # A transparent half is unlit, like a dark one.
+            return ' ▄▀█'[(top is not None and _lum(top) >= 128) * 2 +
+                          (bottom is not None and _lum(bottom) >= 128)], \
+                None, None
         if bottom is None:
             return '▀', top, None
         if top is None:
             return '▄', bottom, None
-        if mono:
-            return ' ▄▀█'[(_lum(top) >= 128) * 2 + (_lum(bottom) >= 128)], \
-                None, None
         if top == bottom:
             return '█', top, None
         return '▀', top, bottom
