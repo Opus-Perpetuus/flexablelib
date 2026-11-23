@@ -76,3 +76,35 @@ class TestKittyPlaceholderLimit:
             use(monkeypatch, gi)
             img = fc.Image(blank(100, 8000), alt='Alta')
             assert len(img.render(10).split('\n')) == 400
+
+
+BACKENDS = I.available()
+
+
+class TestMonoHalfBlocks:
+    """Without colour a half block is lit only for a light pixel: a
+    transparent half is unlit like a dark one, so a dark pixel next to
+    transparency no longer shows as a lit block."""
+
+    BLACK, WHITE, CLEAR = (bytes([0, 0, 0, 255]), bytes([255] * 4),
+                           bytes(4))
+
+    @pytest.mark.parametrize('backend', BACKENDS)
+    @pytest.mark.parametrize('top, bottom, want', [
+        ('BLACK', 'CLEAR', ' '), ('CLEAR', 'BLACK', ' '),
+        ('WHITE', 'CLEAR', '▀'), ('CLEAR', 'WHITE', '▄'),
+        ('CLEAR', 'CLEAR', ' '), ('BLACK', 'WHITE', '▄'),
+        ('WHITE', 'BLACK', '▀'), ('WHITE', 'WHITE', '█'),
+        ('BLACK', 'BLACK', ' '),
+    ])
+    def test_cell(self, backend, top, bottom, want):
+        fn = I._PYTHON['cells'] if backend == 'python' else I._C.cells
+        data = getattr(self, top) + getattr(self, bottom)
+        assert fn(data, 1, 2, 'half', 'none', 128) == [want]
+
+    def test_colour_keeps_the_pixel_colour(self):
+        for backend in BACKENDS:
+            fn = I._PYTHON['cells'] if backend == 'python' else I._C.cells
+            line = fn(self.BLACK + self.CLEAR, 1, 2, 'half', 'truecolor',
+                      128)[0]
+            assert '▀' in line and '38;2;0;0;0' in line

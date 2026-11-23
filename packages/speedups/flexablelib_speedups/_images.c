@@ -585,12 +585,13 @@ img_cells(PyObject *self, PyObject *args)
             Col fg = {0}, bg = {0};
             if (mode == M_HALF) {
                 if (!solid[0] && !solid[1]) ch = 0x20;
-                else if (!solid[1]) { ch = 0x2580; fg.set = 1; fg.r = px[0][0]; fg.g = px[0][1]; fg.b = px[0][2]; }
-                else if (!solid[0]) { ch = 0x2584; fg.set = 1; fg.r = px[1][0]; fg.g = px[1][1]; fg.b = px[1][2]; }
                 else if (mono) {
+                    /* A transparent half is unlit, like a dark one. */
                     static const unsigned int T[4] = {0x20, 0x2584, 0x2580, 0x2588};
-                    ch = T[(lums[0] >= 128) * 2 + (lums[1] >= 128)];
-                } else if (px[0][0] == px[1][0] && px[0][1] == px[1][1] && px[0][2] == px[1][2]) {
+                    ch = T[(solid[0] && lums[0] >= 128) * 2 + (solid[1] && lums[1] >= 128)];
+                } else if (!solid[1]) { ch = 0x2580; fg.set = 1; fg.r = px[0][0]; fg.g = px[0][1]; fg.b = px[0][2]; }
+                else if (!solid[0]) { ch = 0x2584; fg.set = 1; fg.r = px[1][0]; fg.g = px[1][1]; fg.b = px[1][2]; }
+                else if (px[0][0] == px[1][0] && px[0][1] == px[1][1] && px[0][2] == px[1][2]) {
                     ch = 0x2588; fg.set = 1; fg.r = px[0][0]; fg.g = px[0][1]; fg.b = px[0][2];
                 } else {
                     ch = 0x2580;

@@ -1229,13 +1229,15 @@ def _cell(px, mode, mono, gx, gy, pw):
         top, bottom = px
         if top is None and bottom is None:
             return ' ', None, None
+        if mono:
+            # A transparent half is unlit, like a dark one.
+            return ' ▄▀█'[(top is not None and _lum(top) >= 128) * 2 +
+                          (bottom is not None and _lum(bottom) >= 128)], \
+                None, None
         if bottom is None:
             return '▀', top, None
         if top is None:
             return '▄', bottom, None
-        if mono:
-            return ' ▄▀█'[(_lum(top) >= 128) * 2 + (_lum(bottom) >= 128)], \
-                None, None
         if top == bottom:
             return '█', top, None
         return '▀', top, bottom
