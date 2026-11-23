@@ -102,7 +102,13 @@ class Image(_Themed):
         if isinstance(src, (str, os.PathLike)):
             text = os.fspath(src)
             if '://' in text:
-                return text.rstrip('/').rsplit('/', 1)[-1] or text
+                # The file name: no query (a signed URL's token) or
+                # fragment, and %-escapes decoded.
+                from urllib.parse import unquote, urlsplit
+                parts = urlsplit(text)
+                path = parts.path.rstrip('/')
+                last = unquote(path.rsplit('/', 1)[-1]) if path else ''
+                return last or parts.netloc or text
             return os.path.basename(text.rstrip('/\\')) or text
         return getattr(src, 'name', None) or 'imagen'
 

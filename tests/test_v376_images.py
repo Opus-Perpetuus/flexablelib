@@ -108,3 +108,36 @@ class TestMonoHalfBlocks:
             line = fn(self.BLACK + self.CLEAR, 1, 2, 'half', 'truecolor',
                       128)[0]
             assert '▀' in line and '38;2;0;0;0' in line
+
+
+class TestUrlName:
+    """The name of a URL picture is its file name: without the query (a
+    signed URL's token) or the fragment, and decoded."""
+
+    @pytest.mark.parametrize('url, want', [
+        ('https://ex.com/fotos/silla.png?token=SECRETO#x', 'silla.png'),
+        ('https://ex.com/fotos/silla.png#vista', 'silla.png'),
+        ('https://ex.com/fotos/silla%20roja.png', 'silla roja.png'),
+        ('https://ex.com/fotos/a%C3%B1o.png', 'año.png'),
+        ('https://ex.com/fotos/', 'fotos'),
+        ('https://ex.com/', 'ex.com'),
+        ('https://ex.com/?id=7', 'ex.com'),
+        ('file:///tmp/mi%20foto.png', 'mi foto.png'),
+    ])
+    def test_name(self, url, want):
+        assert fc.Image(url).name == want
+
+    def test_warning_does_not_show_the_query(self, monkeypatch):
+        use(monkeypatch, info())
+        monkeypatch.setattr(g, 'browser_available',
+                            lambda *a, **k: (False, 'sin pantalla'))
+        img = fc.Image('https://ex.com/silla.png?token=SECRETO',
+                       method='half')
+        monkeypatch.setattr(img, 'bitmap', lambda: None)
+        img.error = 'no se pudo descargar (HTTP 403)'
+        out = img.render(80)
+        assert 'silla.png' in out and 'SECRETO' not in out
+
+    def test_paths_unchanged(self):
+        assert fc.Image('/tmp/fotos/a?b.png').name == 'a?b.png'
+        assert fc.Image('/tmp/fotos/').name == 'fotos'
