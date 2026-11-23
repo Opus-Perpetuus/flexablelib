@@ -806,7 +806,8 @@ def read_source(source, timeout=5.0, max_bytes=64 * 1024 * 1024,
     if hasattr(source, 'read'):
         return source.read(), getattr(source, 'name', None)
     path = os.fspath(source)
-    if path.startswith(('http://', 'https://')):
+    scheme = path[:8].lower()       # schemes are case-insensitive
+    if scheme.startswith(('http://', 'https://')):
         from http.client import InvalidURL
         from urllib.error import URLError
         from urllib.request import Request, urlopen
@@ -842,7 +843,7 @@ def read_source(source, timeout=5.0, max_bytes=64 * 1024 * 1024,
         if len(data) > max_bytes:
             raise ImageError('imagen demasiado grande')
         return data, path
-    if path.startswith('file://'):
+    if scheme.startswith('file://'):
         from urllib.parse import unquote, urlparse
         path = unquote(urlparse(path).path)
         if os.name == 'nt' and path[:1] == '/' and path[2:3] == ':':

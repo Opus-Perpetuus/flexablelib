@@ -184,3 +184,40 @@ class TestBackgroundColour:
             fc.Image(blank(2, 2), background='blanco hueso')
         with pytest.raises(ValueError):
             fc.Image(blank(2, 2), background='#12')
+
+
+class TestSchemeCase:
+    """URL schemes are case-insensitive (RFC 3986): ``HTTPS://`` and
+    ``File://`` were read as file names ("no existe el archivo")."""
+
+    def test_http_upper_case(self, tmp_path):
+        import http.server
+        import threading
+        png = I.encode_png(blank(2, 2))
+        (tmp_path / 'a.png').write_bytes(png)
+
+        class Quiet(http.server.SimpleHTTPRequestHandler):
+            def __init__(self, *a, **k):
+                super().__init__(*a, directory=str(tmp_path), **k)
+
+            def log_message(self, *a):
+                pass
+        server = http.server.HTTPServer(('127.0.0.1', 0), Quiet)
+        t = threading.Thread(target=server.serve_forever, daemon=True)
+        t.start()
+        try:
+            for scheme in ('HTTP', 'Http'):
+                url = '{0}://127.0.0.1:{1}/a.png'.format(scheme,
+                                                         server.server_port)
+                assert I.read_source(url)[0] == png
+                assert I.load(url).size == (2, 2)
+        finally:
+            server.shutdown()
+
+    def test_file_upper_case(self, tmp_path):
+        png = I.encode_png(blank(3, 1))
+        path = tmp_path / 'b.png'
+        path.write_bytes(png)
+        url = path.as_uri()
+        for scheme in ('FILE', 'File'):
+            assert I.read_source(scheme + url[4:])[0] == png
