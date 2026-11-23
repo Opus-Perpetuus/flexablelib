@@ -81,6 +81,8 @@ class Image(_Themed):
         self.method = method
         self.blocks = blocks
         self.align = align
+        if background is not None:
+            _rgb(background)            # refuse an unknown colour now
         self.background = background
         self.upscale = upscale
         self.animate = animate
@@ -559,12 +561,24 @@ class ImageViewer(_Themed):
 
 
 def _rgb(color):
+    """``(r, g, b)`` for a background: a tuple, or any colour the library
+    draws (``'#fff'``, ``'white'``, ``'color:15'``, ``'grey50'``, ``'on
+    white'``)."""
     if isinstance(color, (tuple, list)):
         return tuple(int(c) for c in color[:3])
-    text = str(color).lstrip('#')
-    if len(text) == 3:
-        text = ''.join(c * 2 for c in text)
-    return int(text[0:2], 16), int(text[2:4], 16), int(text[4:6], 16)
+    text = str(color).strip()
+    bare = text.lstrip('#')
+    if len(bare) in (3, 6, 8) and all(c in '0123456789abcdefABCDEF'
+                                      for c in bare):
+        if len(bare) == 3:
+            bare = ''.join(c * 2 for c in bare)
+        return int(bare[0:2], 16), int(bare[2:4], 16), int(bare[4:6], 16)
+    fg, bg, _attrs = _a11y.spec_colors(text)
+    rgb = bg or fg
+    if rgb is None:
+        raise ValueError('background: colour not understood: {0!r}'
+                         .format(color))
+    return tuple(rgb)
 
 
 def _wrap(text, width):

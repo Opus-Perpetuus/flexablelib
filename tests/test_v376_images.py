@@ -141,3 +141,46 @@ class TestUrlName:
     def test_paths_unchanged(self):
         assert fc.Image('/tmp/fotos/a?b.png').name == 'a?b.png'
         assert fc.Image('/tmp/fotos/').name == 'fotos'
+
+
+class TestBackgroundColour:
+    """``background`` takes any colour the library draws (names, ``#rgb``,
+    ``color:N``, ``greyNN``, ``on <colour>``) or an RGB tuple; a named one
+    raised ValueError while drawing."""
+
+    @pytest.mark.parametrize('colour, rgb', [
+        ('#fff', (255, 255, 255)), ('fff', (255, 255, 255)),
+        ('#336699', (51, 102, 153)), ((1, 2, 3), (1, 2, 3)),
+        ([1, 2, 3], (1, 2, 3)), ('white', None), ('on white', None),
+        ('bright_red', None), ('grey50', None), ('color:15', None),
+        (' #FFFFFF ', (255, 255, 255)), ('#ff000080', (255, 0, 0)),
+    ])
+    def test_parsed(self, colour, rgb):
+        from flexablelib_tui.accessibility import parse_color
+        got = fc.media._rgb(colour)
+        name = str(colour).replace('on ', '').strip() \
+            if not isinstance(colour, (tuple, list)) else None
+        assert got == (rgb or parse_color(name))
+
+    @pytest.mark.parametrize('method', ['half', 'braille', 'sixel', 'kitty'])
+    def test_named_colour_renders(self, monkeypatch, method):
+        use(monkeypatch, info(kitty=True, kitty_placeholders=True,
+                              sixel=True))
+        clear = I.Bitmap(4, 4, bytes(64))
+        img = fc.Image(clear, background='white', method=method,
+                       use_colors=True)
+        img.render(8, 4)
+        assert img.used_method == method
+
+    def test_named_colour_is_used(self, monkeypatch):
+        use(monkeypatch, info())
+        clear = I.Bitmap(2, 2, bytes(16))
+        out = fc.Image(clear, background='on #ff0000', method='half',
+                       use_colors=True, width=2).render(2, 1)
+        assert '38;2;255;0;0' in out
+
+    def test_unknown_colour_is_refused_up_front(self):
+        with pytest.raises(ValueError):
+            fc.Image(blank(2, 2), background='blanco hueso')
+        with pytest.raises(ValueError):
+            fc.Image(blank(2, 2), background='#12')
