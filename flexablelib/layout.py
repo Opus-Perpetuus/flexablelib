@@ -1993,7 +1993,12 @@ class Grid(object):
             room = len(segment) - 6
             if room < 1:
                 continue
-            label = cell.title
+            # One line, like a Card title: a newline or tab would otherwise
+            # vanish from the border. A label with nothing visible (only
+            # zero-width or combining marks) is no title at all.
+            label = _one_line(cell.title)
+            if _fx.visible_width(strip_ansi(label)) < 1:
+                continue
             if _fx.visible_width(label) > room:
                 label = _fx.truncate(label, room, '…')
             pos = self._title_position(segment, label, cell.title_align)
@@ -2006,7 +2011,8 @@ class Grid(object):
                 for k in range(1, w):
                     grid[y][x + k] = ''
                 x += w
-            titled.setdefault(y, []).append((start + 1, x - 1))
+            if x - 1 > start + 1:
+                titled.setdefault(y, []).append((start + 1, x - 1))
         border = painter.prefix(self.border_color)
         title_prefix = painter.prefix(self.title_color)
         content = {}
