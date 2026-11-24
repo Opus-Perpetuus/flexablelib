@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.7.7] - 2026-11-24
+
+### Fixed
+- **Grid cell titles with nothing visible** (only zero-width or combining
+  marks, e.g. `GridCell(x, title='\u200d')`) made a bordered
+  `Grid.render()` loop forever; such a title is now left out.
+- **Line breaks and tabs in grid cell titles** became spaces, as in `Card`
+  titles; they used to vanish from the border (`'a\nb'` read `ab`).
+- **`GridView(title=)`** is one line cut to the width with `…`: a long
+  title overflowed the width and a newline added a line `draw()` did not
+  count; with `height=1` the title is left out so the view keeps its height.
+
 ## [3.7.6] - 2026-11-23
 
 ### Fixed
