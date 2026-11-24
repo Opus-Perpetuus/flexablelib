@@ -57,3 +57,28 @@ def test_title_with_tab_is_expanded(no_hang):
     assert '\t' not in top
     assert top.startswith('┌─ a') and top.endswith('┐')
     assert len(top) == 30
+
+
+def _gridview_lines(title, width, height):
+    components = pytest.importorskip('flexablelib_components')
+    from flexablelib.text_width import visible_width
+    view = components.GridView(['abc', 'def'], title=title, columns=2,
+                               border='single')
+    text = '\n'.join(view.draw(width, height))
+    return [visible_width(strip_ansi(line)) for line in text.split('\n')]
+
+
+def test_gridview_long_title_fits_width():
+    widths = _gridview_lines('Un título bastante largo 漢字', 10, None)
+    assert max(widths) <= 10
+
+
+def test_gridview_title_newline_is_one_line():
+    widths = _gridview_lines('a\nb', 20, 4)
+    assert len(widths) == 4
+    assert widths[0] == 3
+
+
+def test_gridview_height_one_keeps_height():
+    assert len(_gridview_lines('T', 20, 1)) == 1
+    assert len(_gridview_lines('T', 20, 3)) == 3

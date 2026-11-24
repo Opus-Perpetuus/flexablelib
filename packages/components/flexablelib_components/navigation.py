@@ -6,7 +6,8 @@ the application shell that wires them together.
 """
 
 from flexablelib import _frames as _fx
-from flexablelib.layout import _accepts_height, _natural_width, _render_child
+from flexablelib.layout import (_accepts_height, _natural_width, _one_line,
+                                 _render_child)
 
 from flexablelib_tui import Key
 
@@ -1752,8 +1753,13 @@ class GridView(_Themed):
 
     def draw(self, width, height):
         out = []
-        if self.title:
-            out.append(self.paint(self.title, 'bold'))
+        if self.title and (height is None or height > 1):
+            # One line no wider than the grid: a newline or a long title
+            # would push the stack past its height or width.
+            title = _one_line(self.title)
+            if _fx.visible_width(title) > width:
+                title = _fx.truncate(title, max(1, width), '\u2026')
+            out.append(self.paint(title, 'bold'))
         room = None if height is None else max(1, height - len(out))
         grid = self.grid()
         text = grid.render(width=width, height=room) if room else \
