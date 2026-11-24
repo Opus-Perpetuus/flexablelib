@@ -91,6 +91,8 @@ class Tabs(_Themed):
         k = str(key)
         if k in ('left', 'right'):
             n = len(self.tabs)
+            if not n:
+                return False
             return self.select((self.index + (1 if k == 'right' else -1)) % n)
         if len(k) == 1 and k.isdigit() and 0 < int(k) <= len(self.tabs):
             return self.select(int(k) - 1)

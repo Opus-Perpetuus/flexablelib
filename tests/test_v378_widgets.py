@@ -36,3 +36,12 @@ def test_wide_char_under_cursor_is_shown_whole():
     line = strip_ansi(field.render(9))
     assert line.endswith('中')
     assert len(line) == 8  # '› ' + 5 narrow + one wide
+
+
+@pytest.mark.parametrize('key', ['left', 'right'])
+def test_empty_tabs_ignore_arrows(key):
+    from flexablelib_tui.keys import Key
+    tabs = C.Tabs([])
+    assert tabs.handle_key(Key(key)) is False
+    assert tabs.index == 0
+    tabs.render(20)
