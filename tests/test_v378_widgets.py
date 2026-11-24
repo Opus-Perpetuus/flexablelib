@@ -45,3 +45,14 @@ def test_empty_tabs_ignore_arrows(key):
     assert tabs.handle_key(Key(key)) is False
     assert tabs.index == 0
     tabs.render(20)
+
+
+@pytest.mark.parametrize('cls', [C.DataTable, C.EditableTable])
+def test_table_without_columns_survives_right(cls):
+    from flexablelib_tui.keys import Key
+    table = cls([])
+    table.handle_key(Key('right'))
+    assert table.col_offset == 0
+    table.render(30)
+    table.handle_key(Key('left'))
+    table.render(30)
