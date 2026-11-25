@@ -265,8 +265,14 @@ class TextInput(Input):
         cursor_col = sum(widths[:self.cursor_pos])
         if cursor_col < self.scroll_x:
             self.scroll_x = cursor_col
-        if cursor_col >= self.scroll_x + avail:
-            self.scroll_x = cursor_col - avail + 1
+        # The whole cursor cell must fit: a wide character (中, 👍) under
+        # the cursor takes two columns, and showing only its first column
+        # would leave it out of the view along with the cursor.
+        cursor_w = widths[self.cursor_pos] \
+            if self.cursor_pos < len(widths) else 1
+        cursor_w = max(1, min(cursor_w, avail))
+        if cursor_col + cursor_w > self.scroll_x + avail:
+            self.scroll_x = cursor_col + cursor_w - avail
         # Never scrolled further than the text needs: once the field is
         # wide enough again (a resize, a shorter value), it shows from the
         # start instead of keeping only the tail it showed when narrow.

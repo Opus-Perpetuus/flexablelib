@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.7.8] - 2026-11-24
+
+### Fixed
+- **A wide character under the `TextInput` cursor** (`中`, `👍`) at the
+  right edge of the field is scrolled into view whole; before, only its
+  first column was made room for, so the character and the cursor were
+  both left out (also `Autocomplete`, `FilterBar`, `ScanInput`).
+- **`Tabs([])`**: Left/Right are ignored instead of raising
+  `ZeroDivisionError`.
+- **`DataTable` / `EditableTable` without columns**: Right no longer moves
+  the column offset to -1, which made the next draw raise `IndexError`.
+
 ## [3.7.7] - 2026-11-24
 
 ### Fixed

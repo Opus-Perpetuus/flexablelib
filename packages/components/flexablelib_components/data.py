@@ -351,7 +351,8 @@ class DataTable(_Themed):
         elif k in ('end', 'G'):
             self.cursor_row = max(0, len(view) - 1)
         elif k == 'right':
-            self.col_offset = min(len(self.columns) - 1, self.col_offset + 1)
+            self.col_offset = max(0, min(len(self.columns) - 1,
+                                      self.col_offset + 1))
         elif k == 'left':
             self.col_offset = max(0, self.col_offset - 1)
         elif len(k) == 1 and k.isdigit() and 0 < int(k) <= len(self.columns):
