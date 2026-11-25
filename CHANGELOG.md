@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.7.9] - 2026-11-25
+
+### Fixed
+- **Pure-Python picture primitives refuse what the C ones refuse**
+  (`FLEXABLELIB_IMAGES=python` or no `flexablelib-speedups`):
+  `sixel_encode` with fewer indices than `width * height` raised
+  `IndexError` or quietly drew a short picture, and with a zero size drew
+  an empty one; `cells` with a negative width or height returned empty
+  rows. Both now raise `ValueError` as in C.
+
+### Tests
+- Core-only CI job: widget regression tests skip when
+  `flexablelib_components` is not installed.
+
 ## [3.7.8] - 2026-11-24
 
 ### Fixed
