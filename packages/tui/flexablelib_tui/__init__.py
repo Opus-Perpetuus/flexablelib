@@ -12,7 +12,7 @@ Everything here is also reachable as ``flexablelib.ProgressBar``,
 ``flexablelib.App`` and so on once installed.
 """
 
-__version__ = '3.7.7'
+__version__ = '3.7.8'
 
 from .widgets import (ProgressBar, Sparkline, BarChart, StatusBar, KeyHints,
                       LogView, Text, Rule)
