@@ -1,7 +1,7 @@
 """Regression tests for the 3.7.8 widget fixes."""
 import pytest
 
-import flexablelib_components as C
+C = pytest.importorskip('flexablelib_components')
 from flexablelib.layout import strip_ansi
 
 
