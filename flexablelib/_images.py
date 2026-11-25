@@ -1132,6 +1132,10 @@ _SIXEL_PCT = [(v * 100 + 127) // 255 for v in range(256)]
 
 def _py_sixel_encode(indices, width, height, palette):
     """The DCS sixel sequence for an indexed image (255 = transparent)."""
+    if width <= 0 or height <= 0 or len(indices) < width * height:
+        # Refused as the C version does: short indices raised IndexError
+        # or drew a short picture.
+        raise ValueError('bad image size')
     out = ['\x1bP0;1;0q"1;1;{0};{1}'.format(width, height)]
     ncolors = len(palette) // 3
     for i in range(ncolors):
@@ -1319,7 +1323,8 @@ def _py_cells(data, width, height, mode, color, threshold):
         raise ValueError('unknown mode {0!r}'.format(mode))
     if color not in ('truecolor', '256', '16', 'none'):
         raise ValueError('unknown colour level {0!r}'.format(color))
-    if len(data) < width * height * 4:
+    if width < 0 or height < 0 or len(data) < width * height * 4:
+        # A negative size is refused as in C (it gave empty rows).
         raise ValueError('data shorter than width * height * 4')
     pw, ph = CELL_PIXELS[mode]
     cols = width // pw
