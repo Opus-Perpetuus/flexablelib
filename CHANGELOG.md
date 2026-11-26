@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file. See [standa
   `truncate`): the marker was cut by characters, so `'省略'` at width 1
   came out two columns wide and a coloured marker was split, leaking a
   bare ESC. It is now cut by columns, escapes kept whole and closed.
+- **`wrap_to_width` (and `overflow='wrap'` cells) dropped zero-width
+  text**: a lone combining mark or zero-width character (U+200B, U+2060)
+  left on its own after a break, or following a wide character on a
+  width-1 line, vanished from the output.
 
 ## [3.7.9] - 2026-11-25
 

@@ -490,13 +490,21 @@ def _wrap_single_line(text: str, width: int) -> List[str]:
         # line is still empty would invent a blank row and, worse, loop
         # forever if the flush condition did not advance the input --
         # tabulate #399.
+        # A zero-width cluster (U+200B, U+2060) never forces a break: it
+        # stays with the cluster before it. Breaking for it after a wide
+        # character that overfills a width-1 line left it alone on a line
+        # of width 0, which the end of the loop then dropped.
         for cluster, cluster_w in measured_clusters(word):
-            if current_width and current_width + cluster_w > width:
+            if (cluster_w and current_width
+                    and current_width + cluster_w > width):
                 flush()
             current.append(cluster)
             current_width += cluster_w
 
-    if current_width or not lines:
+    # A last line of width 0 still counts when it holds text: a lone
+    # combining mark or zero-width character after a break ('a \u0301' at
+    # width 1) was dropped from the output.
+    if current_width or not lines or strip_ansi(''.join(current)):
         if active_codes:
             current.append(_RESET)
         lines.append(''.join(current))
