@@ -269,6 +269,7 @@ truncate_impl(PyObject *text, Py_ssize_t width, PyObject *suffix)
     sw = measure(skind, sdata, slen);
     if (width <= sw) {
         if (width <= 0) return PyUnicode_FromString("");
+        if (width == sw) return Py_NewRef(suffix);   /* fits as it is */
         /* as much of the marker as fits, cut by columns (a wide or
            coloured marker must neither overflow nor be split) */
         if (buf_init(&b, slen + 4) < 0) return NULL;
