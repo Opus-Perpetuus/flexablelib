@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
-## [Unreleased]
+## [3.7.10] - 2026-11-25
 
 ### Fixed
 - **`truncate_to_width` with a marker wider than the width** (and the C
