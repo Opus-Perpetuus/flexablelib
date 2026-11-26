@@ -377,8 +377,13 @@ def truncate_to_width(text: str, width: int, suffix: str = '...') -> str:
     suffix_width = visible_width(suffix)
     if width <= suffix_width:
         # No room for content alongside the marker. Return as much of the
-        # marker as fits, rather than something misleading.
-        return suffix[:width] if width > 0 else ''
+        # marker as fits, rather than something misleading. Cut it by
+        # columns, not characters: suffix[:width] overflowed with a wide
+        # marker ('省略' at width 1 gave '省', two columns) and split a
+        # coloured one, leaking a bare ESC into the terminal.
+        if width <= 0:
+            return ''
+        return truncate_to_width(suffix, width, '')
 
     budget = width - suffix_width
     used = 0

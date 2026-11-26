@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [Unreleased]
+
+### Fixed
+- **`truncate_to_width` with a marker wider than the width** (and the C
+  `truncate`): the marker was cut by characters, so `'省略'` at width 1
+  came out two columns wide and a coloured marker was split, leaking a
+  bare ESC. It is now cut by columns, escapes kept whole and closed.
+
 ## [3.7.9] - 2026-11-25
 
 ### Fixed

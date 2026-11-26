@@ -269,7 +269,14 @@ truncate_impl(PyObject *text, Py_ssize_t width, PyObject *suffix)
     sw = measure(skind, sdata, slen);
     if (width <= sw) {
         if (width <= 0) return PyUnicode_FromString("");
-        return PyUnicode_Substring(suffix, 0, width < slen ? width : slen);
+        /* as much of the marker as fits, cut by columns (a wide or
+           coloured marker must neither overflow nor be split) */
+        if (buf_init(&b, slen + 4) < 0) return NULL;
+        if (cut_into(&b, skind, sdata, slen, width, NULL) < 0) {
+            PyMem_Free(b.data);
+            return NULL;
+        }
+        return buf_finish(&b);
     }
     if (buf_init(&b, length + slen + 4) < 0) return NULL;
     if (cut_into(&b, kind, data, length, width - sw, suffix) < 0) {
